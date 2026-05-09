@@ -1,0 +1,51 @@
+# 月次作戦ボード Supabase版
+
+GitHub Pages + Supabase Auth + Supabase Database/RLS で使う分割版です。
+
+## ファイル構成
+
+```text
+index.html
+style.css
+config.example.js
+config.js
+js/
+  app.js
+  auth.js
+  board.js
+  calendar.js
+  setup-view.js
+  setup.js
+  state.js
+  supabase-client.js
+  tasks.js
+  utils.js
+sql/
+  supabase_setup.sql
+```
+
+## 重要
+
+- GitHubに入れていいのは `anon key` または `publishable key` だけです。
+- `service_role key` / `secret key` / Database password は絶対にGitHubへ入れないでください。
+- SQLは `sql/supabase_setup.sql` の1本だけを使ってください。
+
+## Supabase設定の流れ
+
+1. Supabaseで新規プロジェクトを作る
+2. SQL Editorで `sql/supabase_setup.sql` を実行する
+3. Authentication > Providers > Email を有効にする
+4. Project URL と anon/publishable key を `config.js` に貼る
+5. このフォルダをGitHubへアップする
+6. GitHub Pagesで公開する
+7. サイト上で新規登録/ログインする
+
+## 初回ログイン時
+
+初回ログイン時に、自動で以下が作られます。
+
+- profiles の自分の行
+- teams の「個人ボード」
+- team_members の自分の管理者行
+- category_trees の初期カテゴリ候補
+
