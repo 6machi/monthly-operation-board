@@ -107,13 +107,18 @@
           </div>
         </section>
         <section class="panel unavailablePanel">
-          <h2>稼働できない日</h2>
-          <p class="muted">先にお休み・外出・予定で作業できない日を入れておくと、毎日タスクや納期から逆算した分割タスクがその日を避けます。</p>
-          <div class="form three unavailableForm">
+          <h2>稼働できない日・時間</h2>
+          <p class="muted">外出・通院・予定など、作業できない日や時間を先に入れておくと、分割タスクや持ち越しタスクがその時間を避けます。</p>
+          <div class="form unavailableForm">
             <label><small>稼働不可の日</small><input type="date" id="unavailableDate"></label>
+            <label><small>開始時間</small><input type="time" id="unavailableStart" value="00:00" step="900"></label>
+            <label><small>終了時間</small><input type="time" id="unavailableEnd" value="23:59" step="900"></label>
             <label><small>理由メモ</small><input id="unavailableMemo" placeholder="例：外出 / 通院 / 休み"></label>
-            <button class="primary" id="addUnavailableBtn" type="button">稼働不可にする</button>
           </div>
+          <div class="mode unavailableMode">
+            <label><input type="checkbox" id="unavailableAllDay" checked>終日稼働不可にする</label>
+          </div>
+          <button class="primary" id="addUnavailableBtn" type="button">稼働不可を追加</button>
           <div id="unavailableList" class="unavailableList"></div>
         </section>
         <section class="panel"><h2>日付別の予定量</h2><div class="monthGrid" id="monthGrid"></div></section>

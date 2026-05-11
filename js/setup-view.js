@@ -1,4 +1,4 @@
-import { $, esc, occurrenceLabel, addDays, diffDays, fmtDate } from './utils.js';
+import { $, esc, occurrenceLabel, addDays, diffDays, fmtDate, minutesFromTime, fullClock } from './utils.js';
 import { state } from './state.js';
 import { saveTree } from './setup.js';
 import { updateMyProfile, loadMembers } from './auth.js';
@@ -308,24 +308,69 @@ function renderRegisteredTasks(){
   box.querySelectorAll('[data-delete-task]').forEach(btn=>btn.onclick=async()=>{ if(!mine)return alert('他メンバーのタスクは編集できません'); const id=btn.dataset.deleteTask; const t=state.tasks.find(x=>String(x.id)===String(id)); if(!confirm(`タスク「${t?.title||''}」を削除しますか？`))return; await deleteTask(id); await refreshAll(); });
 }
 
+const DAY_MINUTES = 24 * 60;
 function isUnavailableTaskLocal(t){ return t?.status === 'unavailable' || t?.category === '稼働不可'; }
-function unavailableDatesForMe(){
-  return new Set(state.tasks
-    .filter(t=>t.owner_id===state.user?.id && isUnavailableTaskLocal(t) && (t.schedule_date || t.due_date || t.carryover_date))
-    .map(t=>t.schedule_date || t.due_date || t.carryover_date));
+function snap15(min){ return Math.max(15, Math.ceil(Number(min || 0) / 15) * 15); }
+function snapStart(min){ return Math.max(0, Math.min(DAY_MINUTES-15, Math.round(Number(min||0)/15)*15)); }
+function splitInterval(start, duration){
+  start = snapStart(start); duration = Number(duration || 0);
+  if(duration <= 0 || duration >= DAY_MINUTES) return [{start:0,end:DAY_MINUTES}];
+  const end = start + duration;
+  if(end <= DAY_MINUTES) return [{start,end}];
+  return [{start,end:DAY_MINUTES},{start:0,end:end-DAY_MINUTES}];
+}
+function sleepIntervalsForMe(){
+  const profile = state.profile || {};
+  const startText = String(profile.sleep_start_time || '02:00').slice(0,5);
+  const endText = String(profile.sleep_end_time || '09:00').slice(0,5);
+  const start = minutesFromTime(startText);
+  let duration = minutesFromTime(endText) - start;
+  if(duration <= 0) duration += DAY_MINUTES;
+  return splitInterval(start, duration);
+}
+function unavailableDuration(t){
+  const n = Number(t.estimated_minutes || 0);
+  if(n <= 0 || n >= DAY_MINUTES) return DAY_MINUTES;
+  return n;
+}
+function unavailableBlocksForMe(date){
+  return state.tasks
+    .filter(t=>t.owner_id===state.user?.id && isUnavailableTaskLocal(t) && (t.schedule_date || t.due_date || t.carryover_date) === date)
+    .flatMap(t=>splitInterval(minutesFromTime(t.start_time||'00:00'), unavailableDuration(t)));
+}
+function isAllDayUnavailableForMe(date){
+  return state.tasks.some(t=>t.owner_id===state.user?.id && isUnavailableTaskLocal(t) && (t.schedule_date || t.due_date || t.carryover_date) === date && unavailableDuration(t) >= DAY_MINUTES);
+}
+function intervalsOverlap(aStart, aEnd, bStart, bEnd){ return aStart < bEnd && bStart < aEnd; }
+function taskIntervalsForMe(date){
+  return state.tasks
+    .filter(t=>t.owner_id===state.user?.id && !t.done && !isUnavailableTaskLocal(t) && (t.schedule_date===date || t.carryover_date===date))
+    .map(t=>({ start:minutesFromTime(t.start_time||'09:00'), end:minutesFromTime(t.start_time||'09:00') + snap15(Number(t.estimated_minutes||30)) }));
+}
+function busyIntervalsForMe(date){ return [...sleepIntervalsForMe(), ...unavailableBlocksForMe(date), ...taskIntervalsForMe(date)].sort((a,b)=>a.start-b.start); }
+function fitsAt(date, start, duration){
+  const end = start + duration;
+  if(start < 0 || end > DAY_MINUTES) return false;
+  return !busyIntervalsForMe(date).some(b=>intervalsOverlap(start, end, b.start, b.end));
+}
+function findAvailableStartForMe(date, duration, preferredText='09:00'){
+  duration = snap15(duration);
+  const preferred = snapStart(minutesFromTime(preferredText || '09:00'));
+  const candidates=[];
+  for(let m=preferred; m<=DAY_MINUTES-duration; m+=15) candidates.push(m);
+  for(let m=0; m<preferred; m+=15) candidates.push(m);
+  return candidates.find(m=>fitsAt(date,m,duration)) ?? preferred;
 }
 function workingDatesBetween(start, due){
-  const unavailable = unavailableDatesForMe();
   const totalDays = diffDays(due, start) + 1;
   const dates = [];
   const skipped = [];
   for(let i=0; i<totalDays; i++){
     const date = addDays(start, i);
-    if(unavailable.has(date)) skipped.push(date); else dates.push(date);
+    if(isAllDayUnavailableForMe(date)) skipped.push(date); else dates.push(date);
   }
   return { dates, skipped, totalDays };
 }
-function snap15(min){ return Math.max(15, Math.ceil(Number(min || 0) / 15) * 15); }
 function currentNewTaskTitle(){ return $('newTitle').value.trim() || ($('newCandidate').value==='候補から選ぶ'?'':$('newCandidate').value); }
 function getReversePlan(){
   const title = currentNewTaskTitle();
@@ -358,9 +403,10 @@ async function addReversePlanTasks(){
   if(!plan.ok) return alert(plan.message);
   if(plan.days > 45 && !confirm(`${plan.days}日分のタスクを作ります。数が多いですが大丈夫ですか？`)) return;
   const memoBase = $('newMemo').value || '';
-  const startTime = $('newStartTime')?.value || '09:00';
+  const preferredStart = $('newStartTime')?.value || '09:00';
   for(let i=0;i<plan.days;i++){
     const date = plan.dates[i];
+    const startTime = fullClock(findAvailableStartForMe(date, plan.daily, preferredStart));
     await createTask({
       team_id:state.team.id,
       owner_id:state.user.id,
@@ -404,7 +450,9 @@ export function initSetupEvents(){
     if(!title) return alert('タスク名を入れてください');
     const occurrence = document.querySelector('input[name="occurrence"]:checked')?.value || 'single';
     const start = $('newStart').value || new Date().toISOString().slice(0,10);
-    await createTask({ team_id:state.team.id, owner_id:state.user.id, created_by:state.user.id, title, category:$('newCategory').value, project:$('newProject').value, task_type:'', estimated_minutes:Math.max(15, Math.round(Number($('newMinutes').value||30)/15)*15), start_time:$('newStartTime')?.value||'09:00', schedule_date:start, due_date:$('newDue').value||null, occurrence, status:'scheduled', memo:$('newMemo').value||'', sort_order:Date.now()*-1 });
+    const minutes = snap15(Number($('newMinutes').value||30));
+    const startTime = fullClock(findAvailableStartForMe(start, minutes, $('newStartTime')?.value||'09:00'));
+    await createTask({ team_id:state.team.id, owner_id:state.user.id, created_by:state.user.id, title, category:$('newCategory').value, project:$('newProject').value, task_type:'', estimated_minutes:minutes, start_time:startTime, schedule_date:start, due_date:$('newDue').value||null, occurrence, status:'scheduled', memo:$('newMemo').value||'', sort_order:Date.now()*-1 });
     $('newTitle').value=''; $('newMinutes').value=''; $('newMemo').value=''; await refreshAll();
   });
 }

@@ -1,8 +1,32 @@
-import { $, esc, toISO, todayISO, diffDays, taskOccursOnDate } from './utils.js';
+import { $, esc, toISO, todayISO, diffDays, taskOccursOnDate, minutesFromTime, fullClock } from './utils.js';
 import { state } from './state.js';
 import { openDateOnBoard } from './board.js';
 import { createTask, deleteTask } from './tasks.js';
 import { refreshAll } from './app.js';
+
+const DAY_MINUTES = 24 * 60;
+function clampMinute(n){ return Math.max(0, Math.min(DAY_MINUTES, Math.round(Number(n)||0))); }
+function snap15(n){ return Math.max(0, Math.min(DAY_MINUTES, Math.round(Number(n||0)/15)*15)); }
+function durationBetween(startText, endText){
+  const start = snap15(minutesFromTime(startText || '00:00'));
+  let end = snap15(minutesFromTime(endText || '00:00'));
+  if(String(endText).slice(0,5)==='23:59') end = DAY_MINUTES;
+  let duration = end - start;
+  if(duration <= 0) duration += DAY_MINUTES;
+  return Math.min(DAY_MINUTES, Math.max(15, duration));
+}
+function intervalParts(start, duration){
+  start = snap15(start); duration = Math.max(0, Math.round(Number(duration)||0));
+  if(duration >= DAY_MINUTES) return [{start:0,end:DAY_MINUTES}];
+  const end = start + duration;
+  if(end <= DAY_MINUTES) return [{start, end}];
+  return [{start, end:DAY_MINUTES}, {start:0, end:end-DAY_MINUTES}];
+}
+function unavailableDuration(t){
+  const n = Number(t.estimated_minutes || 0);
+  if(n <= 0 || n >= DAY_MINUTES) return DAY_MINUTES;
+  return n;
+}
 
 export function renderCalendar(){
   $('calendarMonth').value = state.calendarMonth;
@@ -14,17 +38,36 @@ export function renderCalendar(){
 export function isUnavailableTask(t){
   return t?.status === 'unavailable' || t?.category === '稼働不可';
 }
-export function unavailableDatesForMember(memberId = state.user?.id){
-  return new Set(state.tasks
-    .filter(t=>t.owner_id===memberId && isUnavailableTask(t) && (t.schedule_date || t.due_date || t.carryover_date))
-    .map(t=>t.schedule_date || t.due_date || t.carryover_date));
+export function isAllDayUnavailableTask(t){
+  return isUnavailableTask(t) && unavailableDuration(t) >= DAY_MINUTES;
+}
+export function unavailableTasksForMember(dateIso, memberId = state.user?.id){
+  return state.tasks
+    .filter(t=>t.owner_id===memberId && isUnavailableTask(t) && (t.schedule_date || t.due_date || t.carryover_date) === dateIso)
+    .sort((a,b)=>String(a.start_time||'00:00').localeCompare(String(b.start_time||'00:00')));
+}
+export function unavailableBlocksForMember(dateIso, memberId = state.user?.id){
+  return unavailableTasksForMember(dateIso, memberId).flatMap(t=>{
+    const start = minutesFromTime(t.start_time || '00:00');
+    const duration = unavailableDuration(t);
+    return intervalParts(start, duration).map(part=>({ ...part, task:t, memo:t.memo || '稼働不可', allDay: duration>=DAY_MINUTES }));
+  });
 }
 export function isUnavailableForMember(dateIso, memberId = state.user?.id){
-  return unavailableDatesForMember(memberId).has(dateIso);
+  return unavailableTasksForMember(dateIso, memberId).some(isAllDayUnavailableTask);
+}
+export function hasUnavailableForMember(dateIso, memberId = state.user?.id){
+  return unavailableTasksForMember(dateIso, memberId).length > 0;
 }
 function visibleTasksOnDate(dateIso, memberId){
   if(isUnavailableForMember(dateIso, memberId)) return [];
   return state.tasks.filter(t=>t.owner_id===memberId && !isUnavailableTask(t) && taskOccursOnDate(t, dateIso));
+}
+function formatUnavailable(t){
+  const start = t.start_time || '00:00';
+  const duration = unavailableDuration(t);
+  if(duration >= DAY_MINUTES) return '終日';
+  return `${start.slice(0,5)}〜${fullClock(minutesFromTime(start)+duration)}`;
 }
 function renderUnavailableList(){
   const box = $('unavailableList');
@@ -33,14 +76,14 @@ function renderUnavailableList(){
   const month = state.calendarMonth;
   const list = state.tasks
     .filter(t=>t.owner_id===state.user?.id && isUnavailableTask(t) && String(t.schedule_date||'').startsWith(month))
-    .sort((a,b)=>String(a.schedule_date||'').localeCompare(String(b.schedule_date||'')));
+    .sort((a,b)=>String(a.schedule_date||'').localeCompare(String(b.schedule_date||'')) || String(a.start_time||'').localeCompare(String(b.start_time||'')));
   if(!list.length){
-    box.innerHTML = '<div class="empty">この月の稼働不可日はまだありません。</div>';
+    box.innerHTML = '<div class="empty">この月の稼働不可はまだありません。</div>';
     return;
   }
-  box.innerHTML = list.map(t=>`<div class="unavailableItem"><b>${esc(t.schedule_date || '')}</b><span>${esc(t.memo || '稼働不可')}</span>${mine?`<button class="ghost" data-del-unavailable="${esc(t.id)}" type="button">解除</button>`:''}</div>`).join('');
+  box.innerHTML = list.map(t=>`<div class="unavailableItem"><b>${esc(t.schedule_date || '')}</b><span>${esc(formatUnavailable(t))}</span><span>${esc(t.memo || '稼働不可')}</span>${mine?`<button class="ghost" data-del-unavailable="${esc(t.id)}" type="button">解除</button>`:''}</div>`).join('');
   box.querySelectorAll('[data-del-unavailable]').forEach(btn=>btn.addEventListener('click', async()=>{
-    if(!confirm('この日の稼働不可を解除しますか？')) return;
+    if(!confirm('この稼働不可を解除しますか？')) return;
     await deleteTask(btn.dataset.delUnavailable);
     await refreshAll();
   }));
@@ -78,7 +121,8 @@ function renderMonthGrid(){
   for(let day=1; day<=last.getDate(); day++){
     const iso = toISO(new Date(y,m-1,day));
     const isToday = iso===today;
-    const unavailableMembers = state.members.filter(mem=>isUnavailableForMember(iso, mem.id));
+    const unavailableMembers = state.members.filter(mem=>hasUnavailableForMember(iso, mem.id));
+    const allDayMembers = state.members.filter(mem=>isUnavailableForMember(iso, mem.id));
     const membersWithTasks = state.members.map(mem=>{
       const tasks = visibleTasksOnDate(iso, mem.id);
       return { mem, count: tasks.length, carry: tasks.filter(t=>t.carryover_date===iso).length };
@@ -109,9 +153,10 @@ function renderMonthGrid(){
             <span class="miniCount">${count}</span>
             ${carry ? '<span class="miniCarry">↺</span>' : ''}
           </span>`).join('')}</div>`
-      : (unavailableMembers.length ? `<div class="dayRest">${unavailableMembers.map(m=>`${esc(m.emoji||'🌙')} ${esc(m.name)}`).join('・')} おやすみ</div>` : '<div class="dayEmpty">のんびり</div>');
+      : (unavailableMembers.length ? `<div class="dayRest">${unavailableMembers.map(m=>`${esc(m.emoji||'🌙')} ${esc(m.name)}`).join('・')} 稼働不可</div>` : '<div class="dayEmpty">のんびり</div>');
 
-    const footer = `<div class="dayMood">${unavailableMembers.length ? '稼働不可あり' : (carryovers ? `持ち越し ${carryovers}件` : '持ち越しなし')}</div>`;
+    const partialText = unavailableMembers.length && !allDayMembers.length ? '稼働不可時間あり' : '稼働不可あり';
+    const footer = `<div class="dayMood">${unavailableMembers.length ? partialText : (carryovers ? `持ち越し ${carryovers}件` : '持ち越しなし')}</div>`;
     cell.innerHTML = header + chips + footer;
     cell.addEventListener('click',()=>openDateOnBoard(iso));
     grid.appendChild(cell);
@@ -179,11 +224,34 @@ function renderMemberSummary(){
 export function initCalendarEvents(){
   $('calendarMonth').addEventListener('change',()=>{ state.calendarMonth = $('calendarMonth').value; renderCalendar(); });
   $('calendarThisMonth').addEventListener('click',()=>{ state.calendarMonth = new Date().toISOString().slice(0,7); renderCalendar(); });
+  $('unavailableAllDay')?.addEventListener('change',()=>{
+    const allDay = $('unavailableAllDay').checked;
+    $('unavailableStart').disabled = allDay;
+    $('unavailableEnd').disabled = allDay;
+  });
   $('addUnavailableBtn')?.addEventListener('click', async()=>{
     const date = $('unavailableDate')?.value;
     if(!date) return alert('稼働できない日を選んでください');
-    if(isUnavailableForMember(date, state.user.id)) return alert('その日はすでに稼働不可です');
-    await createTask({ team_id:state.team.id, owner_id:state.user.id, created_by:state.user.id, title:'稼働不可', category:'稼働不可', project:'おやすみ', task_type:'', estimated_minutes:0, start_time:'00:00', schedule_date:date, due_date:date, occurrence:'single', status:'unavailable', memo:$('unavailableMemo')?.value || '稼働不可', sort_order:Date.now()*-1 });
+    const allDay = $('unavailableAllDay')?.checked;
+    const start = allDay ? '00:00' : ($('unavailableStart')?.value || '00:00');
+    const duration = allDay ? DAY_MINUTES : durationBetween(start, $('unavailableEnd')?.value || '00:00');
+    await createTask({
+      team_id:state.team.id,
+      owner_id:state.user.id,
+      created_by:state.user.id,
+      title: allDay ? '終日稼働不可' : '稼働不可時間',
+      category:'稼働不可',
+      project:'おやすみ',
+      task_type:'',
+      estimated_minutes: duration,
+      start_time:start,
+      schedule_date:date,
+      due_date:date,
+      occurrence:'single',
+      status:'unavailable',
+      memo:$('unavailableMemo')?.value || '稼働不可',
+      sort_order:Date.now()*-1
+    });
     $('unavailableMemo').value='';
     await refreshAll();
   });

@@ -273,3 +273,15 @@ input[type="color"]::-moz-color-swatch{
 .sleepEvent small{display:block;font-size:11px;font-weight:850;color:#6b7488}
 .taskEvent{z-index:3}
 @media(max-width:650px){.profileChip{border-radius:18px;align-items:flex-start;flex-direction:column}.profileChip small{margin-left:0}.sleepEvent small{display:none}}
+
+/* v25: unavailable time blocks */
+.unavailableMode{margin-top:0;margin-bottom:10px;grid-template-columns:1fr}
+.unavailableForm input:disabled{opacity:.48;background:#f3f5f9}
+.unavailableItem{border-radius:16px!important;grid-template-columns:auto auto 1fr auto!important}
+.unavailableEvent{position:absolute;left:0;right:0;background:repeating-linear-gradient(135deg,#f1f2f5 0,#f1f2f5 8px,#e7e9ee 8px,#e7e9ee 16px);border:1px solid #d7dbe5;border-left:7px solid #9aa4b6;border-radius:14px;padding:8px 10px;color:#5d6678;box-shadow:0 4px 12px rgba(40,50,80,.05);z-index:1;pointer-events:none;overflow:hidden}
+.unavailableEvent b{display:block;font-size:13px;font-weight:950;margin-bottom:3px}
+.unavailableEvent small{font-size:11px;font-weight:850;color:#737d90}
+.sleepEvent{z-index:1;pointer-events:none}
+.taskEvent{z-index:3}
+.dayCell.unavailableDay:not(.past){box-shadow:0 0 0 3px rgba(154,164,182,.10),0 4px 10px rgba(40,50,80,.04)}
+@media(max-width:650px){.unavailableItem{grid-template-columns:1fr auto!important}.unavailableItem b,.unavailableItem span{grid-column:auto}.unavailableItem span:nth-of-type(2){grid-column:1/-1}}

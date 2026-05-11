@@ -2,7 +2,7 @@ import { $, esc, todayISO, addDays, fmtDate, diffDays, relativeFrom, taskOccursO
 import { state } from './state.js';
 import { createTask, markCarryover, returnToSchedule, updateTask, deleteTask } from './tasks.js';
 import { refreshAll, showView } from './app.js';
-import { isUnavailableTask, isUnavailableForMember } from './calendar.js';
+import { isUnavailableTask, isUnavailableForMember, unavailableBlocksForMember } from './calendar.js';
 
 const SLOT_MINUTES = 15;
 const PX_PER_MINUTE = 1.15; // 15分 = 約17px / 60分 = 約69px
@@ -88,16 +88,67 @@ function sleepDurationMinutes(startText, endText){
   if(duration <= 0) duration += DAY_MINUTES;
   return snapDuration(duration);
 }
-function makeSleepElement(baseMin){
+function splitInterval(start, duration){
+  start = snapMinutes(start);
+  duration = Number(duration || 0);
+  if(duration >= DAY_MINUTES) return [{start:0,end:DAY_MINUTES}];
+  const end = start + duration;
+  if(end <= DAY_MINUTES) return [{start, end}];
+  return [{start, end:DAY_MINUTES}, {start:0, end:end-DAY_MINUTES}];
+}
+function memberSleepIntervals(){
   const { start, end } = memberSleep();
   const startMin = snapMinutes(minutesFromTime(start));
   const duration = sleepDurationMinutes(start, end);
+  return splitInterval(startMin, duration).map(part=>({ ...part, kind:'sleep', label:'すいみん', meta:`${start} - ${end}` }));
+}
+function makeBlockedElement(block, baseMin){
   const el = document.createElement('div');
-  el.className = 'sleepEvent';
-  el.style.top = `${relativeTimelineTop(startMin, baseMin)}px`;
-  el.style.height = `${Math.max(26, duration * PX_PER_MINUTE - 4)}px`;
-  el.innerHTML = `<b>すいみん</b><small>${esc(start)} - ${esc(end)}</small>`;
+  el.className = block.kind === 'sleep' ? 'sleepEvent' : 'unavailableEvent';
+  el.style.top = `${relativeTimelineTop(block.start, baseMin)}px`;
+  el.style.height = `${Math.max(24, (block.end - block.start) * PX_PER_MINUTE - 4)}px`;
+  el.innerHTML = `<b>${esc(block.label || '稼働不可')}</b><small>${esc(block.meta || `${timeLabelWrap(block.start)} - ${timeLabelWrap(block.end)}`)}</small>`;
   return el;
+}
+function memberBlockedIntervals(dateIso=state.scheduleDate, memberId=state.selectedMemberId){
+  const sleep = memberSleepIntervals();
+  const unavail = unavailableBlocksForMember(dateIso, memberId).map(b=>({ start:b.start, end:b.end, kind:'unavailable', label:b.allDay?'終日稼働不可':'稼働不可', meta:b.allDay ? (b.memo || '稼働不可') : `${timeLabelWrap(b.start)} - ${timeLabelWrap(b.end)} / ${b.memo || '稼働不可'}` }));
+  return [...sleep, ...unavail].sort((a,b)=>a.start-b.start);
+}
+function intervalsOverlap(aStart, aEnd, bStart, bEnd){ return aStart < bEnd && bStart < aEnd; }
+function busyIntervals(dateIso, memberId=state.selectedMemberId, excludeTaskId=null){
+  const blocked = memberBlockedIntervals(dateIso, memberId).map(b=>({start:b.start,end:b.end}));
+  const tasks = state.tasks
+    .filter(t=>t.owner_id===memberId && !t.done && !isUnavailableTask(t) && String(t.id)!==String(excludeTaskId) && taskOccursOnDate(t, dateIso))
+    .map((t,i)=>({ start:taskStartMinutes(t, i), end:taskStartMinutes(t, i)+taskDuration(t) }));
+  return [...blocked, ...tasks].sort((a,b)=>a.start-b.start);
+}
+function fitsAt(dateIso, start, duration, memberId=state.selectedMemberId, excludeTaskId=null){
+  const end = start + duration;
+  if(start < 0 || end > DAY_MINUTES) return false;
+  return !busyIntervals(dateIso, memberId, excludeTaskId).some(b=>intervalsOverlap(start, end, b.start, b.end));
+}
+function findAvailableStart(dateIso, duration, preferred=DEFAULT_START_MINUTES, memberId=state.selectedMemberId, excludeTaskId=null){
+  duration = snapDuration(duration);
+  const start = snapMinutes(preferred);
+  const candidates = [];
+  for(let m=start; m<=DAY_MINUTES-duration; m+=SLOT_MINUTES) candidates.push(m);
+  for(let m=0; m<start; m+=SLOT_MINUTES) candidates.push(m);
+  return candidates.find(m=>fitsAt(dateIso, m, duration, memberId, excludeTaskId)) ?? start;
+}
+async function carryTaskToDate(taskId, carryDate){
+  const t = state.tasks.find(x=>String(x.id)===String(taskId));
+  const duration = taskDuration(t || {});
+  const preferred = t?.start_time ? minutesFromTime(t.start_time) : DEFAULT_START_MINUTES;
+  const start = findAvailableStart(carryDate, duration, preferred, t?.owner_id || state.selectedMemberId, taskId);
+  await updateTask(taskId, { carryover_date: carryDate, schedule_date: null, status:'carryover', start_time: timeLabel(start), sort_order: Date.now()*-1 });
+}
+async function scheduleTaskOnDate(taskId, scheduleDate){
+  const t = state.tasks.find(x=>String(x.id)===String(taskId));
+  const duration = taskDuration(t || {});
+  const preferred = t?.start_time ? minutesFromTime(t.start_time) : DEFAULT_START_MINUTES;
+  const start = findAvailableStart(scheduleDate, duration, preferred, t?.owner_id || state.selectedMemberId, taskId);
+  await updateTask(taskId, { schedule_date: scheduleDate, carryover_date: null, status:'scheduled', start_time: timeLabel(start), sort_order: Date.now()*-1 });
 }
 
 function ensureTaskEditor(){
@@ -194,7 +245,7 @@ function openTaskEditor(t){
     await refreshAll();
   };
   $('carryTaskFromTimeline').onclick = async()=>{
-    await markCarryover(t.id, state.carryDate);
+    await carryTaskToDate(t.id, state.carryDate);
     closeTaskEditor();
     await refreshAll();
   };
@@ -209,8 +260,11 @@ function openTaskEditor(t){
 }
 
 function makeEventElement(t, index, baseMin){
-  const start = taskStartMinutes(t, index);
   const duration = taskDuration(t);
+  const rawStart = taskStartMinutes(t, index);
+  const start = fitsAt(state.scheduleDate, rawStart, duration, state.selectedMemberId, t.id)
+    ? rawStart
+    : findAvailableStart(state.scheduleDate, duration, rawStart, state.selectedMemberId, t.id);
   const el = document.createElement('div');
   el.className = 'taskEvent';
   el.dataset.id = t.id;
@@ -286,7 +340,7 @@ function makeEventElement(t, index, baseMin){
     const dropRect = drop?.getBoundingClientRect();
     const droppedToCarry = dropRect && e.clientX >= dropRect.left && e.clientX <= dropRect.right && e.clientY >= dropRect.top && e.clientY <= dropRect.bottom;
     if(currentMode === 'move' && droppedToCarry){
-      await markCarryover(t.id, state.carryDate);
+      await carryTaskToDate(t.id, state.carryDate);
       await refreshAll();
       return;
     }
@@ -297,7 +351,8 @@ function makeEventElement(t, index, baseMin){
     }
 
     if(currentMode === 'move'){
-      const newStart = minutesFromTimelineTop(parseFloat(el.style.top)||0, timelineBaseMinutes());
+      let newStart = minutesFromTimelineTop(parseFloat(el.style.top)||0, timelineBaseMinutes());
+      if(!fitsAt(state.scheduleDate, newStart, taskDuration(t), state.selectedMemberId, t.id)) newStart = findAvailableStart(state.scheduleDate, taskDuration(t), newStart, state.selectedMemberId, t.id);
       await updateTask(t.id, { start_time: timeLabelWrap(newStart), schedule_date: state.scheduleDate, carryover_date:null, status:'scheduled' });
     }else{
       const newDuration = snapDuration(((parseFloat(el.style.height)||0) + 4) / PX_PER_MINUTE);
@@ -329,7 +384,7 @@ function taskCard(t){
   art.innerHTML = `<b>${esc(t.title)}</b><small>${esc(t.category || '')} / ${esc(t.project || '')} / ${Math.round(t.estimated_minutes||30)}分</small><div class="badges"><span class="badge">${esc(t.status || '')}</span><span class="badge">${occurrenceLabel(t.occurrence)}</span>${t.due_date?`<span class="badge">期限 ${esc(t.due_date)}</span>`:''}</div><div class="actions"><button data-act="return">この日のタイムラインへ戻す</button><button data-act="done">完了</button></div>`;
   art.addEventListener('dragstart', e=>{ state.draggingTaskId = t.id; e.dataTransfer.setData('text/plain', t.id); });
   art.addEventListener('click', e=>{ if(e.target.closest('button')) return; if(isEditable()) openTaskEditor(t); });
-  art.querySelector('[data-act="return"]').addEventListener('click', async(e)=>{ e.stopPropagation(); await returnToSchedule(t.id, state.scheduleDate); await refreshAll(); });
+  art.querySelector('[data-act="return"]').addEventListener('click', async(e)=>{ e.stopPropagation(); await scheduleTaskOnDate(t.id, state.scheduleDate); await refreshAll(); });
   art.querySelector('[data-act="done"]').addEventListener('click', async(e)=>{ e.stopPropagation(); await updateTask(t.id, { done:true, status:'done' }); await refreshAll(); });
   return art;
 }
@@ -341,7 +396,7 @@ export function renderBoard(){
   $('carryDateText').textContent = fmtDate(state.carryDate);
   $('carryRelative').textContent = `(${relativeFrom(state.scheduleDate, state.carryDate)})`;
   $('carryPrev').disabled = diffDays(state.carryDate, addDays(state.scheduleDate,1)) <= 0;
-  $('boardNotice').textContent = isUnavailableForMember(state.scheduleDate, state.selectedMemberId) ? 'この日は稼働不可です。毎日タスクや分割タスクは表示されません。' : (state.selectedMemberId === state.user.id ? '自分の今日やることです。編集できます。' : '他メンバーの今日やることです。閲覧中心です。');
+  $('boardNotice').textContent = isUnavailableForMember(state.scheduleDate, state.selectedMemberId) ? 'この日は終日稼働不可です。毎日タスクや分割タスクは表示されません。' : (state.selectedMemberId === state.user.id ? '自分の今日やることです。編集できます。' : '他メンバーの今日やることです。閲覧中心です。');
   renderTimeline();
   renderCarryList();
 }
@@ -380,7 +435,7 @@ export function renderTimeline(){
 
   const events = document.createElement('div');
   events.className = 'eventLayer';
-  events.appendChild(makeSleepElement(baseMin));
+  memberBlockedIntervals(state.scheduleDate, state.selectedMemberId).forEach(block=>events.appendChild(makeBlockedElement(block, baseMin)));
   const list = timelineTasks();
   list.forEach((t,idx)=>events.appendChild(makeEventElement(t, idx, baseMin)));
 
@@ -436,7 +491,7 @@ export function initBoardEvents(){
     e.preventDefault();
     const id = e.dataTransfer.getData('text/plain') || state.draggingTaskId;
     if(!id) return;
-    await markCarryover(id, state.carryDate);
+    await carryTaskToDate(id, state.carryDate);
     state.draggingTaskId = null;
     await refreshAll();
   });
@@ -444,14 +499,16 @@ export function initBoardEvents(){
     const title = $('quickTitle').value.trim();
     if(!title) return alert('タスク名を入れてください');
     const now = new Date();
-    const startMin = state.scheduleDate === todayISO() ? snapMinutes(now.getHours()*60 + now.getMinutes()) : DEFAULT_START_MINUTES;
+    const duration = snapDuration(Number($('quickMinutes').value||30));
+    const preferred = state.scheduleDate === todayISO() ? snapMinutes(now.getHours()*60 + now.getMinutes()) : DEFAULT_START_MINUTES;
+    const startMin = findAvailableStart(state.scheduleDate, duration, preferred, state.user.id);
     await createTask({
       team_id: state.team.id,
       owner_id: state.user.id,
       created_by: state.user.id,
       title,
       category:'差し込みタスク', project:'差し込み', task_type:'差し込み',
-      estimated_minutes:snapDuration(Number($('quickMinutes').value||30)),
+      estimated_minutes:duration,
       start_time: timeLabel(startMin),
       due_date:$('quickDue').value || null,
       schedule_date: state.scheduleDate,
