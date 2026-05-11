@@ -270,14 +270,15 @@ function renderRegisteredTasks(){
   box.innerHTML = arr.map(t=>`
     <article class="registeredTask ${t.done?'done':''}" data-task-card="${esc(t.id)}">
       <div class="registeredTaskHead"><div><b>${esc(t.title)}</b><div class="muted">${esc(t.category||'未分類')} / ${esc(t.project||'')}</div></div><div class="taskDateBadge">${esc(taskDateLabel(t) || '日付なし')}</div></div>
-      <div class="badges"><span class="badge">${Math.round(Number(t.estimated_minutes||30))}分</span><span class="badge">${esc(t.status||'')}</span><span class="badge">${occurrenceLabel(t.occurrence)}</span>${t.done?'<span class="badge">完了</span>':''}</div>
+      <div class="badges"><span class="badge">${esc(t.start_time || '09:00')}開始</span><span class="badge">${Math.round(Number(t.estimated_minutes||30))}分</span><span class="badge">${esc(t.status||'')}</span><span class="badge">${occurrenceLabel(t.occurrence)}</span>${t.done?'<span class="badge">完了</span>':''}</div>
       ${t.memo?`<p class="taskMemo">${esc(t.memo)}</p>`:''}
       <details class="taskEditDetails"><summary>このタスクを修正する</summary>
         <div class="form taskEditForm">
           <label><small>タスク名</small><input data-field="title" value="${esc(t.title||'')}"></label>
           <label><small>カテゴリ</small><input data-field="category" value="${esc(t.category||'')}"></label>
           <label><small>プロジェクト</small><input data-field="project" value="${esc(t.project||'')}"></label>
-          <label><small>見積もり時間 分</small><input data-field="estimated_minutes" type="number" min="5" step="5" value="${esc(t.estimated_minutes||30)}"></label>
+          <label><small>見積もり時間 分</small><input data-field="estimated_minutes" type="number" min="15" step="15" value="${esc(t.estimated_minutes||30)}"></label>
+          <label><small>開始時間</small><input data-field="start_time" type="time" step="900" value="${esc(t.start_time||'09:00')}"></label>
           <label><small>予定日</small><input data-field="schedule_date" type="date" value="${esc(t.schedule_date||'')}"></label>
           <label><small>持ち越し日</small><input data-field="carryover_date" type="date" value="${esc(t.carryover_date||'')}"></label>
           <label><small>期限</small><input data-field="due_date" type="date" value="${esc(t.due_date||'')}"></label>
@@ -296,7 +297,7 @@ function renderRegisteredTasks(){
     if(!mine) return alert('他メンバーのタスクは編集できません');
     const id=btn.dataset.saveTask; const card=box.querySelector(`[data-task-card="${id}"]`); const val=(name)=>card.querySelector(`[data-field="${name}"]`)?.value || '';
     const schedule=val('schedule_date')||null; const carry=val('carryover_date')||null;
-    await updateTask(id,{ title:val('title').trim()||'無題タスク', category:val('category').trim()||'未分類', project:val('project').trim()||'未分類', task_type:'', estimated_minutes:Number(val('estimated_minutes')||30), schedule_date:schedule, carryover_date:carry, due_date:val('due_date')||null, occurrence:val('occurrence')||'single', memo:val('memo')||'', status:carry?'carryover':'scheduled' });
+    await updateTask(id,{ title:val('title').trim()||'無題タスク', category:val('category').trim()||'未分類', project:val('project').trim()||'未分類', task_type:'', estimated_minutes:Math.max(15, Math.round(Number(val('estimated_minutes')||30)/15)*15), start_time:val('start_time')||'09:00', schedule_date:schedule, carryover_date:carry, due_date:val('due_date')||null, occurrence:val('occurrence')||'single', memo:val('memo')||'', status:carry?'carryover':'scheduled' });
     await refreshAll();
   });
   box.querySelectorAll('[data-toggle-done]').forEach(btn=>btn.onclick=async()=>{ if(!mine)return alert('他メンバーのタスクは編集できません'); const id=btn.dataset.toggleDone; const t=state.tasks.find(x=>String(x.id)===String(id)); if(!t)return; await updateTask(id,{ done:!t.done, status:!t.done?'done':'scheduled' }); await refreshAll(); });
@@ -320,7 +321,7 @@ export function initSetupEvents(){
     if(!title) return alert('タスク名を入れてください');
     const occurrence = document.querySelector('input[name="occurrence"]:checked')?.value || 'single';
     const start = $('newStart').value || new Date().toISOString().slice(0,10);
-    await createTask({ team_id:state.team.id, owner_id:state.user.id, created_by:state.user.id, title, category:$('newCategory').value, project:$('newProject').value, task_type:'', estimated_minutes:Number($('newMinutes').value||30), schedule_date:start, due_date:$('newDue').value||null, occurrence, status:'scheduled', memo:$('newMemo').value||'', sort_order:Date.now()*-1 });
+    await createTask({ team_id:state.team.id, owner_id:state.user.id, created_by:state.user.id, title, category:$('newCategory').value, project:$('newProject').value, task_type:'', estimated_minutes:Math.max(15, Math.round(Number($('newMinutes').value||30)/15)*15), start_time:$('newStartTime')?.value||'09:00', schedule_date:start, due_date:$('newDue').value||null, occurrence, status:'scheduled', memo:$('newMemo').value||'', sort_order:Date.now()*-1 });
     $('newTitle').value=''; $('newMinutes').value=''; $('newMemo').value=''; await refreshAll();
   });
 }
