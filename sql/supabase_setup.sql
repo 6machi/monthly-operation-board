@@ -69,7 +69,7 @@ create table public.tasks (
   schedule_date date,
   carryover_date date,
   due_date date,
-  occurrence text not null default 'single' check (occurrence in ('single','daily')),
+  occurrence text not null default 'single' check (occurrence in ('single','daily','weekly','monthly')),
   status text not null default 'scheduled' check (status in ('scheduled','carryover','done')),
   done boolean not null default false,
   memo text not null default '',
@@ -160,10 +160,10 @@ declare
   v_display_name text;
   v_team_id uuid;
   v_default_tree jsonb := '[
-    {"name":"かいまほケット2026","color":"#e8a6c8","memo":"イベント・制作系","projects":[{"name":"ハッキング合宿","types":[{"name":"原稿制作","tasks":["清書・トーン張り","校正反映","入稿準備"]}]}]},
-    {"name":"仕事","color":"#5d9cec","memo":"会社・業務委託","projects":[{"name":"通常業務","types":[{"name":"連絡","tasks":["進捗報告","確認依頼","返信作成"]},{"name":"チェック","tasks":["タテヨコ確認","資料確認","差し戻し確認"]}]}]},
-    {"name":"プライベート","color":"#63b978","memo":"生活・通院・休息","projects":[{"name":"生活","types":[{"name":"体調管理","tasks":["通院","薬確認","8時間寝る"]},{"name":"家事","tasks":["洗濯","片付け","買い出し"]}]}]},
-    {"name":"差し込みタスク","color":"#f5a623","memo":"急な依頼・即対応","projects":[{"name":"差し込み","types":[{"name":"即対応","tasks":["急ぎ対応"]}]}]}
+    {"name":"かいまほケット2026","color":"#e8a6c8","memo":"イベント・制作系","sharedWith":[],"projects":[{"name":"ハッキング合宿","candidates":["清書・トーン張り","校正反映","入稿準備"]}]},
+    {"name":"仕事","color":"#5d9cec","memo":"会社・業務委託","sharedWith":[],"projects":[{"name":"通常業務","candidates":["進捗報告","確認依頼","返信作成","タテヨコ確認","資料確認","差し戻し確認"]}]},
+    {"name":"プライベート","color":"#63b978","memo":"生活・通院・休息","sharedWith":[],"projects":[{"name":"生活","candidates":["通院","薬確認","8時間寝る","洗濯","片付け","買い出し"]}]},
+    {"name":"差し込みタスク","color":"#f5a623","memo":"急な依頼・即対応","sharedWith":[],"projects":[{"name":"差し込み","candidates":["急ぎ対応"]}]}
   ]'::jsonb;
 begin
   if v_user is null then

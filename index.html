@@ -146,8 +146,7 @@
           <div class="form">
             <label><small>カテゴリ</small><select id="newCategory"></select></label>
             <label><small>プロジェクト</small><select id="newProject"></select></label>
-            <label><small>タスク種類</small><select id="newType"></select></label>
-            <label><small>タスク名候補</small><select id="newCandidate"></select></label>
+            <label><small>タスク候補</small><select id="newCandidate"></select></label>
             <label><small>タスク名</small><input id="newTitle" placeholder="候補にない場合だけ入力"></label>
             <label><small>見積もり時間</small><input id="newMinutes" type="number" min="5" step="5" placeholder="分"></label>
             <label><small>開始日</small><input id="newStart" type="date"></label>
@@ -156,6 +155,8 @@
           <div class="mode">
             <label><input type="radio" name="occurrence" value="single" checked>単発</label>
             <label><input type="radio" name="occurrence" value="daily">毎日</label>
+            <label><input type="radio" name="occurrence" value="weekly">毎週</label>
+            <label><input type="radio" name="occurrence" value="monthly">毎月</label>
           </div>
           <label><small>メモ</small><textarea id="newMemo" placeholder="補足・確認先・注意点"></textarea></label>
           <button class="primary" id="addMonthlyTaskBtn">追加する</button>

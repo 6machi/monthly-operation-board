@@ -1,4 +1,4 @@
-import { $, esc } from './utils.js';
+import { $, esc, occurrenceLabel } from './utils.js';
 import { state } from './state.js';
 import { saveTree } from './setup.js';
 import { updateMyProfile, loadMembers } from './auth.js';
@@ -8,13 +8,43 @@ import { refreshAll, showView } from './app.js';
 let draggingCategoryIndex = null;
 
 function editable(){ return state.selectedMemberId === state.user.id; }
-function cat(){ return state.tree[state.selectedCategoryIndex] || state.tree[0]; }
-function proj(){ const c=cat(); return c?.projects?.find(p=>p.name===$('newProject').value) || c?.projects?.[0]; }
-function typ(){ const p=proj(); return p?.types?.find(t=>t.name===$('newType').value) || p?.types?.[0]; }
+function cat(){ normalizeTree(); return state.tree[state.selectedCategoryIndex] || state.tree[0]; }
 function fill(sel, arr, cur){ sel.innerHTML=(arr||[]).map(v=>`<option ${v===cur?'selected':''}>${esc(v)}</option>`).join(''); }
+function uniq(arr){ return [...new Set((arr||[]).map(v=>String(v||'').trim()).filter(Boolean))]; }
+function normalizeCategory(c){
+  if(!c) return c;
+  if(!Array.isArray(c.sharedWith)) c.sharedWith=[];
+  if(!Array.isArray(c.projects)) c.projects=[];
+  const categoryLevelCandidates = uniq(c.candidates || []);
+  const normalizedProjects = [];
 
+  c.projects.forEach((p, index)=>{
+    if(typeof p === 'string'){
+      normalizedProjects.push({ name:p, candidates:[] });
+      return;
+    }
+    if(!p?.name) return;
+    const projectCandidates = [];
+    if(Array.isArray(p.candidates)) projectCandidates.push(...p.candidates);
+    (p.types||[]).forEach(ty=>(ty?.tasks||[]).forEach(t=>projectCandidates.push(t)));
+    normalizedProjects.push({ name:p.name, candidates:uniq(projectCandidates) });
+  });
+
+  if(!normalizedProjects.length && categoryLevelCandidates.length){
+    normalizedProjects.push({ name:'未分類', candidates:categoryLevelCandidates });
+  }else if(categoryLevelCandidates.length){
+    // v16以前の「カテゴリ直下の候補」は、最初のプロジェクトへ退避させます。
+    normalizedProjects[0].candidates = uniq([...(normalizedProjects[0].candidates||[]), ...categoryLevelCandidates]);
+  }
+
+  c.projects = normalizedProjects;
+  delete c.candidates;
+  return c;
+}
+function normalizeTree(){ state.tree = (state.tree||[]).map(normalizeCategory); }
 function memberById(id){ return state.members.find(m=>m.id===id); }
 function categorySharedWith(c){ return Array.isArray(c?.sharedWith) ? c.sharedWith : []; }
+function projectCandidateCount(c){ return (c?.projects||[]).reduce((n,p)=>n + (p.candidates?.length||0), 0); }
 function categoryShareLabel(c){
   const ids = categorySharedWith(c).filter(id=>id && id!==state.user?.id);
   if(!ids.length) return '<span class="catSharePill solo">ひとりでやる</span>';
@@ -28,10 +58,12 @@ function canUseCategoryForMember(c, memberId){
   if(memberId === state.user?.id) return true;
   return categorySharedWith(c).includes(memberId);
 }
+async function persist(){ normalizeTree(); await saveTree(state.treeRowId, state.tree); renderSetup(); }
 
 export function renderSetup(){
+  normalizeTree();
   $('setupNotice').textContent = editable()
-    ? '自分のタスク追加画面です。棚・登録済みタスクを編集できます。カテゴリはドラッグで並び替えできます。'
+    ? 'タスクを追加する画面です。カテゴリはドラッグで並び替えできます。'
     : '他メンバーのタスク追加画面は閲覧中心です。';
   renderCategories();
   renderSelectors();
@@ -74,19 +106,16 @@ function renderAchievementArchive(memberId = state.user?.id){
     .filter(t=>t.owner_id===memberId && t.done)
     .slice()
     .sort((a,b)=>String(b.updated_at||b.created_at||'').localeCompare(String(a.updated_at||a.created_at||'')));
-
   const byCategory = new Map();
   doneTasks.forEach(t=>{
     const key = t.category || '未分類';
     if(!byCategory.has(key)) byCategory.set(key, []);
     byCategory.get(key).push(t);
   });
-
   const categories = [...byCategory.entries()].sort((a,b)=>b[1].length-a[1].length || a[0].localeCompare(b[0],'ja'));
   const topCategory = categories[0]?.[0] || 'まだこれから';
   const latest = doneTasks[0];
   const latestText = latest ? `最近は「${latest.title || '無題タスク'}」を完了` : '完了したタスクはまだありません';
-
   box.innerHTML = `
     <div class="achievementHero" style="--ach-color:${esc(color)}">
       <div class="achievementIcon">${esc(emoji)}</div>
@@ -98,17 +127,10 @@ function renderAchievementArchive(memberId = state.user?.id){
     </div>
     ${doneTasks.length ? `<div class="achievementCategories">${categories.map(([category, arr])=>`
       <section class="achievementCategory" style="--ach-color:${esc(color)}">
-        <div class="achievementCategoryHead">
-          <b>${esc(category)}</b>
-          <span>${arr.length}個できた</span>
-        </div>
+        <div class="achievementCategoryHead"><b>${esc(category)}</b><span>${arr.length}個できた</span></div>
         <div class="achievementDoneList">
           ${arr.slice(0,8).map(t=>`
-            <div class="doneTaskPill">
-              <span class="doneMark">✓</span>
-              <span class="doneTitle">${esc(t.title || '無題タスク')}</span>
-              <small>${esc(t.project || '')}${t.task_type ? ` / ${esc(t.task_type)}` : ''}</small>
-            </div>
+            <div class="doneTaskPill"><span class="doneMark">✓</span><span class="doneTitle">${esc(t.title || '無題タスク')}</span><small>${esc(t.project || '')}</small></div>
           `).join('')}
           ${arr.length>8 ? `<div class="doneMore">ほか ${arr.length-8}個</div>` : ''}
         </div>
@@ -128,7 +150,7 @@ function renderCategories(){
     card.innerHTML=`
       <div class="catCardMain">
         <h3>${esc(c.name)}</h3>
-        <p>${esc(c.memo||'')}<br>プロジェクト ${c.projects?.length||0}</p>
+        <p>${esc(c.memo||'')}<br>プロジェクト ${c.projects?.length||0} / タスク候補 ${projectCandidateCount(c)}</p>
         <div class="catShareList">${categoryShareLabel(c)}</div>
       </div>
       <div class="dragHint">ドラッグで並び替え</div>`;
@@ -144,104 +166,66 @@ function renderCategories(){
     card.addEventListener('dragover',e=>{ if(draggingCategoryIndex===null)return; e.preventDefault(); card.classList.add('dragover'); e.dataTransfer.dropEffect='move'; });
     card.addEventListener('dragleave',()=>card.classList.remove('dragover'));
     card.addEventListener('drop',async e=>{
-      e.preventDefault();
-      card.classList.remove('dragover');
+      e.preventDefault(); card.classList.remove('dragover');
       const from = draggingCategoryIndex ?? Number(e.dataTransfer.getData('text/plain'));
       const to = Number(card.dataset.catIndex);
       if(Number.isNaN(from) || Number.isNaN(to) || from===to) return;
-      await moveCategoryTo(from, to);
+      const [item] = state.tree.splice(from, 1);
+      state.tree.splice(to, 0, item);
+      state.selectedCategoryIndex = to;
+      await persist();
     });
     grid.appendChild(card);
   });
 }
-async function moveCategory(index, direction){
-  await moveCategoryTo(index, index + direction);
-}
-async function moveCategoryTo(index, next){
-  if(!editable()) return alert('他メンバーのカテゴリは編集できません');
-  if(next < 0 || next >= state.tree.length) return;
-  const [item] = state.tree.splice(index, 1);
-  state.tree.splice(next, 0, item);
-  state.selectedCategoryIndex = next;
-  await persist();
-}
 
 function renderSelectors(){
   const c=cat(); if(!c) return;
-  const oldCat=$('newCategory').value, oldProj=$('newProject').value, oldType=$('newType').value, oldCand=$('newCandidate').value;
+  const oldCat=$('newCategory').value, oldProj=$('newProject').value, oldCand=$('newCandidate').value;
   const usableTree = state.tree.filter(x=>canUseCategoryForMember(x, state.user.id));
   fill($('newCategory'), usableTree.map(x=>x.name), oldCat || c.name);
   const currentCat = usableTree.find(x=>x.name===$('newCategory').value) || c;
   fill($('newProject'), (currentCat.projects||[]).map(p=>p.name), oldProj);
-  const currentProj = currentCat.projects?.find(p=>p.name===$('newProject').value) || currentCat.projects?.[0];
-  fill($('newType'), (currentProj?.types||[]).map(t=>t.name), oldType);
-  const currentType = currentProj?.types?.find(t=>t.name===$('newType').value) || currentProj?.types?.[0];
-  fill($('newCandidate'), ['候補から選ぶ', ...(currentType?.tasks||[])], oldCand);
-}
-async function persist(){ await saveTree(state.treeRowId, state.tree); renderSetup(); }
-
-function renderProjectTree(c){
-  const projects = c.projects || [];
-  if(!projects.length){
-    return '<div class="empty">このカテゴリにはまだプロジェクトがありません。</div>';
-  }
-  return `<div class="categoryTreeList slimTree">${projects.map((p,pi)=>`
-    <section class="treeProject simpleTreeProject">
-      <div class="treeProjectHead">
-        <b>${esc(p.name)}</b>
-        <span>${p.types?.length || 0} 種類</span>
-      </div>
-      <div class="treeTypeList">
-        ${(p.types||[]).map((ty,ti)=>`
-          <div class="treeType simpleTreeType">
-            <div class="treeTypeHead">
-              <span>タスク種類</span>
-              <b>${esc(ty.name)}</b>
-            </div>
-            <div class="candidateChips">
-              ${(ty.tasks||[]).length ? (ty.tasks||[]).map((name,ci)=>`
-                <span class="candidateChip editableCandidate">${esc(name)}
-                  <button type="button" class="chipEdit" data-edit-cand="${pi}:${ti}:${ci}" title="修正">修正</button>
-                  <button type="button" class="chipDelete" data-del-cand="${pi}:${ti}:${ci}" title="削除">×</button>
-                </span>
-              `).join('') : '<span class="muted">タスク名候補はまだありません。</span>'}
-            </div>
-            <details class="tinyEditDetails">
-              <summary>このタスク種類を編集</summary>
-              <div class="actions compactActions">
-                <button type="button" class="ghost" data-edit-type="${pi}:${ti}">種類名を修正</button>
-                <button type="button" class="ghost" data-add-cand-to="${pi}:${ti}">候補を追加</button>
-                <button type="button" class="danger" data-delete-type="${pi}:${ti}">種類削除</button>
-              </div>
-            </details>
-          </div>
-        `).join('')}
-      </div>
-      <details class="tinyEditDetails">
-        <summary>このプロジェクトを編集</summary>
-        <div class="actions compactActions">
-          <button type="button" class="ghost" data-edit-project="${pi}">プロジェクト名を修正</button>
-          <button type="button" class="ghost" data-add-type-to="${pi}">タスク種類を追加</button>
-          <button type="button" class="danger" data-delete-project="${pi}">プロジェクト削除</button>
-        </div>
-      </details>
-    </section>
-  `).join('')}</div>`;
+  const currentProject = (currentCat.projects||[]).find(p=>p.name===$('newProject').value) || currentCat.projects?.[0];
+  fill($('newCandidate'), ['候補から選ぶ', ...(currentProject?.candidates||[])], oldCand);
 }
 
 function renderSharePicker(c){
   const ids = categorySharedWith(c);
   const others = state.members.filter(m=>m.id !== state.user.id);
-  if(!others.length){
-    return '<div class="empty">まだ一緒に選べるメンバーがいません。</div>';
-  }
+  if(!others.length){ return '<div class="empty">まだ一緒に選べるメンバーがいません。</div>'; }
   return `<div class="shareMemberList">${others.map(m=>`
     <label class="shareMemberOption" style="--share-color:${esc(m.color || '#5d9cec')}">
       <input type="checkbox" class="shareMemberCheck" value="${esc(m.id)}" ${ids.includes(m.id)?'checked':''}>
-      <span class="shareEmoji">${esc(m.emoji || '🌙')}</span>
-      <span class="shareName">${esc(m.name)}</span>
-    </label>
-  `).join('')}</div>`;
+      <span class="shareEmoji">${esc(m.emoji || '🌙')}</span><span class="shareName">${esc(m.name)}</span>
+    </label>`).join('')}</div>`;
+}
+
+function renderProjectCandidateBoxes(c){
+  const projects = c.projects || [];
+  return `
+    <div class="projectCandidateEditor">
+      ${projects.length ? projects.map((p,pi)=>`
+        <section class="projectCandidateBox" data-project-box="${pi}">
+          <div class="projectCandidateHead">
+            <div><b>${esc(p.name)}</b><span>タスク候補 ${p.candidates?.length||0}件</span></div>
+            <div class="boxItemActions"><button type="button" class="ghost tiny" data-edit-project="${pi}">プロジェクト名を修正</button><button type="button" class="danger tiny" data-delete-project="${pi}">×</button></div>
+          </div>
+          <p class="muted">このプロジェクトで使うタスク候補です。</p>
+          <div class="candidateChips bigCandidates">
+            ${(p.candidates||[]).length ? p.candidates.map((name,ci)=>`
+              <span class="candidateChip editableCandidate">${esc(name)}
+                <button type="button" class="chipEdit" data-edit-cand="${pi}:${ci}" title="修正">修正</button>
+                <button type="button" class="chipDelete" data-del-cand="${pi}:${ci}" title="削除">×</button>
+              </span>
+            `).join('') : '<span class="muted">タスク候補はまだありません。</span>'}
+          </div>
+          <div class="minirow candidateAddRow">
+            <input data-candidate-input="${pi}" placeholder="このプロジェクトに候補を追加">
+            <button type="button" class="ghost" data-add-cand-to-project="${pi}">追加</button>
+          </div>
+        </section>`).join('') : '<div class="empty">プロジェクトを追加すると、その中にタスク候補を入れられます。</div>'}
+    </div>`;
 }
 
 function renderCategoryEditor(){
@@ -251,242 +235,84 @@ function renderCategoryEditor(){
     $('addCategoryBtn').onclick = async()=>{ const name=prompt('追加するカテゴリ名'); if(!name)return; state.tree.push({name, memo:'', color:'#9aa4b6', projects:[], sharedWith:[]}); state.selectedCategoryIndex=state.tree.length-1; await persist(); };
     return;
   }
-  if(!Array.isArray(c.sharedWith)) c.sharedWith = [];
   box.innerHTML = `
     <div class="editorgrid">
       <label><small>カテゴリ名</small><input id="editCatName" value="${esc(c.name)}"></label>
       <label><small>色</small><input id="editCatColor" type="color" value="${esc(c.color||'#9aa4b6')}"></label>
       <label style="grid-column:1/-1"><small>メモ</small><input id="editCatMemo" value="${esc(c.memo||'')}"></label>
     </div>
-    <section class="sharePickerBox">
-      <div class="sharePickerHead">
-        <b>一緒に頑張るひとを選択</b>
-        <span>選ばない場合は、ひとりでやるカテゴリです。</span>
-      </div>
-      ${renderSharePicker(c)}
-    </section>
-    <div class="actions mainActions">
-      <button id="saveCatBtn" class="primary">カテゴリを保存</button>
-    </div>
-    <details class="softDetails" open>
-      <summary>登録されている棚</summary>
-      <p class="muted">タスク名候補は、候補チップの「修正」から名前を変えられます。</p>
-      ${renderProjectTree(c)}
-    </details>
-    <details class="softDetails adminDetails">
-      <summary>棚の追加・削除など</summary>
-      <div class="actions">
-        <button id="addCategoryBtn" class="ghost">カテゴリ追加</button>
-        <button id="addProjectBtn" class="ghost">プロジェクト追加</button>
-        <button id="addTypeBtn" class="ghost">タスク種類追加</button>
-        <button id="addCandidateBtn" class="ghost">タスク名候補追加</button>
-        <button id="deleteCategoryBtn" class="danger">カテゴリ削除</button>
-      </div>
-    </details>`;
+    <section class="sharePickerBox"><div class="sharePickerHead"><b>一緒に頑張るひとを選択</b><span>選ばない場合は、ひとりでやるカテゴリです。</span></div>${renderSharePicker(c)}</section>
+    <div class="actions mainActions"><button id="saveCatBtn" class="primary">カテゴリを保存</button></div>
+    <details class="softDetails" open><summary>登録されている棚</summary>${renderProjectCandidateBoxes(c)}</details>
+    <details class="softDetails adminDetails"><summary>棚の追加・削除など</summary><div class="actions"><button id="addCategoryBtn" class="ghost">カテゴリ追加</button><button id="addProjectBtn" class="ghost">プロジェクト追加</button><button id="deleteCategoryBtn" class="danger">カテゴリ削除</button></div></details>`;
 
   $('saveCatBtn').onclick = async()=>{
-    c.name=$('editCatName').value.trim()||c.name;
-    c.color=$('editCatColor').value;
-    c.memo=$('editCatMemo').value;
-    c.sharedWith = [...box.querySelectorAll('.shareMemberCheck:checked')].map(input=>input.value);
-    await persist();
+    c.name=$('editCatName').value.trim()||c.name; c.color=$('editCatColor').value; c.memo=$('editCatMemo').value;
+    c.sharedWith = [...box.querySelectorAll('.shareMemberCheck:checked')].map(input=>input.value); await persist();
   };
-  box.querySelectorAll('.shareMemberCheck').forEach(input=>{
-    input.addEventListener('change', async()=>{
-      c.sharedWith = [...box.querySelectorAll('.shareMemberCheck:checked')].map(input=>input.value);
-      await saveTree(state.treeRowId, state.tree);
-      renderCategories();
-    });
-  });
+  box.querySelectorAll('.shareMemberCheck').forEach(input=>input.addEventListener('change', async()=>{ c.sharedWith=[...box.querySelectorAll('.shareMemberCheck:checked')].map(input=>input.value); await saveTree(state.treeRowId,state.tree); renderCategories(); }));
   $('addCategoryBtn').onclick = async()=>{ const name=prompt('追加するカテゴリ名'); if(!name)return; state.tree.push({name, memo:'', color:'#9aa4b6', projects:[], sharedWith:[]}); state.selectedCategoryIndex=state.tree.length-1; await persist(); };
   $('deleteCategoryBtn').onclick = async()=>{ if(!confirm(`カテゴリ「${c.name}」を削除しますか？\n登録済みタスク自体は消えません。`))return; state.tree.splice(state.selectedCategoryIndex,1); state.selectedCategoryIndex=Math.max(0,state.selectedCategoryIndex-1); await persist(); };
-  $('addProjectBtn').onclick = async()=>{ const name=prompt('追加するプロジェクト名'); if(!name)return; c.projects=c.projects||[]; c.projects.push({name, types:[{name:'未分類',tasks:[]}]}); await persist(); };
-  $('addTypeBtn').onclick = async()=>{ const pName=prompt('どのプロジェクトに追加しますか？', c.projects?.[0]?.name||''); const p=c.projects?.find(x=>x.name===pName); if(!p)return alert('プロジェクトが見つかりません'); const name=prompt('追加するタスク種類'); if(!name)return; p.types=p.types||[]; p.types.push({name,tasks:[]}); await persist(); };
-  $('addCandidateBtn').onclick = async()=>{ const pName=prompt('プロジェクト名', c.projects?.[0]?.name||''); const p=c.projects?.find(x=>x.name===pName); if(!p)return alert('プロジェクトが見つかりません'); const tName=prompt('タスク種類', p.types?.[0]?.name||''); const ty=p.types?.find(x=>x.name===tName); if(!ty)return alert('タスク種類が見つかりません'); const name=prompt('追加するタスク名候補'); if(!name)return; ty.tasks=ty.tasks||[]; ty.tasks.push(name); await persist(); };
-
-  box.querySelectorAll('[data-add-type-to]').forEach(btn=>{
-    btn.onclick = async()=>{
-      const pi=Number(btn.dataset.addTypeTo); const p=c.projects?.[pi]; if(!p)return;
-      const name=prompt('追加するタスク種類'); if(!name)return;
-      p.types=p.types||[]; p.types.push({name:name.trim(),tasks:[]}); await persist();
-    };
-  });
-  box.querySelectorAll('[data-add-cand-to]').forEach(btn=>{
-    btn.onclick = async()=>{
-      const [pi,ti]=btn.dataset.addCandTo.split(':').map(Number);
-      const ty=c.projects?.[pi]?.types?.[ti]; if(!ty)return;
-      const name=prompt('追加するタスク名候補'); if(!name)return;
-      ty.tasks=ty.tasks||[]; ty.tasks.push(name.trim()); await persist();
-    };
-  });
-
-  box.querySelectorAll('[data-edit-project]').forEach(btn=>{
-    btn.onclick = async()=>{
-      const pi=Number(btn.dataset.editProject); const p=c.projects?.[pi]; if(!p)return;
-      const name=prompt('プロジェクト名を修正', p.name); if(!name)return;
-      p.name=name.trim()||p.name; await persist();
-    };
-  });
-  box.querySelectorAll('[data-delete-project]').forEach(btn=>{
-    btn.onclick = async()=>{
-      const pi=Number(btn.dataset.deleteProject); const p=c.projects?.[pi]; if(!p)return;
-      if(!confirm(`プロジェクト「${p.name}」を削除しますか？\n登録済みタスク自体は消えません。`))return;
-      c.projects.splice(pi,1); await persist();
-    };
-  });
-  box.querySelectorAll('[data-edit-type]').forEach(btn=>{
-    btn.onclick = async()=>{
-      const [pi,ti]=btn.dataset.editType.split(':').map(Number); const ty=c.projects?.[pi]?.types?.[ti]; if(!ty)return;
-      const name=prompt('タスク種類名を修正', ty.name); if(!name)return;
-      ty.name=name.trim()||ty.name; await persist();
-    };
-  });
-  box.querySelectorAll('[data-delete-type]').forEach(btn=>{
-    btn.onclick = async()=>{
-      const [pi,ti]=btn.dataset.deleteType.split(':').map(Number); const ty=c.projects?.[pi]?.types?.[ti]; if(!ty)return;
-      if(!confirm(`タスク種類「${ty.name}」を削除しますか？\n登録済みタスク自体は消えません。`))return;
-      c.projects[pi].types.splice(ti,1); await persist();
-    };
-  });
-  box.querySelectorAll('[data-edit-cand]').forEach(btn=>{
-    btn.onclick = async()=>{
-      const [pi,ti,ci] = btn.dataset.editCand.split(':').map(Number);
-      const old = c.projects?.[pi]?.types?.[ti]?.tasks?.[ci];
-      if(!old) return;
-      const name=prompt('タスク名候補を修正', old); if(!name)return;
-      c.projects[pi].types[ti].tasks[ci]=name.trim()||old; await persist();
-    };
-  });
-  box.querySelectorAll('[data-del-cand]').forEach(btn=>{
-    btn.onclick = async()=>{
-      const [pi,ti,ci] = btn.dataset.delCand.split(':').map(Number);
-      const name = c.projects?.[pi]?.types?.[ti]?.tasks?.[ci];
-      if(!name) return;
-      if(!confirm(`「${name}」を候補から削除しますか？`)) return;
-      c.projects[pi].types[ti].tasks.splice(ci,1);
-      await persist();
-    };
-  });
+  $('addProjectBtn').onclick = async()=>{ const name=prompt('追加するプロジェクト名'); if(!name)return; c.projects=c.projects||[]; c.projects.push({name:name.trim(), candidates:[]}); await persist(); };
+  box.querySelectorAll('[data-edit-project]').forEach(btn=>btn.onclick=async()=>{ const pi=Number(btn.dataset.editProject); const p=c.projects?.[pi]; if(!p)return; const name=prompt('プロジェクト名を修正', p.name); if(!name)return; p.name=name.trim()||p.name; await persist(); });
+  box.querySelectorAll('[data-delete-project]').forEach(btn=>btn.onclick=async()=>{ const pi=Number(btn.dataset.deleteProject); const p=c.projects?.[pi]; if(!p)return; if(!confirm(`プロジェクト「${p.name}」を削除しますか？\n登録済みタスク自体は消えません。`))return; c.projects.splice(pi,1); await persist(); });
+  box.querySelectorAll('[data-add-cand-to-project]').forEach(btn=>btn.onclick=async()=>{ const pi=Number(btn.dataset.addCandToProject); const p=c.projects?.[pi]; if(!p)return; const input=box.querySelector(`[data-candidate-input="${pi}"]`); const name=input?.value?.trim(); if(!name)return alert('追加するタスク候補を入力してください'); p.candidates=uniq([...(p.candidates||[]), name]); input.value=''; await persist(); });
+  box.querySelectorAll('[data-edit-cand]').forEach(btn=>btn.onclick=async()=>{ const [pi,ci]=String(btn.dataset.editCand).split(':').map(Number); const p=c.projects?.[pi]; const old=p?.candidates?.[ci]; if(!old)return; const name=prompt('タスク候補を修正', old); if(!name)return; p.candidates[ci]=name.trim()||old; p.candidates=uniq(p.candidates); await persist(); });
+  box.querySelectorAll('[data-del-cand]').forEach(btn=>btn.onclick=async()=>{ const [pi,ci]=String(btn.dataset.delCand).split(':').map(Number); const p=c.projects?.[pi]; const name=p?.candidates?.[ci]; if(!name)return; if(!confirm(`「${name}」を候補から削除しますか？`)) return; p.candidates.splice(ci,1); await persist(); });
 }
 
-function taskDateLabel(t){
-  return t.schedule_date || t.carryover_date || t.due_date || '';
-}
+function taskDateLabel(t){ return t.schedule_date || t.carryover_date || t.due_date || ''; }
 function renderRegisteredTasks(){
-  const box = $('registeredTasks');
-  if(!box) return;
+  const box = $('registeredTasks'); if(!box) return;
   const mine = editable();
-  const arr = state.tasks
-    .filter(t=>t.owner_id===state.selectedMemberId)
-    .slice()
-    .sort((a,b)=>String(taskDateLabel(b)).localeCompare(String(taskDateLabel(a))) || String(b.created_at||'').localeCompare(String(a.created_at||'')));
-
-  if(!arr.length){
-    box.innerHTML = '<div class="empty">登録済みタスクはまだありません。</div>';
-    return;
-  }
-
+  const arr = state.tasks.filter(t=>t.owner_id===state.selectedMemberId).slice().sort((a,b)=>String(taskDateLabel(b)).localeCompare(String(taskDateLabel(a))) || String(b.created_at||'').localeCompare(String(a.created_at||'')));
+  if(!arr.length){ box.innerHTML = '<div class="empty">登録済みタスクはまだありません。</div>'; return; }
   box.innerHTML = arr.map(t=>`
     <article class="registeredTask ${t.done?'done':''}" data-task-card="${esc(t.id)}">
-      <div class="registeredTaskHead">
-        <div>
-          <b>${esc(t.title)}</b>
-          <div class="muted">${esc(t.category||'未分類')} / ${esc(t.project||'')} / ${esc(t.task_type||'')}</div>
-        </div>
-        <div class="taskDateBadge">${esc(taskDateLabel(t) || '日付なし')}</div>
-      </div>
-      <div class="badges">
-        <span class="badge">${Math.round(Number(t.estimated_minutes||30))}分</span>
-        <span class="badge">${esc(t.status||'')}</span>
-        ${t.done?'<span class="badge">完了</span>':''}
-      </div>
+      <div class="registeredTaskHead"><div><b>${esc(t.title)}</b><div class="muted">${esc(t.category||'未分類')} / ${esc(t.project||'')}</div></div><div class="taskDateBadge">${esc(taskDateLabel(t) || '日付なし')}</div></div>
+      <div class="badges"><span class="badge">${Math.round(Number(t.estimated_minutes||30))}分</span><span class="badge">${esc(t.status||'')}</span><span class="badge">${occurrenceLabel(t.occurrence)}</span>${t.done?'<span class="badge">完了</span>':''}</div>
       ${t.memo?`<p class="taskMemo">${esc(t.memo)}</p>`:''}
-      <details class="taskEditDetails">
-        <summary>このタスクを修正する</summary>
+      <details class="taskEditDetails"><summary>このタスクを修正する</summary>
         <div class="form taskEditForm">
           <label><small>タスク名</small><input data-field="title" value="${esc(t.title||'')}"></label>
           <label><small>カテゴリ</small><input data-field="category" value="${esc(t.category||'')}"></label>
           <label><small>プロジェクト</small><input data-field="project" value="${esc(t.project||'')}"></label>
-          <label><small>タスク種類</small><input data-field="task_type" value="${esc(t.task_type||'')}"></label>
           <label><small>見積もり時間 分</small><input data-field="estimated_minutes" type="number" min="5" step="5" value="${esc(t.estimated_minutes||30)}"></label>
           <label><small>予定日</small><input data-field="schedule_date" type="date" value="${esc(t.schedule_date||'')}"></label>
           <label><small>持ち越し日</small><input data-field="carryover_date" type="date" value="${esc(t.carryover_date||'')}"></label>
           <label><small>期限</small><input data-field="due_date" type="date" value="${esc(t.due_date||'')}"></label>
+          <label><small>発生タイプ</small><select data-field="occurrence">
+            <option value="single" ${t.occurrence==='single'||!t.occurrence?'selected':''}>単発</option>
+            <option value="daily" ${t.occurrence==='daily'?'selected':''}>毎日</option>
+            <option value="weekly" ${t.occurrence==='weekly'?'selected':''}>毎週</option>
+            <option value="monthly" ${t.occurrence==='monthly'?'selected':''}>毎月</option>
+          </select></label>
           <label style="grid-column:1/-1"><small>メモ</small><textarea data-field="memo">${esc(t.memo||'')}</textarea></label>
         </div>
-        <div class="actions">
-          <button type="button" class="primary" data-save-task="${esc(t.id)}">保存</button>
-          <button type="button" class="ghost" data-toggle-done="${esc(t.id)}">${t.done?'未完了に戻す':'完了にする'}</button>
-          <button type="button" class="danger" data-delete-task="${esc(t.id)}">削除</button>
-        </div>
+        <div class="actions"><button type="button" class="primary" data-save-task="${esc(t.id)}">保存</button><button type="button" class="ghost" data-toggle-done="${esc(t.id)}">${t.done?'未完了に戻す':'完了にする'}</button><button type="button" class="danger" data-delete-task="${esc(t.id)}">削除</button></div>
       </details>
-    </article>
-  `).join('');
-
-  box.querySelectorAll('[data-save-task]').forEach(btn=>{
-    btn.onclick = async()=>{
-      if(!mine) return alert('他メンバーのタスクは編集できません');
-      const id=btn.dataset.saveTask;
-      const card=box.querySelector(`[data-task-card="${id}"]`);
-      const val=(name)=>card.querySelector(`[data-field="${name}"]`)?.value || '';
-      const schedule = val('schedule_date') || null;
-      const carry = val('carryover_date') || null;
-      await updateTask(id, {
-        title: val('title').trim() || '無題タスク',
-        category: val('category').trim() || '未分類',
-        project: val('project').trim() || '未分類',
-        task_type: val('task_type').trim() || '未分類',
-        estimated_minutes: Number(val('estimated_minutes') || 30),
-        schedule_date: schedule,
-        carryover_date: carry,
-        due_date: val('due_date') || null,
-        memo: val('memo') || '',
-        status: carry ? 'carryover' : 'scheduled'
-      });
-      await refreshAll();
-    };
+    </article>`).join('');
+  box.querySelectorAll('[data-save-task]').forEach(btn=>btn.onclick=async()=>{
+    if(!mine) return alert('他メンバーのタスクは編集できません');
+    const id=btn.dataset.saveTask; const card=box.querySelector(`[data-task-card="${id}"]`); const val=(name)=>card.querySelector(`[data-field="${name}"]`)?.value || '';
+    const schedule=val('schedule_date')||null; const carry=val('carryover_date')||null;
+    await updateTask(id,{ title:val('title').trim()||'無題タスク', category:val('category').trim()||'未分類', project:val('project').trim()||'未分類', task_type:'', estimated_minutes:Number(val('estimated_minutes')||30), schedule_date:schedule, carryover_date:carry, due_date:val('due_date')||null, occurrence:val('occurrence')||'single', memo:val('memo')||'', status:carry?'carryover':'scheduled' });
+    await refreshAll();
   });
-  box.querySelectorAll('[data-toggle-done]').forEach(btn=>{
-    btn.onclick = async()=>{
-      if(!mine) return alert('他メンバーのタスクは編集できません');
-      const id=btn.dataset.toggleDone;
-      const t=state.tasks.find(x=>String(x.id)===String(id));
-      if(!t)return;
-      await updateTask(id, { done: !t.done, status: !t.done ? 'done' : 'scheduled' });
-      await refreshAll();
-    };
-  });
-  box.querySelectorAll('[data-delete-task]').forEach(btn=>{
-    btn.onclick = async()=>{
-      if(!mine) return alert('他メンバーのタスクは編集できません');
-      const id=btn.dataset.deleteTask;
-      const t=state.tasks.find(x=>String(x.id)===String(id));
-      if(!confirm(`タスク「${t?.title||''}」を削除しますか？`))return;
-      await deleteTask(id);
-      await refreshAll();
-    };
-  });
+  box.querySelectorAll('[data-toggle-done]').forEach(btn=>btn.onclick=async()=>{ if(!mine)return alert('他メンバーのタスクは編集できません'); const id=btn.dataset.toggleDone; const t=state.tasks.find(x=>String(x.id)===String(id)); if(!t)return; await updateTask(id,{ done:!t.done, status:!t.done?'done':'scheduled' }); await refreshAll(); });
+  box.querySelectorAll('[data-delete-task]').forEach(btn=>btn.onclick=async()=>{ if(!mine)return alert('他メンバーのタスクは編集できません'); const id=btn.dataset.deleteTask; const t=state.tasks.find(x=>String(x.id)===String(id)); if(!confirm(`タスク「${t?.title||''}」を削除しますか？`))return; await deleteTask(id); await refreshAll(); });
 }
 
 export function initSetupEvents(){
   $('backToBoardBtn')?.addEventListener('click', ()=>showView('board'));
   $('saveProfileBtn').addEventListener('click', async()=>{
     try{
-      const updated = await updateMyProfile({
-        display_name: $('profileName').value,
-        display_emoji: $('profileEmoji').value,
-        display_color: $('profileColor').value
-      });
-      state.profile = updated;
-      state.members = await loadMembers(state.team.id);
-      $('loginPill').textContent = `${updated.display_emoji || '🌙'} ${updated.display_name || '自分'}`;
-      alert('自分設定を保存しました');
-      renderProfilePage();
-      refreshAll();
+      const updated = await updateMyProfile({ display_name:$('profileName').value, display_emoji:$('profileEmoji').value, display_color:$('profileColor').value });
+      state.profile = updated; state.members = await loadMembers(state.team.id); $('loginPill').textContent = `${updated.display_emoji || '🌙'} ${updated.display_name || '自分'}`; alert('自分設定を保存しました'); renderProfilePage(); refreshAll();
     }catch(e){ alert(e.message || '自分設定の保存に失敗しました'); }
   });
   ['profileName','profileEmoji','profileColor'].forEach(id=>$(id).addEventListener('input', renderProfilePreview));
-  ['newCategory','newProject','newType'].forEach(id=>$(id).addEventListener('change',renderSelectors));
+  ['newCategory','newProject'].forEach(id=>$(id).addEventListener('change',renderSelectors));
   $('newCandidate').addEventListener('change',()=>{ if($('newCandidate').value !== '候補から選ぶ') $('newTitle').value = $('newCandidate').value; });
   $('addMonthlyTaskBtn').addEventListener('click', async()=>{
     if(!editable()) return alert('他メンバーの棚卸しは編集できません');
@@ -494,11 +320,7 @@ export function initSetupEvents(){
     if(!title) return alert('タスク名を入れてください');
     const occurrence = document.querySelector('input[name="occurrence"]:checked')?.value || 'single';
     const start = $('newStart').value || new Date().toISOString().slice(0,10);
-    await createTask({ team_id:state.team.id, owner_id:state.user.id, created_by:state.user.id, title,
-      category:$('newCategory').value, project:$('newProject').value, task_type:$('newType').value,
-      estimated_minutes:Number($('newMinutes').value||30), schedule_date:start, due_date:$('newDue').value||null,
-      occurrence, status:'scheduled', memo:$('newMemo').value||'', sort_order:Date.now()*-1 });
-    $('newTitle').value=''; $('newMinutes').value=''; $('newMemo').value='';
-    await refreshAll();
+    await createTask({ team_id:state.team.id, owner_id:state.user.id, created_by:state.user.id, title, category:$('newCategory').value, project:$('newProject').value, task_type:'', estimated_minutes:Number($('newMinutes').value||30), schedule_date:start, due_date:$('newDue').value||null, occurrence, status:'scheduled', memo:$('newMemo').value||'', sort_order:Date.now()*-1 });
+    $('newTitle').value=''; $('newMinutes').value=''; $('newMemo').value=''; await refreshAll();
   });
 }

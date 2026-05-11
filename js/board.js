@@ -1,4 +1,4 @@
-import { $, esc, todayISO, addDays, fmtDate, diffDays, relativeFrom, minutesFromTime, fullClock } from './utils.js';
+import { $, esc, todayISO, addDays, fmtDate, diffDays, relativeFrom, taskOccursOnDate, occurrenceLabel } from './utils.js';
 import { state } from './state.js';
 import { createTask, markCarryover, returnToSchedule, updateTask } from './tasks.js';
 import { refreshAll, showView } from './app.js';
@@ -7,7 +7,7 @@ function selectedTasks(){
   return state.tasks.filter(t => t.owner_id === state.selectedMemberId && !t.done);
 }
 function timelineTasks(){
-  return selectedTasks().filter(t => t.schedule_date === state.scheduleDate || t.carryover_date === state.scheduleDate);
+  return selectedTasks().filter(t => taskOccursOnDate(t, state.scheduleDate));
 }
 function carryTasks(){
   return selectedTasks().filter(t => t.carryover_date === state.carryDate);
@@ -36,7 +36,7 @@ function taskBlock(t){
   div.draggable = true;
   div.dataset.id = t.id;
   div.style.setProperty('--c', colorFor(t));
-  div.innerHTML = `<b>${esc(t.title)}</b><small>${esc(t.project || t.category || '')} / ${Math.round((t.estimated_minutes||30))}分</small><div class="dragHint">ドラッグで持ち越しへ移動</div>`;
+  div.innerHTML = `<b>${esc(t.title)}</b><small>${esc(t.project || t.category || '')} / ${Math.round((t.estimated_minutes||30))}分 / ${occurrenceLabel(t.occurrence)}</small><div class="dragHint">ドラッグで持ち越しへ移動</div>`;
   div.addEventListener('dragstart', e => { state.draggingTaskId = t.id; div.classList.add('dragging'); e.dataTransfer.setData('text/plain', t.id); });
   div.addEventListener('dragend', () => div.classList.remove('dragging'));
   return div;
@@ -45,7 +45,7 @@ function taskCard(t){
   const art = document.createElement('article');
   art.className = 'task';
   art.style.setProperty('--c', colorFor(t));
-  art.innerHTML = `<b>${esc(t.title)}</b><small>${esc(t.category || '')} / ${esc(t.project || '')} / ${Math.round(t.estimated_minutes||30)}分</small><div class="badges"><span class="badge">${esc(t.status || '')}</span>${t.due_date?`<span class="badge">期限 ${esc(t.due_date)}</span>`:''}</div><div class="actions"><button data-act="return">この日のタイムラインへ戻す</button><button data-act="done">完了</button></div>`;
+  art.innerHTML = `<b>${esc(t.title)}</b><small>${esc(t.category || '')} / ${esc(t.project || '')} / ${Math.round(t.estimated_minutes||30)}分</small><div class="badges"><span class="badge">${esc(t.status || '')}</span><span class="badge">${occurrenceLabel(t.occurrence)}</span>${t.due_date?`<span class="badge">期限 ${esc(t.due_date)}</span>`:''}</div><div class="actions"><button data-act="return">この日のタイムラインへ戻す</button><button data-act="done">完了</button></div>`;
   art.querySelector('[data-act="return"]').addEventListener('click', async()=>{ await returnToSchedule(t.id, state.scheduleDate); await refreshAll(); });
   art.querySelector('[data-act="done"]').addEventListener('click', async()=>{ await updateTask(t.id, { done:true, status:'done' }); await refreshAll(); });
   return art;

@@ -49,3 +49,9 @@ sql/
 - team_members の自分の管理者行
 - category_trees の初期カテゴリ候補
 
+
+
+## v18
+- カレンダーの過去日はグレーアウトします。
+- タスク追加の発生タイプに「毎週」「毎月」を追加しました。
+- 既存Supabaseに反映する場合は `sql/supabase_patch_v18_occurrence.sql` をSQL Editorで1回実行してください。

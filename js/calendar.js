@@ -1,4 +1,4 @@
-import { $, esc, toISO } from './utils.js';
+import { $, esc, toISO, todayISO, diffDays, taskOccursOnDate } from './utils.js';
 import { state } from './state.js';
 import { openDateOnBoard } from './board.js';
 
@@ -9,7 +9,7 @@ export function renderCalendar(){
 }
 
 function relativeMonthStats(iso){
-  const list = state.tasks.filter(t=>!t.done && (t.schedule_date===iso || t.carryover_date===iso || t.due_date===iso));
+  const list = state.tasks.filter(t=>taskOccursOnDate(t, iso));
   const total = list.length;
   const carryovers = list.filter(t=>t.carryover_date===iso).length;
   return { total, carryovers };
@@ -29,7 +29,7 @@ function renderMonthGrid(){
   const first = new Date(y,m-1,1);
   const last = new Date(y,m,0);
   const offset = (first.getDay()+6)%7;
-  const today = new Date().toISOString().slice(0,10);
+  const today = todayISO();
 
   for(let i=0;i<offset;i++){
     const blank=document.createElement('div');
@@ -41,7 +41,7 @@ function renderMonthGrid(){
     const iso = toISO(new Date(y,m-1,day));
     const isToday = iso===today;
     const membersWithTasks = state.members.map(mem=>{
-      const tasks = state.tasks.filter(t=>t.owner_id===mem.id && !t.done && (t.schedule_date===iso || t.carryover_date===iso || t.due_date===iso));
+      const tasks = state.tasks.filter(t=>t.owner_id===mem.id && taskOccursOnDate(t, iso));
       return { mem, count: tasks.length, carry: tasks.filter(t=>t.carryover_date===iso).length };
     }).filter(x=>x.count>0);
 
@@ -50,6 +50,7 @@ function renderMonthGrid(){
     cell.type='button';
     cell.className='dayCell fancy';
     if(isToday) cell.classList.add('today');
+    if(diffDays(iso, today) < 0) cell.classList.add('past');
 
     const header = `
       <div class="dayHead">
