@@ -230,29 +230,38 @@ export function initCalendarEvents(){
     $('unavailableEnd').disabled = allDay;
   });
   $('addUnavailableBtn')?.addEventListener('click', async()=>{
-    const date = $('unavailableDate')?.value;
-    if(!date) return alert('稼働できない日を選んでください');
-    const allDay = $('unavailableAllDay')?.checked;
-    const start = allDay ? '00:00' : ($('unavailableStart')?.value || '00:00');
-    const duration = allDay ? DAY_MINUTES : durationBetween(start, $('unavailableEnd')?.value || '00:00');
-    await createTask({
-      team_id:state.team.id,
-      owner_id:state.user.id,
-      created_by:state.user.id,
-      title: allDay ? '終日稼働不可' : '稼働不可時間',
-      category:'稼働不可',
-      project:'おやすみ',
-      task_type:'',
-      estimated_minutes: duration,
-      start_time:start,
-      schedule_date:date,
-      due_date:date,
-      occurrence:'single',
-      status:'unavailable',
-      memo:$('unavailableMemo')?.value || '稼働不可',
-      sort_order:Date.now()*-1
-    });
-    $('unavailableMemo').value='';
-    await refreshAll();
+    try{
+      const date = $('unavailableDate')?.value;
+      if(!date) return alert('稼働できない日を選んでください');
+      const allDay = $('unavailableAllDay')?.checked;
+      const start = allDay ? '00:00' : ($('unavailableStart')?.value || '00:00');
+      const duration = allDay ? DAY_MINUTES : durationBetween(start, $('unavailableEnd')?.value || '00:00');
+
+      // status は既存DBの制約に合わせて scheduled のままにする。
+      // category='稼働不可' で稼働不可ブロックとして判定する。
+      await createTask({
+        team_id:state.team.id,
+        owner_id:state.user.id,
+        created_by:state.user.id,
+        title: allDay ? '終日稼働不可' : '稼働不可時間',
+        category:'稼働不可',
+        project:'おやすみ',
+        task_type:'',
+        estimated_minutes: duration,
+        start_time:start,
+        schedule_date:date,
+        due_date:date,
+        occurrence:'single',
+        status:'scheduled',
+        memo:$('unavailableMemo')?.value || '稼働不可',
+        sort_order:Date.now()*-1
+      });
+      $('unavailableMemo').value='';
+      await refreshAll();
+      alert('稼働不可を追加しました');
+    }catch(e){
+      console.error(e);
+      alert(e.message || '稼働不可の追加に失敗しました');
+    }
   });
 }

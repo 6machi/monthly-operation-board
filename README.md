@@ -1,4 +1,4 @@
-# タスクかんりシート Supabase版 v11
+# タスクかんりシート Supabase版 v26 v11
 
 GitHub Pages + Supabase Auth + Supabase Database/RLS で使う分割版です。
 
