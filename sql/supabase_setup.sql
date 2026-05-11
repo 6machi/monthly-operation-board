@@ -1,8 +1,8 @@
--- 月次作戦ボード Supabase 初期設定SQL v3
+-- 月次作戦ボード Supabase 初期設定SQL v4
 -- これ1本を Supabase SQL Editor で実行してください。
 -- public側の月次作戦ボード用テーブルを作り直します。
 -- Authのユーザー自体は削除しません。
--- v3: 初回ログイン時のチーム作成を SECURITY DEFINER の bootstrap_my_board() に集約し、RLSで弾かれにくくしています。
+-- v4: bootstrap_my_board() を returns void に変更し、team_id の曖昧参照エラーを回避します。
 
 create extension if not exists pgcrypto;
 
@@ -23,6 +23,8 @@ drop function if exists public.bootstrap_my_board() cascade;
 create table public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   display_name text not null default '自分',
+  display_emoji text not null default '🌙',
+  display_color text not null default '#5d9cec',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -147,7 +149,7 @@ $$;
 -- 初回ログイン時の自分用ボード作成関数。
 -- クライアントから直接 teams/team_members を作ると、RLS順序で弾かれることがあるため関数化。
 create or replace function public.bootstrap_my_board()
-returns table(profile_id uuid, team_id uuid)
+returns void
 language plpgsql
 security definer
 set search_path = public
@@ -171,9 +173,14 @@ begin
   select email into v_email from auth.users where id = v_user;
   v_display_name := coalesce(nullif(split_part(v_email, '@', 1), ''), '自分');
 
-  insert into public.profiles(id, display_name)
-  values (v_user, v_display_name)
-  on conflict (id) do nothing;
+  insert into public.profiles(id, display_name, display_emoji, display_color)
+  values (v_user, v_display_name, '🌙', '#5d9cec')
+  on conflict (id) do update
+    set display_name = case
+      when public.profiles.display_name = v_email then excluded.display_name
+      when public.profiles.display_name like '%@%' then excluded.display_name
+      else public.profiles.display_name
+    end;
 
   select tm.team_id into v_team_id
   from public.team_members tm
@@ -195,7 +202,7 @@ begin
   values (v_team_id, v_user, v_default_tree)
   on conflict (team_id, owner_id) do nothing;
 
-  return query select v_user, v_team_id;
+  return;
 end;
 $$;
 

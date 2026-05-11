@@ -20,8 +20,6 @@ export async function signOut(){
   if(error) throw error;
 }
 export async function ensureProfileAndTeam(user){
-  // 初回ログイン時のプロフィール・個人ボード作成は、RLSで弾かれないよう
-  // Supabase側の SECURITY DEFINER 関数に任せます。
   const { error:bootErr } = await supabase.rpc('bootstrap_my_board');
   if(bootErr) throw bootErr;
 
@@ -45,13 +43,30 @@ export async function ensureProfileAndTeam(user){
 export async function loadMembers(teamId){
   const { data, error } = await supabase
     .from('team_members')
-    .select('user_id, role, profiles(id, display_name)')
+    .select('user_id, role, profiles(id, display_name, display_emoji, display_color)')
     .eq('team_id', teamId)
     .order('created_at', { ascending:true });
   if(error) throw error;
   return (data || []).map(row => ({
     id: row.user_id,
     role: row.role,
-    name: row.profiles?.display_name || 'メンバー'
+    name: row.profiles?.display_name || 'メンバー',
+    emoji: row.profiles?.display_emoji || '🌙',
+    color: row.profiles?.display_color || '#5d9cec'
   }));
+}
+export async function updateMyProfile(profile){
+  const payload = {
+    display_name: (profile.display_name || '').trim() || '自分',
+    display_emoji: (profile.display_emoji || '🌙').trim().slice(0, 4) || '🌙',
+    display_color: profile.display_color || '#5d9cec'
+  };
+  const { data, error } = await supabase
+    .from('profiles')
+    .update(payload)
+    .eq('id', (await supabase.auth.getUser()).data.user.id)
+    .select('*')
+    .single();
+  if(error) throw error;
+  return data;
 }

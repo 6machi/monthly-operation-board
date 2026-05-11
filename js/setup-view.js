@@ -1,6 +1,7 @@
 import { $, esc } from './utils.js';
 import { state } from './state.js';
 import { saveTree } from './setup.js';
+import { updateMyProfile, loadMembers } from './auth.js';
 import { createTask } from './tasks.js';
 import { refreshAll } from './app.js';
 
@@ -11,9 +12,30 @@ function typ(){ const p=proj(); return p?.types?.find(t=>t.name===$('newType').v
 function fill(sel, arr, cur){ sel.innerHTML=(arr||[]).map(v=>`<option ${v===cur?'selected':''}>${esc(v)}</option>`).join(''); }
 export function renderSetup(){
   $('setupNotice').textContent = editable() ? '自分の棚卸しです。編集できます。' : '他メンバーの棚卸しは閲覧中心です。';
+  renderProfileSettings();
   renderCategories(); renderSelectors(); renderCategoryEditor();
   document.querySelectorAll('#setup input,#setup select,#setup textarea,#setup button').forEach(el=>{ if(!el.closest('.tabs')) el.disabled = !editable(); });
 }
+
+function renderProfileSettings(){
+  const panel = $('profileSettingsPanel');
+  if(!panel) return;
+  const isMine = state.selectedMemberId === state.user.id;
+  panel.classList.toggle('hidden', !isMine);
+  if(!isMine) return;
+  const profile = state.profile || {};
+  $('profileName').value = profile.display_name || '自分';
+  $('profileEmoji').value = profile.display_emoji || '🌙';
+  $('profileColor').value = profile.display_color || '#5d9cec';
+  renderProfilePreview();
+}
+function renderProfilePreview(){
+  const name = $('profileName').value || '自分';
+  const emoji = $('profileEmoji').value || '🌙';
+  const color = $('profileColor').value || '#5d9cec';
+  $('profilePreview').innerHTML = `<div class="profileChip" style="--profile-color:${esc(color)}"><span>${esc(emoji)}</span><b>${esc(name)}</b></div>`;
+}
+
 function renderCategories(){
   const grid=$('categoryGrid'); grid.innerHTML='';
   state.tree.forEach((c,i)=>{
@@ -52,6 +74,21 @@ function renderCategoryEditor(){
   $('addCandidateBtn').onclick = async()=>{ const pName=prompt('プロジェクト名', c.projects?.[0]?.name||''); const p=c.projects?.find(x=>x.name===pName); if(!p)return alert('プロジェクトが見つかりません'); const tName=prompt('タスク種類', p.types?.[0]?.name||''); const ty=p.types?.find(x=>x.name===tName); if(!ty)return alert('タスク種類が見つかりません'); const name=prompt('追加するタスク名候補'); if(!name)return; ty.tasks=ty.tasks||[]; ty.tasks.push(name); await persist(); };
 }
 export function initSetupEvents(){
+  $('saveProfileBtn').addEventListener('click', async()=>{
+    try{
+      const updated = await updateMyProfile({
+        display_name: $('profileName').value,
+        display_emoji: $('profileEmoji').value,
+        display_color: $('profileColor').value
+      });
+      state.profile = updated;
+      state.members = await loadMembers(state.team.id);
+      alert('自分設定を保存しました');
+      renderSetup();
+      refreshAll();
+    }catch(e){ alert(e.message || '自分設定の保存に失敗しました'); }
+  });
+  ['profileName','profileEmoji','profileColor'].forEach(id=>$(id).addEventListener('input', renderProfilePreview));
   ['newCategory','newProject','newType'].forEach(id=>$(id).addEventListener('change',renderSelectors));
   $('newCandidate').addEventListener('change',()=>{ if($('newCandidate').value !== '候補から選ぶ') $('newTitle').value = $('newCandidate').value; });
   $('addMonthlyTaskBtn').addEventListener('click', async()=>{

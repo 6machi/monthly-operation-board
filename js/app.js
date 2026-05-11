@@ -27,7 +27,7 @@ function renderHero(){
   $('heroTime').textContent = nowTimeText();
 }
 function renderMemberTabs(){
-  const html = state.members.map(m=>`<button class="${m.id===state.selectedMemberId?'active':''}" data-member="${m.id}">${m.name}</button>`).join('');
+  const html = state.members.map(m=>`<button class="memberTab ${m.id===state.selectedMemberId?'active':''}" data-member="${m.id}" style="--member-color:${m.color || '#5d9cec'}"><span>${m.emoji || '🌙'}</span>${m.name}</button>`).join('');
   $('memberTabs').innerHTML = html;
   $('setupMemberTabs').innerHTML = html;
   [...$('memberTabs').querySelectorAll('button'), ...$('setupMemberTabs').querySelectorAll('button')].forEach(btn=>{
@@ -55,7 +55,7 @@ async function bootAuthed(session){
   state.treeRowId = treeResult.id; state.tree = treeResult.tree;
   state.tasks = await loadTasks(state.team.id);
   $('authView').classList.add('hidden'); $('appView').classList.remove('hidden'); $('mainNav').classList.remove('hidden'); $('logoutBtn').classList.remove('hidden');
-  $('loginPill').textContent = `ログイン：${state.profile?.display_name || state.user.email}`;
+  $('loginPill').textContent = `${state.profile?.display_emoji || '🌙'} ${state.profile?.display_name || '自分'}`;
   renderCurrent();
 }
 function showAuth(){

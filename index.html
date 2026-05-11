@@ -113,6 +113,17 @@
       <section id="setup" class="view">
         <div class="tabs" id="setupMemberTabs"></div>
         <div id="setupNotice" class="notice ok"></div>
+        <section class="panel" id="profileSettingsPanel">
+          <h2>自分設定</h2>
+          <p class="muted">画面上ではメールアドレスを出さず、この名前・絵文字・色で表示します。</p>
+          <div class="profilePreview" id="profilePreview"></div>
+          <div class="form three profileForm">
+            <label><small>自分の名前</small><input id="profileName" placeholder="表示したい名前"></label>
+            <label><small>自分の絵文字</small><input id="profileEmoji" placeholder="例：🌙" maxlength="4"></label>
+            <label><small>自分の色</small><input id="profileColor" type="color" value="#5d9cec"></label>
+          </div>
+          <button class="primary" id="saveProfileBtn">自分設定を保存</button>
+        </section>
         <section class="panel"><h2>カテゴリ管理</h2><div class="catgrid" id="categoryGrid"></div></section>
         <section class="panel" id="categoryEditorPanel">
           <h2>カテゴリ編集</h2>
