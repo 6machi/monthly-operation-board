@@ -304,6 +304,23 @@ function renderRegisteredTasks(){
   box.querySelectorAll('[data-delete-task]').forEach(btn=>btn.onclick=async()=>{ if(!mine)return alert('他メンバーのタスクは編集できません'); const id=btn.dataset.deleteTask; const t=state.tasks.find(x=>String(x.id)===String(id)); if(!confirm(`タスク「${t?.title||''}」を削除しますか？`))return; await deleteTask(id); await refreshAll(); });
 }
 
+function isUnavailableTaskLocal(t){ return t?.status === 'unavailable' || t?.category === '稼働不可'; }
+function unavailableDatesForMe(){
+  return new Set(state.tasks
+    .filter(t=>t.owner_id===state.user?.id && isUnavailableTaskLocal(t) && (t.schedule_date || t.due_date || t.carryover_date))
+    .map(t=>t.schedule_date || t.due_date || t.carryover_date));
+}
+function workingDatesBetween(start, due){
+  const unavailable = unavailableDatesForMe();
+  const totalDays = diffDays(due, start) + 1;
+  const dates = [];
+  const skipped = [];
+  for(let i=0; i<totalDays; i++){
+    const date = addDays(start, i);
+    if(unavailable.has(date)) skipped.push(date); else dates.push(date);
+  }
+  return { dates, skipped, totalDays };
+}
 function snap15(min){ return Math.max(15, Math.ceil(Number(min || 0) / 15) * 15); }
 function currentNewTaskTitle(){ return $('newTitle').value.trim() || ($('newCandidate').value==='候補から選ぶ'?'':$('newCandidate').value); }
 function getReversePlan(){
@@ -314,12 +331,15 @@ function getReversePlan(){
   if(!title) return { ok:false, message:'タスク名を入れると逆算できます。' };
   if(!total) return { ok:false, message:'見積もり時間を入れると逆算できます。例：合計360分' };
   if(!due) return { ok:false, message:'期限を入れると逆算できます。' };
-  const days = diffDays(due, start) + 1;
-  if(days <= 0) return { ok:false, message:'期限は開始日以降にしてください。' };
+  const { dates, skipped, totalDays } = workingDatesBetween(start, due);
+  if(totalDays <= 0) return { ok:false, message:'期限は開始日以降にしてください。' };
+  if(!dates.length) return { ok:false, message:'開始日〜期限の間がすべて稼働不可日です。カレンダーで稼働できる日を1日以上残してください。' };
+  const days = dates.length;
   const daily = snap15(total / days);
   const actualTotal = daily * days;
-  return { ok:true, title, total, start, due, days, daily, actualTotal,
-    message:`${fmtDate(start)}〜${fmtDate(due)}の${days}日間で、毎日 ${daily}分（約${Math.round(daily/60*10)/10}時間）ずつやればOK。` };
+  const skipText = skipped.length ? `（稼働不可 ${skipped.length}日を避けます）` : '';
+  return { ok:true, title, total, start, due, days, daily, actualTotal, dates, skipped, totalDays,
+    message:`${fmtDate(start)}〜${fmtDate(due)}のうち、稼働できる${days}日で、1日 ${daily}分（約${Math.round(daily/60*10)/10}時間）ずつやればOK。${skipText}` };
 }
 function renderReversePreview(){
   const el = $('reversePlanPreview');
@@ -336,7 +356,7 @@ async function addReversePlanTasks(){
   const memoBase = $('newMemo').value || '';
   const startTime = $('newStartTime')?.value || '09:00';
   for(let i=0;i<plan.days;i++){
-    const date = addDays(plan.start, i);
+    const date = plan.dates[i];
     await createTask({
       team_id:state.team.id,
       owner_id:state.user.id,
@@ -351,7 +371,7 @@ async function addReversePlanTasks(){
       due_date:plan.due,
       occurrence:'single',
       status:'scheduled',
-      memo:`${memoBase}${memoBase ? '\n' : ''}納期から逆算：総見積もり${plan.total}分 / ${plan.days}日 / 1日${plan.daily}分`,
+      memo:`${memoBase}${memoBase ? '\n' : ''}納期から逆算：総見積もり${plan.total}分 / 稼働${plan.days}日（期間${plan.totalDays}日・稼働不可${plan.skipped.length}日を除外） / 1日${plan.daily}分`,
       sort_order:(Date.now()*-1)-i
     });
   }
