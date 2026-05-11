@@ -75,6 +75,13 @@ async function init(){
     return;
   }
   initBoardEvents(); initCalendarEvents(); initSetupEvents();
+  document.addEventListener('click', (e)=>{
+    const input = e.target?.closest?.('input[type="date"], input[type="time"]');
+    if(!input || input.disabled) return;
+    if(typeof input.showPicker === 'function'){
+      try{ input.showPicker(); }catch(_e){}
+    }
+  }, true);
   qsa('#mainNav button').forEach(btn=>btn.addEventListener('click',()=>showView(btn.dataset.view)));
   $('loginPill').addEventListener('click',()=>{ if(state.user) showView('profile'); });
   document.addEventListener('click', (e)=>{

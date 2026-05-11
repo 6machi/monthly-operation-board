@@ -69,7 +69,7 @@ function formatUnavailable(t){
   if(duration >= DAY_MINUTES) return '終日';
   return `${start.slice(0,5)}〜${fullClock(minutesFromTime(start)+duration)}`;
 }
-function renderUnavailableList(){
+export function renderUnavailableList(){
   const box = $('unavailableList');
   if(!box) return;
   const mine = state.selectedMemberId === state.user?.id;
@@ -224,6 +224,7 @@ function renderMemberSummary(){
 export function initCalendarEvents(){
   $('calendarMonth').addEventListener('change',()=>{ state.calendarMonth = $('calendarMonth').value; renderCalendar(); });
   $('calendarThisMonth').addEventListener('click',()=>{ state.calendarMonth = new Date().toISOString().slice(0,7); renderCalendar(); });
+  $('openProfileFromCalendar')?.addEventListener('click',()=>{ import('./app.js').then(m=>m.showView('profile')); });
   $('unavailableAllDay')?.addEventListener('change',()=>{
     const allDay = $('unavailableAllDay').checked;
     $('unavailableStart').disabled = allDay;

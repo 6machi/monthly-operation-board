@@ -4,8 +4,13 @@ import { saveTree } from './setup.js';
 import { updateMyProfile, loadMembers } from './auth.js';
 import { createTask, updateTask, deleteTask } from './tasks.js';
 import { refreshAll, showView } from './app.js';
+import { renderUnavailableList, isUnavailableTask } from './calendar.js';
 
 let draggingCategoryIndex = null;
+const ACHIEVEMENT_EXCLUDE = '[[achievement_excluded]]';
+function achievementExcluded(t){ return String(t?.memo||'').includes(ACHIEVEMENT_EXCLUDE); }
+function stripAchievementMarker(memo){ return String(memo||'').replace(ACHIEVEMENT_EXCLUDE,'').trim(); }
+function categoryColor(name){ const c=(state.tree||[]).find(x=>x.name===name); return c?.color || (name==='差し込みタスク'?'#f5a623':name==='仕事'?'#5d9cec':name==='プライベート'?'#63b978':'#9aa4b6'); }
 
 function editable(){ return state.selectedMemberId === state.user.id; }
 function cat(){ normalizeTree(); return state.tree[state.selectedCategoryIndex] || state.tree[0]; }
@@ -75,6 +80,7 @@ export function renderSetup(){
 export function renderProfilePage(){
   state.selectedMemberId = state.user.id;
   renderProfileSettings();
+  renderUnavailableList();
   renderAchievementArchive(state.user.id);
 }
 
@@ -107,7 +113,7 @@ function renderAchievementArchive(memberId = state.user?.id){
   const emoji = member.emoji || '🌙';
   const color = member.color || '#5d9cec';
   const doneTasks = state.tasks
-    .filter(t=>t.owner_id===memberId && t.done)
+    .filter(t=>t.owner_id===memberId && t.done && !achievementExcluded(t))
     .slice()
     .sort((a,b)=>String(b.updated_at||b.created_at||'').localeCompare(String(a.updated_at||a.created_at||'')));
   const byCategory = new Map();
@@ -134,12 +140,21 @@ function renderAchievementArchive(memberId = state.user?.id){
         <div class="achievementCategoryHead"><b>${esc(category)}</b><span>${arr.length}個できた</span></div>
         <div class="achievementDoneList">
           ${arr.slice(0,8).map(t=>`
-            <div class="doneTaskPill"><span class="doneMark">✓</span><span class="doneTitle">${esc(t.title || '無題タスク')}</span><small>${esc(t.project || '')}</small></div>
+            <div class="doneTaskPill"><span class="doneMark">✓</span><span class="doneTitle">${esc(t.title || '無題タスク')}</span><small>${esc(t.project || '')}</small>${memberId===state.user?.id ? `<button type="button" class="ghost tiny excludeAchievementBtn" data-exclude-ach="${esc(t.id)}">ログから外す</button>` : ''}</div>
           `).join('')}
           ${arr.length>8 ? `<div class="doneMore">ほか ${arr.length-8}個</div>` : ''}
         </div>
       </section>`).join('')}</div>` : '<div class="empty">完了にしたタスクがここに積み上がります。</div>'}
   `;
+  box.querySelectorAll('[data-exclude-ach]').forEach(btn=>btn.addEventListener('click', async()=>{
+    const t = state.tasks.find(x=>String(x.id)===String(btn.dataset.excludeAch));
+    if(!t) return;
+    if(!confirm('このタスクをできたことログの集計から外しますか？\nタスク自体は削除されません。')) return;
+    const memo = String(t.memo || '');
+    await updateTask(t.id, { memo: memo.includes(ACHIEVEMENT_EXCLUDE) ? memo : `${memo}${memo ? '\n' : ''}${ACHIEVEMENT_EXCLUDE}` });
+    await refreshAll();
+    renderProfilePage();
+  }));
 }
 
 function renderCategories(){
@@ -269,11 +284,11 @@ function taskDateLabel(t){ return t.schedule_date || t.carryover_date || t.due_d
 function renderRegisteredTasks(){
   const box = $('registeredTasks'); if(!box) return;
   const mine = editable();
-  const arr = state.tasks.filter(t=>t.owner_id===state.selectedMemberId).slice().sort((a,b)=>String(taskDateLabel(b)).localeCompare(String(taskDateLabel(a))) || String(b.created_at||'').localeCompare(String(a.created_at||'')));
+  const arr = state.tasks.filter(t=>t.owner_id===state.selectedMemberId && !isUnavailableTask(t)).slice().sort((a,b)=>String(taskDateLabel(b)).localeCompare(String(taskDateLabel(a))) || String(b.created_at||'').localeCompare(String(a.created_at||'')));
   if(!arr.length){ box.innerHTML = '<div class="empty">登録済みタスクはまだありません。</div>'; return; }
   box.innerHTML = arr.map(t=>`
-    <article class="registeredTask ${t.done?'done':''}" data-task-card="${esc(t.id)}">
-      <div class="registeredTaskHead"><div><b>${esc(t.title)}</b><div class="muted">${esc(t.category||'未分類')} / ${esc(t.project||'')}</div></div><div class="taskDateBadge">${esc(taskDateLabel(t) || '日付なし')}</div></div>
+    <article class="registeredTask ${t.done?'done':''} ${achievementExcluded(t)?'achievementExcluded':''}" style="--c:${esc(categoryColor(t.category))}" data-task-card="${esc(t.id)}">
+      <div class="registeredTaskHead"><label class="taskSelectLine"><input type="checkbox" class="registeredTaskCheck" value="${esc(t.id)}"><span></span></label><div><b>${esc(t.title)}</b><div class="muted">${esc(t.category||'未分類')} / ${esc(t.project||'')}</div></div><div class="taskDateBadge">${esc(taskDateLabel(t) || '日付なし')}</div></div>
       <div class="badges"><span class="badge">${esc(t.start_time || '09:00')}開始</span><span class="badge">${Math.round(Number(t.estimated_minutes||30))}分</span><span class="badge">${esc(t.status||'')}</span><span class="badge">${occurrenceLabel(t.occurrence)}</span>${t.done?'<span class="badge">完了</span>':''}</div>
       ${t.memo?`<p class="taskMemo">${esc(t.memo)}</p>`:''}
       <details class="taskEditDetails"><summary>このタスクを修正する</summary>
@@ -292,19 +307,20 @@ function renderRegisteredTasks(){
             <option value="weekly" ${t.occurrence==='weekly'?'selected':''}>毎週</option>
             <option value="monthly" ${t.occurrence==='monthly'?'selected':''}>毎月</option>
           </select></label>
-          <label style="grid-column:1/-1"><small>メモ</small><textarea data-field="memo">${esc(t.memo||'')}</textarea></label>
+          <label style="grid-column:1/-1"><small>メモ</small><textarea data-field="memo">${esc(stripAchievementMarker(t.memo))}</textarea></label>
         </div>
-        <div class="actions"><button type="button" class="primary" data-save-task="${esc(t.id)}">保存</button><button type="button" class="ghost" data-toggle-done="${esc(t.id)}">${t.done?'未完了に戻す':'完了にする'}</button><button type="button" class="danger" data-delete-task="${esc(t.id)}">削除</button></div>
+        <div class="actions"><button type="button" class="primary" data-save-task="${esc(t.id)}">保存</button><button type="button" class="ghost" data-toggle-done="${esc(t.id)}">${t.done?'未完了に戻す':'完了にする'}</button><button type="button" class="ghost" data-toggle-achievement="${esc(t.id)}">${achievementExcluded(t)?'ログに戻す':'ログに入れない'}</button><button type="button" class="danger" data-delete-task="${esc(t.id)}">削除</button></div>
       </details>
     </article>`).join('');
   box.querySelectorAll('[data-save-task]').forEach(btn=>btn.onclick=async()=>{
     if(!mine) return alert('他メンバーのタスクは編集できません');
     const id=btn.dataset.saveTask; const card=box.querySelector(`[data-task-card="${id}"]`); const val=(name)=>card.querySelector(`[data-field="${name}"]`)?.value || '';
     const schedule=val('schedule_date')||null; const carry=val('carryover_date')||null;
-    await updateTask(id,{ title:val('title').trim()||'無題タスク', category:val('category').trim()||'未分類', project:val('project').trim()||'未分類', task_type:'', estimated_minutes:Math.max(15, Math.round(Number(val('estimated_minutes')||30)/15)*15), start_time:val('start_time')||'09:00', schedule_date:schedule, carryover_date:carry, due_date:val('due_date')||null, occurrence:val('occurrence')||'single', memo:val('memo')||'', status:carry?'carryover':'scheduled' });
+    await updateTask(id,{ title:val('title').trim()||'無題タスク', category:val('category').trim()||'未分類', project:val('project').trim()||'未分類', task_type:'', estimated_minutes:Math.max(15, Math.round(Number(val('estimated_minutes')||30)/15)*15), start_time:val('start_time')||'09:00', schedule_date:schedule, carryover_date:carry, due_date:val('due_date')||null, occurrence:val('occurrence')||'single', memo:(val('memo')||'') + (achievementExcluded(state.tasks.find(x=>String(x.id)===String(id))) ? `\n${ACHIEVEMENT_EXCLUDE}` : ''), status:carry?'carryover':'scheduled' });
     await refreshAll();
   });
   box.querySelectorAll('[data-toggle-done]').forEach(btn=>btn.onclick=async()=>{ if(!mine)return alert('他メンバーのタスクは編集できません'); const id=btn.dataset.toggleDone; const t=state.tasks.find(x=>String(x.id)===String(id)); if(!t)return; await updateTask(id,{ done:!t.done, status:!t.done?'done':'scheduled' }); await refreshAll(); });
+  box.querySelectorAll('[data-toggle-achievement]').forEach(btn=>btn.onclick=async()=>{ if(!mine)return alert('他メンバーのタスクは編集できません'); const id=btn.dataset.toggleAchievement; const t=state.tasks.find(x=>String(x.id)===String(id)); if(!t)return; const memo=String(t.memo||''); const next=achievementExcluded(t) ? stripAchievementMarker(memo) : `${memo}${memo ? '\n' : ''}${ACHIEVEMENT_EXCLUDE}`; await updateTask(id,{ memo:next }); await refreshAll(); });
   box.querySelectorAll('[data-delete-task]').forEach(btn=>btn.onclick=async()=>{ if(!mine)return alert('他メンバーのタスクは編集できません'); const id=btn.dataset.deleteTask; const t=state.tasks.find(x=>String(x.id)===String(id)); if(!confirm(`タスク「${t?.title||''}」を削除しますか？`))return; await deleteTask(id); await refreshAll(); });
 }
 
@@ -434,7 +450,7 @@ export function initSetupEvents(){
   $('backToBoardBtn')?.addEventListener('click', ()=>showView('board'));
   $('saveProfileBtn').addEventListener('click', async()=>{
     try{
-      const updated = await updateMyProfile({ display_name:$('profileName').value, display_emoji:$('profileEmoji').value, display_color:$('profileColor').value });
+      const updated = await updateMyProfile({ display_name:$('profileName').value, display_emoji:$('profileEmoji').value, display_color:$('profileColor').value, sleep_start_time:$('profileSleepStart').value || '02:00', sleep_end_time:$('profileSleepEnd').value || '09:00' });
       state.profile = updated; state.members = await loadMembers(state.team.id); $('loginPill').textContent = `${updated.display_emoji || '🌙'} ${updated.display_name || '自分'}`; alert('自分設定を保存しました'); renderProfilePage(); refreshAll();
     }catch(e){ alert(e.message || '自分設定の保存に失敗しました'); }
   });
@@ -444,6 +460,16 @@ export function initSetupEvents(){
   ['newTitle','newMinutes','newStart','newDue','newStartTime','newMemo'].forEach(id=>$(id)?.addEventListener('input', renderReversePreview));
   $('calcReversePlanBtn')?.addEventListener('click', renderReversePreview);
   $('addReversePlanBtn')?.addEventListener('click', addReversePlanTasks);
+  $('selectAllRegisteredTasks')?.addEventListener('click',()=>document.querySelectorAll('#registeredTasks .registeredTaskCheck').forEach(ch=>ch.checked=true));
+  $('clearRegisteredTaskSelection')?.addEventListener('click',()=>document.querySelectorAll('#registeredTasks .registeredTaskCheck').forEach(ch=>ch.checked=false));
+  $('deleteSelectedTasks')?.addEventListener('click',async()=>{
+    if(!editable()) return alert('他メンバーのタスクは編集できません');
+    const ids=[...document.querySelectorAll('#registeredTasks .registeredTaskCheck:checked')].map(ch=>ch.value);
+    if(!ids.length) return alert('削除するタスクを選んでください');
+    if(!confirm(`${ids.length}件のタスクを削除しますか？`)) return;
+    for(const id of ids) await deleteTask(id);
+    await refreshAll();
+  });
   $('addMonthlyTaskBtn').addEventListener('click', async()=>{
     if(!editable()) return alert('他メンバーの棚卸しは編集できません');
     const title = $('newTitle').value.trim() || ($('newCandidate').value==='候補から選ぶ'?'':$('newCandidate').value);

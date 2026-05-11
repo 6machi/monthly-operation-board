@@ -389,6 +389,48 @@ function taskCard(t){
   return art;
 }
 
+
+function mergeIntervals(intervals){
+  const sorted = intervals
+    .map(x=>({start:Math.max(0, Math.min(DAY_MINUTES, x.start)), end:Math.max(0, Math.min(DAY_MINUTES, x.end))}))
+    .filter(x=>x.end>x.start)
+    .sort((a,b)=>a.start-b.start);
+  const merged=[];
+  sorted.forEach(it=>{
+    const last=merged[merged.length-1];
+    if(!last || it.start>last.end) merged.push({...it});
+    else last.end=Math.max(last.end,it.end);
+  });
+  return merged;
+}
+function availableMinutesForDate(dateIso, memberId=state.selectedMemberId){
+  const busy = mergeIntervals(memberBlockedIntervals(dateIso, memberId));
+  const busyMin = busy.reduce((sum,b)=>sum+(b.end-b.start),0);
+  return Math.max(0, DAY_MINUTES - busyMin);
+}
+function monthDatesFrom(dateIso){
+  const [y,m] = String(dateIso || todayISO()).split('-').map(Number);
+  const last = new Date(y, m, 0).getDate();
+  return Array.from({length:last}, (_,i)=>`${y}-${String(m).padStart(2,'0')}-${String(i+1).padStart(2,'0')}`);
+}
+function formatHours(min){
+  const h = min / 60;
+  return `${Math.round(h*10)/10}h`;
+}
+function renderActivitySummary(){
+  const box = $('activitySummary');
+  if(!box) return;
+  const todayMin = availableMinutesForDate(state.scheduleDate, state.selectedMemberId);
+  const monthMin = monthDatesFrom(state.scheduleDate).reduce((sum,d)=>sum+availableMinutesForDate(d, state.selectedMemberId),0);
+  const workMin = timelineTasks().reduce((sum,t)=>sum+taskDuration(t),0);
+  const remainMin = Math.max(0, todayMin - workMin);
+  box.innerHTML = `
+    <div class="activityCard"><b>${formatHours(todayMin)}</b><span>${fmtDate(state.scheduleDate)} の活動可能時間</span></div>
+    <div class="activityCard"><b>${formatHours(monthMin)}</b><span>この月の活動可能時間</span></div>
+    <div class="activityCard"><b>${formatHours(workMin)}</b><span>この日のタスク量</span></div>
+    <div class="activityCard"><b>${formatHours(remainMin)}</b><span>この日の残り余白</span></div>`;
+}
+
 export function renderBoard(){
   normalizeCarryDate();
   $('scheduleTitle').textContent = scheduleTitle();
@@ -397,6 +439,7 @@ export function renderBoard(){
   $('carryRelative').textContent = `(${relativeFrom(state.scheduleDate, state.carryDate)})`;
   $('carryPrev').disabled = diffDays(state.carryDate, addDays(state.scheduleDate,1)) <= 0;
   $('boardNotice').textContent = isUnavailableForMember(state.scheduleDate, state.selectedMemberId) ? 'この日は終日稼働不可です。毎日タスクや分割タスクは表示されません。' : (state.selectedMemberId === state.user.id ? '自分の今日やることです。編集できます。' : '他メンバーの今日やることです。閲覧中心です。');
+  renderActivitySummary();
   renderTimeline();
   renderCarryList();
 }
