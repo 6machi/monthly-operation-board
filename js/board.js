@@ -7,6 +7,24 @@ const SLOT_MINUTES = 15;
 const PX_PER_MINUTE = 1.15; // 15分 = 約17px / 60分 = 約69px
 const DAY_MINUTES = 24 * 60;
 const DEFAULT_START_MINUTES = 9 * 60;
+function timelineBaseMinutes(){
+  if(state.scheduleDate === todayISO()){
+    const now = new Date();
+    return now.getHours() * 60;
+  }
+  return 0;
+}
+function wrapMinutes(min){ return ((Math.round(min) % DAY_MINUTES) + DAY_MINUTES) % DAY_MINUTES; }
+function timeLabelWrap(min){ return fullClock(wrapMinutes(min)); }
+function relativeTimelineTop(startMin, baseMin){
+  const wrappedStart = wrapMinutes(startMin);
+  let delta = wrappedStart - baseMin;
+  if(delta < 0) delta += DAY_MINUTES;
+  return delta * PX_PER_MINUTE;
+}
+function minutesFromTimelineTop(topPx, baseMin){
+  return wrapMinutes(baseMin + snapMinutes(topPx / PX_PER_MINUTE));
+}
 
 function selectedTasks(){ return state.tasks.filter(t => t.owner_id === state.selectedMemberId && !t.done); }
 function timelineTasks(){ return selectedTasks().filter(t => taskOccursOnDate(t, state.scheduleDate)); }
@@ -49,7 +67,7 @@ function taskStartMinutes(t, index=0){
   if(t.start_time) return snapMinutes(minutesFromTime(t.start_time));
   return fallbackStart(index);
 }
-function timeLabel(min){ return fullClock(snapMinutes(min)); }
+function timeLabel(min){ return timeLabelWrap(snapMinutes(min)); }
 function isEditable(){ return state.selectedMemberId === state.user.id; }
 
 function ensureTaskEditor(){
@@ -160,14 +178,14 @@ function openTaskEditor(t){
   $('editTaskTitle').focus();
 }
 
-function makeEventElement(t, index){
+function makeEventElement(t, index, baseMin){
   const start = taskStartMinutes(t, index);
   const duration = taskDuration(t);
   const el = document.createElement('div');
   el.className = 'taskEvent';
   el.dataset.id = t.id;
   el.style.setProperty('--c', colorFor(t));
-  el.style.top = `${start * PX_PER_MINUTE}px`;
+  el.style.top = `${relativeTimelineTop(start, baseMin)}px`;
   el.style.height = `${Math.max(22, duration * PX_PER_MINUTE - 4)}px`;
   el.innerHTML = `
     <div class="eventMain">
@@ -218,11 +236,13 @@ function makeEventElement(t, index){
     const dy = e.clientY - startY;
     if(Math.abs(dy) > 4) moved = true;
     if(mode === 'move'){
-      const newTop = Math.max(0, Math.min(DAY_MINUTES * PX_PER_MINUTE - originalHeight, originalTop + dy));
-      el.style.top = `${newTop}px`;
+      const rawTop = Math.max(0, Math.min(DAY_MINUTES * PX_PER_MINUTE - originalHeight, originalTop + dy));
+      const snappedTop = snapMinutes(rawTop / PX_PER_MINUTE) * PX_PER_MINUTE;
+      el.style.top = `${snappedTop}px`;
     }else{
-      const newHeight = Math.max(SLOT_MINUTES * PX_PER_MINUTE - 4, originalHeight + dy);
-      el.style.height = `${newHeight}px`;
+      const rawHeight = Math.max(SLOT_MINUTES * PX_PER_MINUTE - 4, originalHeight + dy);
+      const snappedDuration = snapDuration((rawHeight + 4) / PX_PER_MINUTE);
+      el.style.height = `${snappedDuration * PX_PER_MINUTE - 4}px`;
     }
   };
 
@@ -247,8 +267,8 @@ function makeEventElement(t, index){
     }
 
     if(currentMode === 'move'){
-      const newStart = snapMinutes((parseFloat(el.style.top)||0) / PX_PER_MINUTE);
-      await updateTask(t.id, { start_time: timeLabel(newStart), schedule_date: state.scheduleDate, carryover_date:null, status:'scheduled' });
+      const newStart = minutesFromTimelineTop(parseFloat(el.style.top)||0, timelineBaseMinutes());
+      await updateTask(t.id, { start_time: timeLabelWrap(newStart), schedule_date: state.scheduleDate, carryover_date:null, status:'scheduled' });
     }else{
       const newDuration = snapDuration(((parseFloat(el.style.height)||0) + 4) / PX_PER_MINUTE);
       await updateTask(t.id, { estimated_minutes: newDuration });
@@ -298,6 +318,7 @@ export function renderBoard(){
 
 export function renderTimeline(){
   const box = $('timeline');
+  const baseMin = timelineBaseMinutes();
   box.innerHTML = '';
   box.className = 'timeline timelineCalendar';
   box.style.setProperty('--day-height', `${DAY_MINUTES * PX_PER_MINUTE}px`);
@@ -308,7 +329,7 @@ export function renderTimeline(){
     const label = document.createElement('div');
     label.className = 'timeMark';
     label.style.top = `${h*60*PX_PER_MINUTE}px`;
-    label.textContent = `${String(h).padStart(2,'0')}:00`;
+    label.textContent = timeLabelWrap(baseMin + h*60);
     axis.appendChild(label);
   }
 
@@ -330,7 +351,7 @@ export function renderTimeline(){
   const events = document.createElement('div');
   events.className = 'eventLayer';
   const list = timelineTasks();
-  list.forEach((t,idx)=>events.appendChild(makeEventElement(t, idx)));
+  list.forEach((t,idx)=>events.appendChild(makeEventElement(t, idx, baseMin)));
 
   const isToday = state.scheduleDate === todayISO();
   if(isToday){
@@ -338,14 +359,14 @@ export function renderTimeline(){
     const nowMin = now.getHours()*60 + now.getMinutes();
     const line = document.createElement('div');
     line.className = 'nowLine calendarNowLine';
-    line.style.top = `${nowMin * PX_PER_MINUTE}px`;
+    line.style.top = `${relativeTimelineTop(nowMin, baseMin)}px`;
     grid.appendChild(line);
   }
 
   const dropHint = document.createElement('div');
   dropHint.className = 'timelineHint';
   dropHint.textContent = isEditable()
-    ? 'カードを上下に動かすと開始時間変更 / 下端を引っぱると所要時間変更 / 持ち越し欄へ放すと持ち越し'
+    ? '15分刻みで移動・伸縮できます / カードクリックで修正 / 持ち越し欄へ放すと持ち越し'
     : '他メンバーのタイムラインは閲覧のみです。';
 
   box.appendChild(axis);
@@ -359,8 +380,9 @@ export function renderTimeline(){
   requestAnimationFrame(()=>{
     const container = $('timelineBox') || box.parentElement;
     if(!container) return;
-    const target = isToday ? (new Date().getHours()*60 + new Date().getMinutes()) * PX_PER_MINUTE - 80 : DEFAULT_START_MINUTES * PX_PER_MINUTE - 80;
-    container.scrollTop = Math.max(0, target);
+    // 今日は読み込んだ時刻の「時台」を先頭にして、そこから24時間を表示します。
+    // 明日以降は00:00始まりです。
+    container.scrollTop = 0;
   });
 }
 
