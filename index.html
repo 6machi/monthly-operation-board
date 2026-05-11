@@ -124,6 +124,11 @@
           </div>
           <button class="primary" id="saveProfileBtn">自分設定を保存</button>
         </section>
+
+        <section class="panel" id="achievementPanel">
+          <h2>できたことログ</h2>
+          <div id="achievementArchive"></div>
+        </section>
         <section class="panel"><h2>カテゴリ管理</h2><div class="catgrid" id="categoryGrid"></div></section>
         <section class="panel" id="categoryEditorPanel">
           <h2>カテゴリ編集</h2>
@@ -147,6 +152,11 @@
           </div>
           <label><small>メモ</small><textarea id="newMemo" placeholder="補足・確認先・注意点"></textarea></label>
           <button class="primary" id="addMonthlyTaskBtn">追加する</button>
+        </section>
+        <section class="panel">
+          <h2>登録済みタスクの修正</h2>
+          <p class="muted">追加済みのタスク名・カテゴリ・プロジェクト・日付・期限などをあとから直せます。</p>
+          <div class="registeredTaskList" id="registeredTasks"></div>
         </section>
       </section>
     </section>
