@@ -86,13 +86,17 @@ function renderProfileSettings(){
   $('profileName').value = profile.display_name || '自分';
   $('profileEmoji').value = profile.display_emoji || '🌙';
   $('profileColor').value = profile.display_color || '#5d9cec';
+  $('profileSleepStart').value = String(profile.sleep_start_time || '02:00').slice(0,5);
+  $('profileSleepEnd').value = String(profile.sleep_end_time || '09:00').slice(0,5);
   renderProfilePreview();
 }
 function renderProfilePreview(){
   const name = $('profileName').value || '自分';
   const emoji = $('profileEmoji').value || '🌙';
   const color = $('profileColor').value || '#5d9cec';
-  $('profilePreview').innerHTML = `<div class="profileChip" style="--profile-color:${esc(color)}"><span>${esc(emoji)}</span><b>${esc(name)}</b></div>`;
+  const sleepStart = $('profileSleepStart')?.value || '02:00';
+  const sleepEnd = $('profileSleepEnd')?.value || '09:00';
+  $('profilePreview').innerHTML = `<div class="profileChip" style="--profile-color:${esc(color)}"><span>${esc(emoji)}</span><b>${esc(name)}</b><small>睡眠 ${esc(sleepStart)}〜${esc(sleepEnd)}</small></div>`;
 }
 
 function renderAchievementArchive(memberId = state.user?.id){
@@ -388,7 +392,7 @@ export function initSetupEvents(){
       state.profile = updated; state.members = await loadMembers(state.team.id); $('loginPill').textContent = `${updated.display_emoji || '🌙'} ${updated.display_name || '自分'}`; alert('自分設定を保存しました'); renderProfilePage(); refreshAll();
     }catch(e){ alert(e.message || '自分設定の保存に失敗しました'); }
   });
-  ['profileName','profileEmoji','profileColor'].forEach(id=>$(id).addEventListener('input', renderProfilePreview));
+  ['profileName','profileEmoji','profileColor','profileSleepStart','profileSleepEnd'].forEach(id=>$(id)?.addEventListener('input', renderProfilePreview));
   ['newCategory','newProject'].forEach(id=>$(id).addEventListener('change',renderSelectors));
   $('newCandidate').addEventListener('change',()=>{ if($('newCandidate').value !== '候補から選ぶ') $('newTitle').value = $('newCandidate').value; renderReversePreview(); });
   ['newTitle','newMinutes','newStart','newDue','newStartTime','newMemo'].forEach(id=>$(id)?.addEventListener('input', renderReversePreview));

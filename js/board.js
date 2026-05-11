@@ -2,6 +2,7 @@ import { $, esc, todayISO, addDays, fmtDate, diffDays, relativeFrom, taskOccursO
 import { state } from './state.js';
 import { createTask, markCarryover, returnToSchedule, updateTask, deleteTask } from './tasks.js';
 import { refreshAll, showView } from './app.js';
+import { isUnavailableTask, isUnavailableForMember } from './calendar.js';
 
 const SLOT_MINUTES = 15;
 const PX_PER_MINUTE = 1.15; // 15分 = 約17px / 60分 = 約69px
@@ -26,8 +27,8 @@ function minutesFromTimelineTop(topPx, baseMin){
   return wrapMinutes(baseMin + snapMinutes(topPx / PX_PER_MINUTE));
 }
 
-function selectedTasks(){ return state.tasks.filter(t => t.owner_id === state.selectedMemberId && !t.done); }
-function timelineTasks(){ return selectedTasks().filter(t => taskOccursOnDate(t, state.scheduleDate)); }
+function selectedTasks(){ return state.tasks.filter(t => t.owner_id === state.selectedMemberId && !t.done && !isUnavailableTask(t)); }
+function timelineTasks(){ if(isUnavailableForMember(state.scheduleDate, state.selectedMemberId)) return []; return selectedTasks().filter(t => taskOccursOnDate(t, state.scheduleDate)); }
 function carryTasks(){ return selectedTasks().filter(t => t.carryover_date === state.carryDate); }
 function colorFor(t){
   const cat = (state.tree || []).find(c => c.name === t.category);
@@ -69,6 +70,35 @@ function taskStartMinutes(t, index=0){
 }
 function timeLabel(min){ return timeLabelWrap(snapMinutes(min)); }
 function isEditable(){ return state.selectedMemberId === state.user.id; }
+
+function selectedMember(){
+  return state.members.find(m=>m.id===state.selectedMemberId) || {};
+}
+function memberSleep(){
+  const member = selectedMember();
+  const own = state.selectedMemberId === state.user?.id ? state.profile || {} : {};
+  const start = String(member.sleepStart || own.sleep_start_time || '02:00').slice(0,5);
+  const end = String(member.sleepEnd || own.sleep_end_time || '09:00').slice(0,5);
+  return { start, end };
+}
+function sleepDurationMinutes(startText, endText){
+  const start = minutesFromTime(startText || '02:00');
+  const end = minutesFromTime(endText || '09:00');
+  let duration = end - start;
+  if(duration <= 0) duration += DAY_MINUTES;
+  return snapDuration(duration);
+}
+function makeSleepElement(baseMin){
+  const { start, end } = memberSleep();
+  const startMin = snapMinutes(minutesFromTime(start));
+  const duration = sleepDurationMinutes(start, end);
+  const el = document.createElement('div');
+  el.className = 'sleepEvent';
+  el.style.top = `${relativeTimelineTop(startMin, baseMin)}px`;
+  el.style.height = `${Math.max(26, duration * PX_PER_MINUTE - 4)}px`;
+  el.innerHTML = `<b>すいみん</b><small>${esc(start)} - ${esc(end)}</small>`;
+  return el;
+}
 
 function ensureTaskEditor(){
   let modal = document.getElementById('taskEditModal');
@@ -311,7 +341,7 @@ export function renderBoard(){
   $('carryDateText').textContent = fmtDate(state.carryDate);
   $('carryRelative').textContent = `(${relativeFrom(state.scheduleDate, state.carryDate)})`;
   $('carryPrev').disabled = diffDays(state.carryDate, addDays(state.scheduleDate,1)) <= 0;
-  $('boardNotice').textContent = state.selectedMemberId === state.user.id ? '自分の今日やることです。編集できます。' : '他メンバーの今日やることです。閲覧中心です。';
+  $('boardNotice').textContent = isUnavailableForMember(state.scheduleDate, state.selectedMemberId) ? 'この日は稼働不可です。毎日タスクや分割タスクは表示されません。' : (state.selectedMemberId === state.user.id ? '自分の今日やることです。編集できます。' : '他メンバーの今日やることです。閲覧中心です。');
   renderTimeline();
   renderCarryList();
 }
@@ -350,6 +380,7 @@ export function renderTimeline(){
 
   const events = document.createElement('div');
   events.className = 'eventLayer';
+  events.appendChild(makeSleepElement(baseMin));
   const list = timelineTasks();
   list.forEach((t,idx)=>events.appendChild(makeEventElement(t, idx, baseMin)));
 

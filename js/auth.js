@@ -43,7 +43,7 @@ export async function ensureProfileAndTeam(user){
 export async function loadMembers(teamId){
   const { data, error } = await supabase
     .from('team_members')
-    .select('user_id, role, profiles(id, display_name, display_emoji, display_color)')
+    .select('user_id, role, profiles(id, display_name, display_emoji, display_color, sleep_start_time, sleep_end_time)')
     .eq('team_id', teamId)
     .order('created_at', { ascending:true });
   if(error) throw error;
@@ -52,14 +52,18 @@ export async function loadMembers(teamId){
     role: row.role,
     name: row.profiles?.display_name || 'メンバー',
     emoji: row.profiles?.display_emoji || '🌙',
-    color: row.profiles?.display_color || '#5d9cec'
+    color: row.profiles?.display_color || '#5d9cec',
+    sleepStart: String(row.profiles?.sleep_start_time || '02:00').slice(0,5),
+    sleepEnd: String(row.profiles?.sleep_end_time || '09:00').slice(0,5)
   }));
 }
 export async function updateMyProfile(profile){
   const payload = {
     display_name: (profile.display_name || '').trim() || '自分',
     display_emoji: (profile.display_emoji || '🌙').trim().slice(0, 4) || '🌙',
-    display_color: profile.display_color || '#5d9cec'
+    display_color: profile.display_color || '#5d9cec',
+    sleep_start_time: profile.sleep_start_time || '02:00',
+    sleep_end_time: profile.sleep_end_time || '09:00'
   };
   const { data, error } = await supabase
     .from('profiles')

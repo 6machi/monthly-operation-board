@@ -106,6 +106,16 @@
             <button class="ghost" id="calendarThisMonth">今月</button>
           </div>
         </section>
+        <section class="panel unavailablePanel">
+          <h2>稼働できない日</h2>
+          <p class="muted">先にお休み・外出・予定で作業できない日を入れておくと、毎日タスクや納期から逆算した分割タスクがその日を避けます。</p>
+          <div class="form three unavailableForm">
+            <label><small>稼働不可の日</small><input type="date" id="unavailableDate"></label>
+            <label><small>理由メモ</small><input id="unavailableMemo" placeholder="例：外出 / 通院 / 休み"></label>
+            <button class="primary" id="addUnavailableBtn" type="button">稼働不可にする</button>
+          </div>
+          <div id="unavailableList" class="unavailableList"></div>
+        </section>
         <section class="panel"><h2>日付別の予定量</h2><div class="monthGrid" id="monthGrid"></div></section>
         <section class="panel"><h2>メンバー別・今月のタスク</h2><div class="memberSummary" id="memberSummary"></div></section>
       </section>
@@ -124,6 +134,14 @@
             <label><small>自分の名前</small><input id="profileName" placeholder="表示したい名前"></label>
             <label><small>自分の絵文字</small><input id="profileEmoji" placeholder="例：🌙" maxlength="4"></label>
             <label><small>自分の色</small><input id="profileColor" type="color" value="#5d9cec" aria-label="自分の色"></label>
+          </div>
+          <div class="sectionline sleepSettingsBlock">
+            <h3>すいみん時間</h3>
+            <p class="muted">デフォルトは 02:00〜09:00。タイムライン上では灰色の予定として表示します。</p>
+            <div class="form two">
+              <label><small>寝る時間</small><input id="profileSleepStart" type="time" step="900" value="02:00"></label>
+              <label><small>起きる時間</small><input id="profileSleepEnd" type="time" step="900" value="09:00"></label>
+            </div>
           </div>
           <button class="primary" id="saveProfileBtn">自分設定を保存</button>
         </section>
