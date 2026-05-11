@@ -5,14 +5,38 @@ import { updateMyProfile, loadMembers } from './auth.js';
 import { createTask, updateTask, deleteTask } from './tasks.js';
 import { refreshAll, showView } from './app.js';
 
+let draggingCategoryIndex = null;
+
 function editable(){ return state.selectedMemberId === state.user.id; }
 function cat(){ return state.tree[state.selectedCategoryIndex] || state.tree[0]; }
 function proj(){ const c=cat(); return c?.projects?.find(p=>p.name===$('newProject').value) || c?.projects?.[0]; }
 function typ(){ const p=proj(); return p?.types?.find(t=>t.name===$('newType').value) || p?.types?.[0]; }
 function fill(sel, arr, cur){ sel.innerHTML=(arr||[]).map(v=>`<option ${v===cur?'selected':''}>${esc(v)}</option>`).join(''); }
+
+function memberById(id){ return state.members.find(m=>m.id===id); }
+function categorySharedWith(c){ return Array.isArray(c?.sharedWith) ? c.sharedWith : []; }
+function categoryShareLabel(c){
+  const ids = categorySharedWith(c).filter(id=>id && id!==state.user?.id);
+  if(!ids.length) return '<span class="catSharePill solo">ひとりでやる</span>';
+  return ids.map(id=>{
+    const m = memberById(id);
+    if(!m) return '';
+    return `<span class="catSharePill" style="--share-color:${esc(m.color || '#5d9cec')}">${esc(m.emoji || '🌙')} ${esc(m.name)}</span>`;
+  }).join('');
+}
+function canUseCategoryForMember(c, memberId){
+  if(memberId === state.user?.id) return true;
+  return categorySharedWith(c).includes(memberId);
+}
+
 export function renderSetup(){
-  $('setupNotice').textContent = editable() ? '自分のタスク追加画面です。棚・登録済みタスクを編集できます。' : '他メンバーのタスク追加画面は閲覧中心です。';
-  renderCategories(); renderSelectors(); renderCategoryEditor(); renderRegisteredTasks();
+  $('setupNotice').textContent = editable()
+    ? '自分のタスク追加画面です。棚・登録済みタスクを編集できます。カテゴリはドラッグで並び替えできます。'
+    : '他メンバーのタスク追加画面は閲覧中心です。';
+  renderCategories();
+  renderSelectors();
+  renderCategoryEditor();
+  renderRegisteredTasks();
   document.querySelectorAll('#setup input,#setup select,#setup textarea,#setup button').forEach(el=>{ if(!el.closest('.tabs')) el.disabled = !editable(); });
 }
 
@@ -38,7 +62,6 @@ function renderProfilePreview(){
   const color = $('profileColor').value || '#5d9cec';
   $('profilePreview').innerHTML = `<div class="profileChip" style="--profile-color:${esc(color)}"><span>${esc(emoji)}</span><b>${esc(name)}</b></div>`;
 }
-
 
 function renderAchievementArchive(memberId = state.user?.id){
   const box = $('achievementArchive');
@@ -96,40 +119,59 @@ function renderAchievementArchive(memberId = state.user?.id){
 function renderCategories(){
   const grid=$('categoryGrid'); grid.innerHTML='';
   state.tree.forEach((c,i)=>{
-    const card=document.createElement('article'); card.className='cat sortableCat'; card.style.setProperty('--c', c.color || '#9aa4b6');
+    const card=document.createElement('article');
+    card.className='cat sortableCat draggableCat';
+    if(i===state.selectedCategoryIndex) card.classList.add('selected');
+    card.style.setProperty('--c', c.color || '#9aa4b6');
+    card.setAttribute('draggable', editable() ? 'true' : 'false');
+    card.dataset.catIndex = String(i);
     card.innerHTML=`
       <div class="catCardMain">
         <h3>${esc(c.name)}</h3>
         <p>${esc(c.memo||'')}<br>プロジェクト ${c.projects?.length||0}</p>
+        <div class="catShareList">${categoryShareLabel(c)}</div>
       </div>
-      <div class="catOrderButtons" aria-label="カテゴリの並び替え">
-        <button type="button" class="ghost catMoveBtn" data-cat-up="${i}" ${i===0?'disabled':''}>上へ</button>
-        <button type="button" class="ghost catMoveBtn" data-cat-down="${i}" ${i===state.tree.length-1?'disabled':''}>下へ</button>
-      </div>`;
-    card.querySelector('.catCardMain').addEventListener('click',()=>{ state.selectedCategoryIndex=i; renderSetup(); });
+      <div class="dragHint">ドラッグで並び替え</div>`;
+    card.addEventListener('click',()=>{ state.selectedCategoryIndex=i; renderSetup(); });
+    card.addEventListener('dragstart',e=>{
+      if(!editable()){ e.preventDefault(); return; }
+      draggingCategoryIndex = i;
+      card.classList.add('dragging');
+      e.dataTransfer.effectAllowed='move';
+      e.dataTransfer.setData('text/plain', String(i));
+    });
+    card.addEventListener('dragend',()=>{ draggingCategoryIndex=null; card.classList.remove('dragging'); grid.querySelectorAll('.dragover').forEach(el=>el.classList.remove('dragover')); });
+    card.addEventListener('dragover',e=>{ if(draggingCategoryIndex===null)return; e.preventDefault(); card.classList.add('dragover'); e.dataTransfer.dropEffect='move'; });
+    card.addEventListener('dragleave',()=>card.classList.remove('dragover'));
+    card.addEventListener('drop',async e=>{
+      e.preventDefault();
+      card.classList.remove('dragover');
+      const from = draggingCategoryIndex ?? Number(e.dataTransfer.getData('text/plain'));
+      const to = Number(card.dataset.catIndex);
+      if(Number.isNaN(from) || Number.isNaN(to) || from===to) return;
+      await moveCategoryTo(from, to);
+    });
     grid.appendChild(card);
-  });
-  grid.querySelectorAll('[data-cat-up]').forEach(btn=>{
-    btn.onclick = async(e)=>{ e.stopPropagation(); await moveCategory(Number(btn.dataset.catUp), -1); };
-  });
-  grid.querySelectorAll('[data-cat-down]').forEach(btn=>{
-    btn.onclick = async(e)=>{ e.stopPropagation(); await moveCategory(Number(btn.dataset.catDown), 1); };
   });
 }
 async function moveCategory(index, direction){
+  await moveCategoryTo(index, index + direction);
+}
+async function moveCategoryTo(index, next){
   if(!editable()) return alert('他メンバーのカテゴリは編集できません');
-  const next = index + direction;
   if(next < 0 || next >= state.tree.length) return;
   const [item] = state.tree.splice(index, 1);
   state.tree.splice(next, 0, item);
   state.selectedCategoryIndex = next;
   await persist();
 }
+
 function renderSelectors(){
   const c=cat(); if(!c) return;
   const oldCat=$('newCategory').value, oldProj=$('newProject').value, oldType=$('newType').value, oldCand=$('newCandidate').value;
-  fill($('newCategory'), state.tree.map(x=>x.name), oldCat || c.name);
-  const currentCat = state.tree.find(x=>x.name===$('newCategory').value) || c;
+  const usableTree = state.tree.filter(x=>canUseCategoryForMember(x, state.user.id));
+  fill($('newCategory'), usableTree.map(x=>x.name), oldCat || c.name);
+  const currentCat = usableTree.find(x=>x.name===$('newCategory').value) || c;
   fill($('newProject'), (currentCat.projects||[]).map(p=>p.name), oldProj);
   const currentProj = currentCat.projects?.find(p=>p.name===$('newProject').value) || currentCat.projects?.[0];
   fill($('newType'), (currentProj?.types||[]).map(t=>t.name), oldType);
@@ -137,6 +179,7 @@ function renderSelectors(){
   fill($('newCandidate'), ['候補から選ぶ', ...(currentType?.tasks||[])], oldCand);
 }
 async function persist(){ await saveTree(state.treeRowId, state.tree); renderSetup(); }
+
 function renderProjectTree(c){
   const projects = c.projects || [];
   if(!projects.length){
@@ -178,23 +221,44 @@ function renderProjectTree(c){
   `).join('')}</div>`;
 }
 
+function renderSharePicker(c){
+  const ids = categorySharedWith(c);
+  const others = state.members.filter(m=>m.id !== state.user.id);
+  if(!others.length){
+    return '<div class="empty">まだ一緒に選べるメンバーがいません。</div>';
+  }
+  return `<div class="shareMemberList">${others.map(m=>`
+    <label class="shareMemberOption" style="--share-color:${esc(m.color || '#5d9cec')}">
+      <input type="checkbox" class="shareMemberCheck" value="${esc(m.id)}" ${ids.includes(m.id)?'checked':''}>
+      <span class="shareEmoji">${esc(m.emoji || '🌙')}</span>
+      <span class="shareName">${esc(m.name)}</span>
+    </label>
+  `).join('')}</div>`;
+}
+
 function renderCategoryEditor(){
   const c=cat(); const box=$('categoryEditor');
   if(!c){
     box.innerHTML=`<div class="empty">カテゴリがありません。</div><div class="actions"><button id="addCategoryBtn" class="primary">カテゴリ追加</button></div>`;
-    $('addCategoryBtn').onclick = async()=>{ const name=prompt('追加するカテゴリ名'); if(!name)return; state.tree.push({name, memo:'', color:'#9aa4b6', projects:[]}); state.selectedCategoryIndex=state.tree.length-1; await persist(); };
+    $('addCategoryBtn').onclick = async()=>{ const name=prompt('追加するカテゴリ名'); if(!name)return; state.tree.push({name, memo:'', color:'#9aa4b6', projects:[], sharedWith:[]}); state.selectedCategoryIndex=state.tree.length-1; await persist(); };
     return;
   }
+  if(!Array.isArray(c.sharedWith)) c.sharedWith = [];
   box.innerHTML = `
     <div class="editorgrid">
       <label><small>カテゴリ名</small><input id="editCatName" value="${esc(c.name)}"></label>
       <label><small>色</small><input id="editCatColor" type="color" value="${esc(c.color||'#9aa4b6')}"></label>
       <label style="grid-column:1/-1"><small>メモ</small><input id="editCatMemo" value="${esc(c.memo||'')}"></label>
     </div>
+    <section class="sharePickerBox">
+      <div class="sharePickerHead">
+        <b>一緒に頑張るひとを選択</b>
+        <span>選ばない場合は、ひとりでやるカテゴリです。</span>
+      </div>
+      ${renderSharePicker(c)}
+    </section>
     <div class="actions">
       <button id="saveCatBtn" class="primary">カテゴリを保存</button>
-      <button id="moveCatUpBtn" class="ghost" ${state.selectedCategoryIndex===0?'disabled':''}>上へ移動</button>
-      <button id="moveCatDownBtn" class="ghost" ${state.selectedCategoryIndex===state.tree.length-1?'disabled':''}>下へ移動</button>
       <button id="addCategoryBtn" class="ghost">カテゴリ追加</button>
       <button id="deleteCategoryBtn" class="danger">カテゴリ削除</button>
       <button id="addProjectBtn" class="ghost">プロジェクト追加</button>
@@ -202,10 +266,22 @@ function renderCategoryEditor(){
       <button id="addCandidateBtn" class="ghost">タスク名候補追加</button>
     </div>
     <div class="sectionline"><b>登録されている棚</b><p class="muted">プロジェクト名・タスク種類・タスク名候補はここから修正できます。</p>${renderProjectTree(c)}</div>`;
-  $('saveCatBtn').onclick = async()=>{ c.name=$('editCatName').value.trim()||c.name; c.color=$('editCatColor').value; c.memo=$('editCatMemo').value; await persist(); };
-  $('moveCatUpBtn').onclick = async()=>{ await moveCategory(state.selectedCategoryIndex, -1); };
-  $('moveCatDownBtn').onclick = async()=>{ await moveCategory(state.selectedCategoryIndex, 1); };
-  $('addCategoryBtn').onclick = async()=>{ const name=prompt('追加するカテゴリ名'); if(!name)return; state.tree.push({name, memo:'', color:'#9aa4b6', projects:[]}); state.selectedCategoryIndex=state.tree.length-1; await persist(); };
+
+  $('saveCatBtn').onclick = async()=>{
+    c.name=$('editCatName').value.trim()||c.name;
+    c.color=$('editCatColor').value;
+    c.memo=$('editCatMemo').value;
+    c.sharedWith = [...box.querySelectorAll('.shareMemberCheck:checked')].map(input=>input.value);
+    await persist();
+  };
+  box.querySelectorAll('.shareMemberCheck').forEach(input=>{
+    input.addEventListener('change', async()=>{
+      c.sharedWith = [...box.querySelectorAll('.shareMemberCheck:checked')].map(input=>input.value);
+      await saveTree(state.treeRowId, state.tree);
+      renderCategories();
+    });
+  });
+  $('addCategoryBtn').onclick = async()=>{ const name=prompt('追加するカテゴリ名'); if(!name)return; state.tree.push({name, memo:'', color:'#9aa4b6', projects:[], sharedWith:[]}); state.selectedCategoryIndex=state.tree.length-1; await persist(); };
   $('deleteCategoryBtn').onclick = async()=>{ if(!confirm(`カテゴリ「${c.name}」を削除しますか？\n登録済みタスク自体は消えません。`))return; state.tree.splice(state.selectedCategoryIndex,1); state.selectedCategoryIndex=Math.max(0,state.selectedCategoryIndex-1); await persist(); };
   $('addProjectBtn').onclick = async()=>{ const name=prompt('追加するプロジェクト名'); if(!name)return; c.projects=c.projects||[]; c.projects.push({name, types:[{name:'未分類',tasks:[]}]}); await persist(); };
   $('addTypeBtn').onclick = async()=>{ const pName=prompt('どのプロジェクトに追加しますか？', c.projects?.[0]?.name||''); const p=c.projects?.find(x=>x.name===pName); if(!p)return alert('プロジェクトが見つかりません'); const name=prompt('追加するタスク種類'); if(!name)return; p.types=p.types||[]; p.types.push({name,tasks:[]}); await persist(); };

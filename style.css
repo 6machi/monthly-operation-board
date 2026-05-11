@@ -115,3 +115,25 @@ input[type="color"]::-moz-color-swatch{
 .profilePageHead h2{margin-bottom:4px}
 #profile .profilePreview{margin-top:12px}
 @media(max-width:650px){.profilePageHead{flex-direction:column}.profilePageHead .ghost{width:100%}}
+
+/* v14: drag-sort categories + category sharing */
+#loginPill{cursor:pointer;pointer-events:auto;user-select:none}
+.catgrid{display:flex;gap:10px;overflow-x:auto;overflow-y:hidden;padding:4px 2px 12px;scroll-snap-type:x proximity}
+.catgrid .cat{min-width:230px;max-width:280px;scroll-snap-align:start;flex:0 0 240px}
+.sortableCat{display:block;position:relative;cursor:grab;transition:transform .16s ease, box-shadow .16s ease, opacity .16s ease}
+.sortableCat:active{cursor:grabbing}
+.sortableCat.dragging{opacity:.45;transform:scale(.98)}
+.sortableCat.dragover{outline:3px dashed color-mix(in srgb,var(--c) 60%,#fff);outline-offset:3px;transform:translateY(-2px)}
+.sortableCat.selected{box-shadow:0 0 0 3px color-mix(in srgb,var(--c) 22%,transparent),0 7px 18px rgba(40,50,80,.08)}
+.sortableCat .dragHint{font-size:11px;color:var(--muted);font-weight:900;margin-top:9px;background:#f8f9fc;border:1px dashed #dbe2ee;border-radius:999px;padding:5px 8px;text-align:center}
+.catShareList{display:flex;flex-wrap:wrap;gap:5px;margin-top:9px}
+.catSharePill{display:inline-flex;align-items:center;gap:4px;border-radius:999px;padding:4px 7px;background:color-mix(in srgb,var(--share-color) 13%,#fff);border:1px solid color-mix(in srgb,var(--share-color) 28%,var(--line));font-size:11px;font-weight:900;color:#4f586d}
+.catSharePill.solo{background:#f5f7fb;border-color:#e2e7f0;color:#758094}
+.sharePickerBox{margin:12px 0;border:1px solid var(--line);background:#fff;border-radius:18px;padding:12px}
+.sharePickerHead{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;margin-bottom:10px}
+.sharePickerHead b{font-size:14px}.sharePickerHead span{color:var(--muted);font-size:12px;font-weight:850;line-height:1.5}
+.shareMemberList{display:flex;flex-wrap:wrap;gap:8px}
+.shareMemberOption{display:inline-flex;align-items:center;gap:7px;border:1px solid color-mix(in srgb,var(--share-color) 30%,var(--line));background:color-mix(in srgb,var(--share-color) 9%,#fff);border-radius:999px;padding:8px 10px;cursor:pointer;font-weight:900}
+.shareMemberOption input{width:16px;height:16px;accent-color:var(--share-color)}
+.shareEmoji{font-size:16px}.shareName{font-size:13px;color:#445066}
+@media(max-width:650px){.catgrid .cat{min-width:210px;flex-basis:220px}.sharePickerHead{flex-direction:column}.shareMemberOption{width:100%}}

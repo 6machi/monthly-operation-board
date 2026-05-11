@@ -77,6 +77,10 @@ async function init(){
   initBoardEvents(); initCalendarEvents(); initSetupEvents();
   qsa('#mainNav button').forEach(btn=>btn.addEventListener('click',()=>showView(btn.dataset.view)));
   $('loginPill').addEventListener('click',()=>{ if(state.user) showView('profile'); });
+  document.addEventListener('click', (e)=>{
+    const pill = e.target.closest?.('#loginPill');
+    if(pill && state.user){ e.preventDefault(); showView('profile'); }
+  });
   $('signinBtn').addEventListener('click', async()=>{
     try{ const session = await signIn($('authEmail').value, $('authPassword').value); await bootAuthed(session); }
     catch(e){ authMsg(e.message || 'ログインに失敗しました', true); }
