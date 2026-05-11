@@ -200,3 +200,45 @@ input[type="color"]::-moz-color-swatch{
   opacity:.72;
 }
 @media(max-width:650px){.mode{grid-template-columns:1fr 1fr}}
+
+/* v19: Google Calendar-like 15-minute timeline */
+.timelineBox{height:660px;overflow:auto;border:1px solid var(--line);border-radius:18px;background:rgba(255,255,255,.72);padding:0;scroll-behavior:smooth;position:relative}
+.timelineCalendar{position:relative;min-height:var(--day-height);display:block;background:#fff;padding:0 10px 0 0}
+.timeAxis{position:absolute;left:0;top:0;width:68px;height:var(--day-height);background:linear-gradient(90deg,#fff 0%,#fff 82%,rgba(245,247,251,.8));z-index:2;border-right:1px solid #edf1f7}
+.timeMark{position:absolute;left:0;width:62px;transform:translateY(-8px);text-align:right;padding-right:8px;color:var(--muted);font-size:12px;font-weight:950}
+.calendarGrid{position:absolute;left:68px;right:0;top:0;height:var(--day-height);background:linear-gradient(180deg,#fff,#fbfcff)}
+.hourLine{position:absolute;left:0;right:0;height:1px;background:#dfe5f0}
+.quarterLine{position:absolute;left:0;right:0;height:1px;background:#f1f4f8}
+.hourQuarter{background:#dfe5f0}
+.eventLayer{position:absolute;left:78px;right:12px;top:0;height:var(--day-height);z-index:3}
+.taskEvent{--c:#9aa4b6;position:absolute;left:0;right:0;min-height:18px;background:color-mix(in srgb,var(--c) 11%,#fff);border:1px solid color-mix(in srgb,var(--c) 38%,var(--line));border-left:7px solid var(--c);border-radius:12px;padding:7px 10px 9px;box-shadow:0 7px 18px rgba(40,50,80,.08);cursor:grab;overflow:hidden;touch-action:none;user-select:none}
+.taskEvent.moving{cursor:grabbing;opacity:.86;box-shadow:0 14px 28px rgba(40,50,80,.14)}
+.taskEvent.resizing{opacity:.9;box-shadow:0 14px 28px rgba(40,50,80,.14)}
+.taskEvent.readonly{cursor:default;touch-action:auto}
+.taskEvent b{display:block;font-size:13px;line-height:1.25;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.taskEvent small{display:block;color:#596276;font-size:11px;font-weight:850;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.taskEvent .eventMeta{position:absolute;right:8px;top:7px;background:rgba(255,255,255,.72);border-radius:999px;padding:2px 6px;font-size:10px;font-weight:900;color:#596276}
+.resizeHandle{position:absolute;left:18px;right:18px;bottom:2px;height:7px;border-radius:999px;cursor:ns-resize;background:linear-gradient(90deg,transparent,rgba(70,80,100,.22),transparent)}
+.resizeHandle::after{content:'';position:absolute;left:50%;top:2px;transform:translateX(-50%);width:34px;height:3px;border-radius:999px;background:rgba(70,80,100,.25)}
+.calendarNowLine{position:absolute;left:0;right:0;height:2px;background:var(--red);z-index:4;border-radius:999px;box-shadow:0 0 0 3px rgba(239,90,90,.08)}
+.timelineHint{position:sticky;left:78px;bottom:8px;margin-left:78px;width:fit-content;max-width:calc(100% - 96px);background:rgba(255,255,255,.92);border:1px solid var(--line);border-radius:999px;padding:7px 11px;color:var(--muted);font-size:11px;font-weight:900;box-shadow:0 6px 16px rgba(40,50,80,.08);z-index:5}
+@media(max-width:650px){.timeAxis{width:54px}.timeMark{width:50px;font-size:11px}.calendarGrid{left:54px}.eventLayer{left:62px;right:8px}.timelineHint{left:62px;margin-left:62px;max-width:calc(100% - 72px);border-radius:14px}.taskEvent .eventMeta{display:none}}
+
+
+/* v20: timeline task editor */
+.taskEvent{cursor:pointer}
+.taskEvent:not(.readonly)::before{content:'ドラッグで移動 / クリックで修正';position:absolute;left:10px;right:10px;bottom:10px;opacity:0;color:var(--muted);font-size:10px;font-weight:900;transition:.12s ease;pointer-events:none}
+.taskEvent:not(.readonly):hover::before{opacity:.75}
+.taskEvent.resizing::before,.taskEvent.moving::before{opacity:0}
+.taskEvent .eventMain{pointer-events:none}
+.taskEvent .eventMeta{pointer-events:none}
+.resizeHandle{pointer-events:auto;height:12px;bottom:0;background:linear-gradient(90deg,transparent,rgba(70,80,100,.32),transparent)}
+.resizeHandle:hover{background:linear-gradient(90deg,transparent,rgba(245,166,35,.45),transparent)}
+.taskEditModal{position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;padding:18px}
+.taskEditModal.hidden{display:none!important}
+.taskEditBackdrop{position:absolute;inset:0;background:rgba(30,38,55,.28);backdrop-filter:blur(4px)}
+.taskEditPanel{position:relative;width:min(780px,100%);max-height:min(84vh,820px);overflow:auto;background:#fff;border:1px solid var(--line);border-radius:24px;box-shadow:0 24px 70px rgba(30,38,55,.24);padding:18px}
+.taskEditPanelHead{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:12px}
+.taskEditPanelHead h2{margin:0 0 4px;font-size:20px}
+.taskEditQuickForm{grid-template-columns:repeat(2,1fr)}
+@media(max-width:650px){.taskEditPanel{border-radius:18px;padding:14px}.taskEditQuickForm{grid-template-columns:1fr}.taskEditPanelHead{flex-direction:column}.taskEvent:not(.readonly)::before{display:none}}
