@@ -57,7 +57,7 @@ export function renderBoard(){
   $('carryDateText').textContent = fmtDate(state.carryDate);
   $('carryRelative').textContent = `(${relativeFrom(state.scheduleDate, state.carryDate)})`;
   $('carryPrev').disabled = diffDays(state.carryDate, addDays(state.scheduleDate,1)) <= 0;
-  $('boardNotice').textContent = state.selectedMemberId === state.user.id ? '自分の作戦ボードです。編集できます。' : '他メンバーの作戦ボードです。閲覧中心です。';
+  $('boardNotice').textContent = state.selectedMemberId === state.user.id ? '自分の今日やることです。編集できます。' : '他メンバーの今日やることです。閲覧中心です。';
   renderTimeline();
   renderCarryList();
 }

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>月次作戦ボード</title>
+  <title>タスクかんりシート</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -11,7 +11,7 @@
     <div class="wrap head">
       <div class="top">
         <div class="title">
-          <h1>月次作戦ボード</h1>
+          <h1>タスクかんりシート</h1>
           <p>月1で棚卸し、日々はスケジュール・持ち越し・差し込みを見る</p>
         </div>
         <div class="userBox">
@@ -20,9 +20,9 @@
         </div>
       </div>
       <nav id="mainNav" class="hidden">
-        <button class="active" data-view="board">作戦ボード</button>
-        <button data-view="calendar">カレンダー</button>
-        <button data-view="setup">月次棚卸し</button>
+        <button class="active" data-view="board">今日やること</button>
+        <button data-view="calendar">今月のよてい</button>
+        <button data-view="setup">タスクのついか</button>
       </nav>
     </div>
   </header>
@@ -120,7 +120,7 @@
           <div class="form three profileForm">
             <label><small>自分の名前</small><input id="profileName" placeholder="表示したい名前"></label>
             <label><small>自分の絵文字</small><input id="profileEmoji" placeholder="例：🌙" maxlength="4"></label>
-            <label><small>自分の色</small><input id="profileColor" type="color" value="#5d9cec"></label>
+            <label><small>自分の色</small><input id="profileColor" type="color" value="#5d9cec" aria-label="自分の色"></label>
           </div>
           <button class="primary" id="saveProfileBtn">自分設定を保存</button>
         </section>

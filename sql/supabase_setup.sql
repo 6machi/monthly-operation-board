@@ -1,6 +1,6 @@
--- 月次作戦ボード Supabase 初期設定SQL v4
+-- タスクかんりシート Supabase 初期設定SQL v4
 -- これ1本を Supabase SQL Editor で実行してください。
--- public側の月次作戦ボード用テーブルを作り直します。
+-- public側のタスクかんりシート用テーブルを作り直します。
 -- Authのユーザー自体は削除しません。
 -- v4: bootstrap_my_board() を returns void に変更し、team_id の曖昧参照エラーを回避します。
 

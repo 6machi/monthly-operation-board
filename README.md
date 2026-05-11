@@ -1,4 +1,4 @@
-# 月次作戦ボード Supabase版
+# タスクかんりシート Supabase版
 
 GitHub Pages + Supabase Auth + Supabase Database/RLS で使う分割版です。
 

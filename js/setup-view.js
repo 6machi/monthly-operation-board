@@ -57,6 +57,36 @@ function renderSelectors(){
   fill($('newCandidate'), ['候補から選ぶ', ...(currentType?.tasks||[])], oldCand);
 }
 async function persist(){ await saveTree(state.treeRowId, state.tree); renderSetup(); }
+function renderProjectTree(c){
+  const projects = c.projects || [];
+  if(!projects.length){
+    return '<div class="empty">このカテゴリにはまだプロジェクトがありません。</div>';
+  }
+  return `<div class="categoryTreeList">${projects.map((p,pi)=>`
+    <section class="treeProject">
+      <div class="treeProjectHead">
+        <b>${esc(p.name)}</b>
+        <span>${p.types?.length || 0} 種類</span>
+      </div>
+      <div class="treeTypeList">
+        ${(p.types||[]).map((ty,ti)=>`
+          <div class="treeType">
+            <div class="treeTypeHead">
+              <span>タスク種類</span>
+              <b>${esc(ty.name)}</b>
+            </div>
+            <div class="candidateChips">
+              ${(ty.tasks||[]).length ? (ty.tasks||[]).map((name,ci)=>`
+                <span class="candidateChip">${esc(name)}<button type="button" class="chipDelete" data-del-cand="${pi}:${ti}:${ci}" title="削除">×</button></span>
+              `).join('') : '<span class="muted">タスク名候補はまだありません。</span>'}
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    </section>
+  `).join('')}</div>`;
+}
+
 function renderCategoryEditor(){
   const c=cat(); const box=$('categoryEditor');
   if(!c){ box.innerHTML='<div class="empty">カテゴリがありません。</div>'; return; }
@@ -67,11 +97,21 @@ function renderCategoryEditor(){
       <label style="grid-column:1/-1"><small>メモ</small><input id="editCatMemo" value="${esc(c.memo||'')}"></label>
     </div>
     <div class="actions"><button id="saveCatBtn" class="primary">カテゴリを保存</button><button id="addProjectBtn" class="ghost">プロジェクト追加</button><button id="addTypeBtn" class="ghost">タスク種類追加</button><button id="addCandidateBtn" class="ghost">タスク名候補追加</button></div>
-    <div class="sectionline"><b>中身</b><pre class="muted">${esc(JSON.stringify(c.projects||[], null, 2))}</pre></div>`;
+    <div class="sectionline"><b>登録されている棚</b>${renderProjectTree(c)}</div>`;
   $('saveCatBtn').onclick = async()=>{ c.name=$('editCatName').value.trim()||c.name; c.color=$('editCatColor').value; c.memo=$('editCatMemo').value; await persist(); };
   $('addProjectBtn').onclick = async()=>{ const name=prompt('追加するプロジェクト名'); if(!name)return; c.projects=c.projects||[]; c.projects.push({name, types:[{name:'未分類',tasks:[]}]}); await persist(); };
   $('addTypeBtn').onclick = async()=>{ const pName=prompt('どのプロジェクトに追加しますか？', c.projects?.[0]?.name||''); const p=c.projects?.find(x=>x.name===pName); if(!p)return alert('プロジェクトが見つかりません'); const name=prompt('追加するタスク種類'); if(!name)return; p.types=p.types||[]; p.types.push({name,tasks:[]}); await persist(); };
   $('addCandidateBtn').onclick = async()=>{ const pName=prompt('プロジェクト名', c.projects?.[0]?.name||''); const p=c.projects?.find(x=>x.name===pName); if(!p)return alert('プロジェクトが見つかりません'); const tName=prompt('タスク種類', p.types?.[0]?.name||''); const ty=p.types?.find(x=>x.name===tName); if(!ty)return alert('タスク種類が見つかりません'); const name=prompt('追加するタスク名候補'); if(!name)return; ty.tasks=ty.tasks||[]; ty.tasks.push(name); await persist(); };
+  box.querySelectorAll('[data-del-cand]').forEach(btn=>{
+    btn.onclick = async()=>{
+      const [pi,ti,ci] = btn.dataset.delCand.split(':').map(Number);
+      const name = c.projects?.[pi]?.types?.[ti]?.tasks?.[ci];
+      if(!name) return;
+      if(!confirm(`「${name}」を候補から削除しますか？`)) return;
+      c.projects[pi].types[ti].tasks.splice(ci,1);
+      await persist();
+    };
+  });
 }
 export function initSetupEvents(){
   $('saveProfileBtn').addEventListener('click', async()=>{
