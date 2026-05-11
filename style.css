@@ -242,3 +242,9 @@ input[type="color"]::-moz-color-swatch{
 .taskEditPanelHead h2{margin:0 0 4px;font-size:20px}
 .taskEditQuickForm{grid-template-columns:repeat(2,1fr)}
 @media(max-width:650px){.taskEditPanel{border-radius:18px;padding:14px}.taskEditQuickForm{grid-template-columns:1fr}.taskEditPanelHead{flex-direction:column}.taskEvent:not(.readonly)::before{display:none}}
+
+
+/* v22 reverse planner */
+.reversePlannerBox{display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;background:#fff;border:1px solid var(--line);border-radius:18px;padding:12px;margin:10px 0;box-shadow:0 5px 14px rgba(40,50,80,.05)}
+.reversePlannerText{display:grid;gap:3px;min-width:0}.reversePlannerText b{font-size:14px}.reversePlannerText span{color:var(--muted);font-size:12px;font-weight:850;line-height:1.55}.reversePlannerText span.warnText{color:#aa6b00}.reversePlannerBox button{white-space:nowrap}
+@media(max-width:760px){.reversePlannerBox{grid-template-columns:1fr}.reversePlannerBox button{width:100%}}

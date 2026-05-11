@@ -1,4 +1,4 @@
-import { $, esc, occurrenceLabel } from './utils.js';
+import { $, esc, occurrenceLabel, addDays, diffDays, fmtDate } from './utils.js';
 import { state } from './state.js';
 import { saveTree } from './setup.js';
 import { updateMyProfile, loadMembers } from './auth.js';
@@ -304,6 +304,62 @@ function renderRegisteredTasks(){
   box.querySelectorAll('[data-delete-task]').forEach(btn=>btn.onclick=async()=>{ if(!mine)return alert('他メンバーのタスクは編集できません'); const id=btn.dataset.deleteTask; const t=state.tasks.find(x=>String(x.id)===String(id)); if(!confirm(`タスク「${t?.title||''}」を削除しますか？`))return; await deleteTask(id); await refreshAll(); });
 }
 
+function snap15(min){ return Math.max(15, Math.ceil(Number(min || 0) / 15) * 15); }
+function currentNewTaskTitle(){ return $('newTitle').value.trim() || ($('newCandidate').value==='候補から選ぶ'?'':$('newCandidate').value); }
+function getReversePlan(){
+  const title = currentNewTaskTitle();
+  const total = snap15(Number($('newMinutes').value || 0));
+  const start = $('newStart').value || new Date().toISOString().slice(0,10);
+  const due = $('newDue').value;
+  if(!title) return { ok:false, message:'タスク名を入れると逆算できます。' };
+  if(!total) return { ok:false, message:'見積もり時間を入れると逆算できます。例：合計360分' };
+  if(!due) return { ok:false, message:'期限を入れると逆算できます。' };
+  const days = diffDays(due, start) + 1;
+  if(days <= 0) return { ok:false, message:'期限は開始日以降にしてください。' };
+  const daily = snap15(total / days);
+  const actualTotal = daily * days;
+  return { ok:true, title, total, start, due, days, daily, actualTotal,
+    message:`${fmtDate(start)}〜${fmtDate(due)}の${days}日間で、毎日 ${daily}分（約${Math.round(daily/60*10)/10}時間）ずつやればOK。` };
+}
+function renderReversePreview(){
+  const el = $('reversePlanPreview');
+  if(!el) return;
+  const plan = getReversePlan();
+  el.textContent = plan.message;
+  el.classList.toggle('warnText', !plan.ok);
+}
+async function addReversePlanTasks(){
+  if(!editable()) return alert('他メンバーの棚卸しは編集できません');
+  const plan = getReversePlan();
+  if(!plan.ok) return alert(plan.message);
+  if(plan.days > 45 && !confirm(`${plan.days}日分のタスクを作ります。数が多いですが大丈夫ですか？`)) return;
+  const memoBase = $('newMemo').value || '';
+  const startTime = $('newStartTime')?.value || '09:00';
+  for(let i=0;i<plan.days;i++){
+    const date = addDays(plan.start, i);
+    await createTask({
+      team_id:state.team.id,
+      owner_id:state.user.id,
+      created_by:state.user.id,
+      title:`${plan.title}（${i+1}/${plan.days}）`,
+      category:$('newCategory').value,
+      project:$('newProject').value,
+      task_type:'',
+      estimated_minutes:plan.daily,
+      start_time:startTime,
+      schedule_date:date,
+      due_date:plan.due,
+      occurrence:'single',
+      status:'scheduled',
+      memo:`${memoBase}${memoBase ? '\n' : ''}納期から逆算：総見積もり${plan.total}分 / ${plan.days}日 / 1日${plan.daily}分`,
+      sort_order:(Date.now()*-1)-i
+    });
+  }
+  $('newTitle').value=''; $('newMinutes').value=''; $('newMemo').value='';
+  alert(`${plan.days}日分に分けて追加しました。`);
+  await refreshAll();
+}
+
 export function initSetupEvents(){
   $('backToBoardBtn')?.addEventListener('click', ()=>showView('board'));
   $('saveProfileBtn').addEventListener('click', async()=>{
@@ -314,7 +370,10 @@ export function initSetupEvents(){
   });
   ['profileName','profileEmoji','profileColor'].forEach(id=>$(id).addEventListener('input', renderProfilePreview));
   ['newCategory','newProject'].forEach(id=>$(id).addEventListener('change',renderSelectors));
-  $('newCandidate').addEventListener('change',()=>{ if($('newCandidate').value !== '候補から選ぶ') $('newTitle').value = $('newCandidate').value; });
+  $('newCandidate').addEventListener('change',()=>{ if($('newCandidate').value !== '候補から選ぶ') $('newTitle').value = $('newCandidate').value; renderReversePreview(); });
+  ['newTitle','newMinutes','newStart','newDue','newStartTime','newMemo'].forEach(id=>$(id)?.addEventListener('input', renderReversePreview));
+  $('calcReversePlanBtn')?.addEventListener('click', renderReversePreview);
+  $('addReversePlanBtn')?.addEventListener('click', addReversePlanTasks);
   $('addMonthlyTaskBtn').addEventListener('click', async()=>{
     if(!editable()) return alert('他メンバーの棚卸しは編集できません');
     const title = $('newTitle').value.trim() || ($('newCandidate').value==='候補から選ぶ'?'':$('newCandidate').value);

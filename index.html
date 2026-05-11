@@ -160,6 +160,14 @@
             <label><input type="radio" name="occurrence" value="monthly">毎月</label>
           </div>
           <label><small>メモ</small><textarea id="newMemo" placeholder="補足・確認先・注意点"></textarea></label>
+          <div class="reversePlannerBox">
+            <div class="reversePlannerText">
+              <b>納期から逆算</b>
+              <span id="reversePlanPreview">見積もり時間と期限を入れると、毎日どれくらいやればいいか計算します。</span>
+            </div>
+            <button class="ghost" id="calcReversePlanBtn" type="button">逆算する</button>
+            <button class="primary" id="addReversePlanBtn" type="button">毎日のタスクに分けて追加</button>
+          </div>
           <button class="primary" id="addMonthlyTaskBtn">追加する</button>
         </section>
         <section class="panel">
