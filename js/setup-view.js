@@ -284,34 +284,60 @@ function taskDateLabel(t){ return t.schedule_date || t.carryover_date || t.due_d
 function renderRegisteredTasks(){
   const box = $('registeredTasks'); if(!box) return;
   const mine = editable();
-  const arr = state.tasks.filter(t=>t.owner_id===state.selectedMemberId && !isUnavailableTask(t)).slice().sort((a,b)=>String(taskDateLabel(b)).localeCompare(String(taskDateLabel(a))) || String(b.created_at||'').localeCompare(String(a.created_at||'')));
+  const arr = state.tasks
+    .filter(t=>t.owner_id===state.selectedMemberId && !isUnavailableTask(t))
+    .slice()
+    .sort((a,b)=>String(a.category||'未分類').localeCompare(String(b.category||'未分類')) || String(taskDateLabel(b)).localeCompare(String(taskDateLabel(a))) || String(b.created_at||'').localeCompare(String(a.created_at||'')));
   if(!arr.length){ box.innerHTML = '<div class="empty">登録済みタスクはまだありません。</div>'; return; }
-  box.innerHTML = arr.map(t=>`
-    <article class="registeredTask ${t.done?'done':''} ${achievementExcluded(t)?'achievementExcluded':''}" style="--c:${esc(categoryColor(t.category))}" data-task-card="${esc(t.id)}">
-      <div class="registeredTaskHead"><label class="taskSelectLine"><input type="checkbox" class="registeredTaskCheck" value="${esc(t.id)}"><span></span></label><div><b>${esc(t.title)}</b><div class="muted">${esc(t.category||'未分類')} / ${esc(t.project||'')}</div></div><div class="taskDateBadge">${esc(taskDateLabel(t) || '日付なし')}</div></div>
-      <div class="badges"><span class="badge">${esc(t.start_time || '09:00')}開始</span><span class="badge">${Math.round(Number(t.estimated_minutes||30))}分</span><span class="badge">${esc(t.status||'')}</span><span class="badge">${occurrenceLabel(t.occurrence)}</span>${t.done?'<span class="badge">完了</span>':''}</div>
-      ${t.memo?`<p class="taskMemo">${esc(t.memo)}</p>`:''}
-      <details class="taskEditDetails"><summary>このタスクを修正する</summary>
-        <div class="form taskEditForm">
-          <label><small>タスク名</small><input data-field="title" value="${esc(t.title||'')}"></label>
-          <label><small>カテゴリ</small><input data-field="category" value="${esc(t.category||'')}"></label>
-          <label><small>プロジェクト</small><input data-field="project" value="${esc(t.project||'')}"></label>
-          <label><small>見積もり時間 分</small><input data-field="estimated_minutes" type="number" min="15" step="15" value="${esc(t.estimated_minutes||30)}"></label>
-          <label><small>開始時間</small><input data-field="start_time" type="time" step="900" value="${esc(t.start_time||'09:00')}"></label>
-          <label><small>予定日</small><input data-field="schedule_date" type="date" value="${esc(t.schedule_date||'')}"></label>
-          <label><small>持ち越し日</small><input data-field="carryover_date" type="date" value="${esc(t.carryover_date||'')}"></label>
-          <label><small>期限</small><input data-field="due_date" type="date" value="${esc(t.due_date||'')}"></label>
-          <label><small>発生タイプ</small><select data-field="occurrence">
-            <option value="single" ${t.occurrence==='single'||!t.occurrence?'selected':''}>単発</option>
-            <option value="daily" ${t.occurrence==='daily'?'selected':''}>毎日</option>
-            <option value="weekly" ${t.occurrence==='weekly'?'selected':''}>毎週</option>
-            <option value="monthly" ${t.occurrence==='monthly'?'selected':''}>毎月</option>
-          </select></label>
-          <label style="grid-column:1/-1"><small>メモ</small><textarea data-field="memo">${esc(stripAchievementMarker(t.memo))}</textarea></label>
-        </div>
-        <div class="actions"><button type="button" class="primary" data-save-task="${esc(t.id)}">保存</button><button type="button" class="ghost" data-toggle-done="${esc(t.id)}">${t.done?'未完了に戻す':'完了にする'}</button><button type="button" class="ghost" data-toggle-achievement="${esc(t.id)}">${achievementExcluded(t)?'ログに戻す':'ログに入れない'}</button><button type="button" class="danger" data-delete-task="${esc(t.id)}">削除</button></div>
-      </details>
-    </article>`).join('');
+
+  const byCategory = new Map();
+  arr.forEach(t=>{
+    const key = t.category || '未分類';
+    if(!byCategory.has(key)) byCategory.set(key, []);
+    byCategory.get(key).push(t);
+  });
+
+  box.innerHTML = [...byCategory.entries()].map(([category, list])=>{
+    const done = list.filter(t=>t.done).length;
+    const color = categoryColor(category);
+    return `<section class="registeredCategoryGroup" style="--c:${esc(color)}">
+      <div class="registeredCategoryHead">
+        <h3>${esc(category)}</h3>
+        <span>${list.length}件 / 完了 ${done}件</span>
+      </div>
+      <div class="registeredCompactList">
+      ${list.map(t=>`
+        <article class="registeredTask compact ${t.done?'done':''} ${achievementExcluded(t)?'achievementExcluded':''}" style="--c:${esc(color)}" data-task-card="${esc(t.id)}">
+          <div class="registeredTaskHead compact">
+            <label class="taskSelectLine"><input type="checkbox" class="registeredTaskCheck" value="${esc(t.id)}"><span></span></label>
+            <div class="registeredTaskMain"><b>${esc(t.title)}</b><div class="muted">${esc(t.project||'未分類')} ・ ${esc(t.start_time || '09:00')} ・ ${Math.round(Number(t.estimated_minutes||30))}分</div></div>
+            <div class="taskDateBadge">${esc(taskDateLabel(t) || '日付なし')}</div>
+          </div>
+          <details class="taskEditDetails compact"><summary>修正</summary>
+            <div class="form taskEditForm">
+              <label><small>タスク名</small><input data-field="title" value="${esc(t.title||'')}"></label>
+              <label><small>カテゴリ</small><input data-field="category" value="${esc(t.category||'')}"></label>
+              <label><small>プロジェクト</small><input data-field="project" value="${esc(t.project||'')}"></label>
+              <label><small>見積もり時間 分</small><input data-field="estimated_minutes" type="number" min="15" step="15" value="${esc(t.estimated_minutes||30)}"></label>
+              <label><small>開始時間</small><input data-field="start_time" type="time" step="900" value="${esc(t.start_time||'09:00')}"></label>
+              <label><small>予定日</small><input data-field="schedule_date" type="date" value="${esc(t.schedule_date||'')}"></label>
+              <label><small>持ち越し日</small><input data-field="carryover_date" type="date" value="${esc(t.carryover_date||'')}"></label>
+              <label><small>期限</small><input data-field="due_date" type="date" value="${esc(t.due_date||'')}"></label>
+              <label><small>発生タイプ</small><select data-field="occurrence">
+                <option value="single" ${t.occurrence==='single'||!t.occurrence?'selected':''}>単発</option>
+                <option value="daily" ${t.occurrence==='daily'?'selected':''}>毎日</option>
+                <option value="weekly" ${t.occurrence==='weekly'?'selected':''}>毎週</option>
+                <option value="monthly" ${t.occurrence==='monthly'?'selected':''}>毎月</option>
+              </select></label>
+              <label style="grid-column:1/-1"><small>メモ</small><textarea data-field="memo">${esc(stripAchievementMarker(t.memo))}</textarea></label>
+            </div>
+            <div class="actions"><button type="button" class="primary" data-save-task="${esc(t.id)}">保存</button><button type="button" class="ghost" data-toggle-done="${esc(t.id)}">${t.done?'未完了に戻す':'完了にする'}</button><button type="button" class="ghost" data-toggle-achievement="${esc(t.id)}">${achievementExcluded(t)?'ログに戻す':'ログに入れない'}</button><button type="button" class="danger" data-delete-task="${esc(t.id)}">削除</button></div>
+          </details>
+        </article>`).join('')}
+      </div>
+    </section>`;
+  }).join('');
+
   box.querySelectorAll('[data-save-task]').forEach(btn=>btn.onclick=async()=>{
     if(!mine) return alert('他メンバーのタスクは編集できません');
     const id=btn.dataset.saveTask; const card=box.querySelector(`[data-task-card="${id}"]`); const val=(name)=>card.querySelector(`[data-field="${name}"]`)?.value || '';

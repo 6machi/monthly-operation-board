@@ -420,15 +420,20 @@ function formatHours(min){
 function renderActivitySummary(){
   const box = $('activitySummary');
   if(!box) return;
-  const todayMin = availableMinutesForDate(state.scheduleDate, state.selectedMemberId);
-  const monthMin = monthDatesFrom(state.scheduleDate).reduce((sum,d)=>sum+availableMinutesForDate(d, state.selectedMemberId),0);
+  const dayMin = availableMinutesForDate(state.scheduleDate, state.selectedMemberId);
+  const todayMin = state.scheduleDate === todayISO()
+    ? Math.max(0, dayMin - (new Date().getHours()*60 + new Date().getMinutes()))
+    : dayMin;
+  const [y,m] = String(state.scheduleDate || todayISO()).split('-').map(Number);
+  const remainingMonthDates = monthDatesFrom(state.scheduleDate).filter(d => d >= state.scheduleDate);
+  const monthMin = remainingMonthDates.reduce((sum,d)=>sum+availableMinutesForDate(d, state.selectedMemberId),0);
   const workMin = timelineTasks().reduce((sum,t)=>sum+taskDuration(t),0);
   const remainMin = Math.max(0, todayMin - workMin);
   box.innerHTML = `
-    <div class="activityCard"><b>${formatHours(todayMin)}</b><span>${fmtDate(state.scheduleDate)} の活動可能時間</span></div>
-    <div class="activityCard"><b>${formatHours(monthMin)}</b><span>この月の活動可能時間</span></div>
-    <div class="activityCard"><b>${formatHours(workMin)}</b><span>この日のタスク量</span></div>
-    <div class="activityCard"><b>${formatHours(remainMin)}</b><span>この日の残り余白</span></div>`;
+    <div class="activityCard"><b>${formatHours(todayMin)}</b><span>今日の残り活動可能時間</span></div>
+    <div class="activityCard"><b>${formatHours(monthMin)}</b><span>${m}月の残り活動可能時間（残り${remainingMonthDates.length}日）</span></div>
+    <div class="activityCard"><b>${formatHours(workMin)}</b><span>今日のタスク予定時間</span></div>
+    <div class="activityCard"><b>${formatHours(remainMin)}</b><span>今日の余白時間</span></div>`;
 }
 
 export function renderBoard(){

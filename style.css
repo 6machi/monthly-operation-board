@@ -307,3 +307,20 @@ input[type="date"]::-webkit-calendar-picker-indicator,input[type="time"]::-webki
 .unavailablePanel{border-color:#e6ddea;background:linear-gradient(180deg,#fff,#fbf8ff)}
 @media(max-width:900px){.activitySummary{grid-template-columns:repeat(2,1fr)}.registeredTaskHead{grid-template-columns:auto 1fr}.taskDateBadge{grid-column:2/3}.bulkTaskActions button{flex:1}}
 @media(max-width:650px){.activitySummary{grid-template-columns:1fr}.doneTaskPill{grid-template-columns:auto 1fr!important}.doneTaskPill .excludeAchievementBtn{grid-column:2/3;grid-row:auto}.registeredTaskHead{grid-template-columns:auto 1fr}}
+
+
+/* v28: activity wording + compact registered task groups */
+.registeredTaskList{display:grid;gap:14px}
+.registeredCategoryGroup{border:1px solid color-mix(in srgb,var(--c) 28%,var(--line));border-left:8px solid var(--c);background:color-mix(in srgb,var(--c) 5%,#fff);border-radius:18px;padding:12px;box-shadow:0 5px 14px rgba(40,50,80,.05)}
+.registeredCategoryHead{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+.registeredCategoryHead h3{margin:0;font-size:16px;font-weight:950}
+.registeredCategoryHead span{border-radius:999px;background:#fff;color:#566176;border:1px solid var(--line);padding:5px 9px;font-size:12px;font-weight:900;white-space:nowrap}
+.registeredCompactList{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:8px}
+.registeredTask.compact{border-radius:14px;padding:9px 10px;border-left-width:6px;box-shadow:0 3px 10px rgba(40,50,80,.045)}
+.registeredTaskHead.compact{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:8px;align-items:flex-start}
+.registeredTaskMain{min-width:0}.registeredTaskMain b{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.registeredTaskMain .muted{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.registeredTask.compact .taskDateBadge{padding:4px 7px;font-size:11px}
+.registeredTask.compact .taskEditDetails{margin-top:7px}.registeredTask.compact .taskEditDetails summary{padding:5px 9px;font-size:12px}
+.registeredTask.compact .taskEditForm{grid-template-columns:repeat(3,1fr)}
+@media(max-width:900px){.registeredCompactList{grid-template-columns:1fr}.registeredTask.compact .taskEditForm{grid-template-columns:1fr 1fr}}
+@media(max-width:650px){.registeredTaskHead.compact{grid-template-columns:auto minmax(0,1fr)}.registeredTask.compact .taskDateBadge{grid-column:2/3}.registeredTask.compact .taskEditForm{grid-template-columns:1fr}}
