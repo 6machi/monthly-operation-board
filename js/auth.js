@@ -20,32 +20,26 @@ export async function signOut(){
   if(error) throw error;
 }
 export async function ensureProfileAndTeam(user){
-  const displayName = user.email?.split('@')[0] || '自分';
-  await supabase.from('profiles').upsert({ id:user.id, display_name:displayName }, { onConflict:'id' });
+  // 初回ログイン時のプロフィール・個人ボード作成は、RLSで弾かれないよう
+  // Supabase側の SECURITY DEFINER 関数に任せます。
+  const { error:bootErr } = await supabase.rpc('bootstrap_my_board');
+  if(bootErr) throw bootErr;
 
-  let { data:memberships, error:memberErr } = await supabase
+  const { data:memberships, error:memberErr } = await supabase
     .from('team_members')
     .select('team_id, role, teams(id,name,created_by)')
     .eq('user_id', user.id)
     .limit(1);
   if(memberErr) throw memberErr;
-
-  if(!memberships || !memberships.length){
-    const { data:team, error:teamErr } = await supabase
-      .from('teams')
-      .insert({ name:'個人ボード', created_by:user.id })
-      .select('*')
-      .single();
-    if(teamErr) throw teamErr;
-    const { error:tmErr } = await supabase
-      .from('team_members')
-      .insert({ team_id:team.id, user_id:user.id, role:'admin' });
-    if(tmErr) throw tmErr;
-    memberships = [{ team_id:team.id, role:'admin', teams:team }];
-  }
+  if(!memberships || !memberships.length) throw new Error('ボード情報を作成できませんでした');
 
   const team = memberships[0].teams;
-  const { data:profile } = await supabase.from('profiles').select('*').eq('id',user.id).single();
+  const { data:profile, error:profileErr } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('id', user.id)
+    .single();
+  if(profileErr) throw profileErr;
   return { profile, team };
 }
 export async function loadMembers(teamId){
