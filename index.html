@@ -15,7 +15,7 @@
           <p>月1で棚卸し、日々はスケジュール・持ち越し・差し込みを見る</p>
         </div>
         <div class="userBox">
-          <span class="pill" id="loginPill">未ログイン</span>
+          <button class="pill profileOpen" id="loginPill" type="button" title="自分のページを開く">未ログイン</button>
           <button id="logoutBtn" class="ghost hidden">ログアウト</button>
         </div>
       </div>
@@ -110,12 +110,15 @@
         <section class="panel"><h2>メンバー別・今月のタスク</h2><div class="memberSummary" id="memberSummary"></div></section>
       </section>
 
-      <section id="setup" class="view">
-        <div class="tabs" id="setupMemberTabs"></div>
-        <div id="setupNotice" class="notice ok"></div>
-        <section class="panel" id="profileSettingsPanel">
-          <h2>自分設定</h2>
-          <p class="muted">画面上ではメールアドレスを出さず、この名前・絵文字・色で表示します。</p>
+      <section id="profile" class="view">
+        <section class="panel profilePagePanel" id="profileSettingsPanel">
+          <div class="profilePageHead">
+            <div>
+              <h2>自分のページ</h2>
+              <p class="muted">表示名・絵文字・色を変えたり、できたことログを見られます。</p>
+            </div>
+            <button class="ghost" id="backToBoardBtn" type="button">今日やることへ戻る</button>
+          </div>
           <div class="profilePreview" id="profilePreview"></div>
           <div class="form three profileForm">
             <label><small>自分の名前</small><input id="profileName" placeholder="表示したい名前"></label>
@@ -124,11 +127,15 @@
           </div>
           <button class="primary" id="saveProfileBtn">自分設定を保存</button>
         </section>
-
         <section class="panel" id="achievementPanel">
           <h2>できたことログ</h2>
           <div id="achievementArchive"></div>
         </section>
+      </section>
+
+      <section id="setup" class="view">
+        <div class="tabs" id="setupMemberTabs"></div>
+        <div id="setupNotice" class="notice ok"></div>
         <section class="panel"><h2>カテゴリ管理</h2><div class="catgrid" id="categoryGrid"></div></section>
         <section class="panel" id="categoryEditorPanel">
           <h2>カテゴリ編集</h2>

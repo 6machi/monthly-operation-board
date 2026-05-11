@@ -3,7 +3,7 @@ import { state } from './state.js';
 import { saveTree } from './setup.js';
 import { updateMyProfile, loadMembers } from './auth.js';
 import { createTask, updateTask, deleteTask } from './tasks.js';
-import { refreshAll } from './app.js';
+import { refreshAll, showView } from './app.js';
 
 function editable(){ return state.selectedMemberId === state.user.id; }
 function cat(){ return state.tree[state.selectedCategoryIndex] || state.tree[0]; }
@@ -11,19 +11,21 @@ function proj(){ const c=cat(); return c?.projects?.find(p=>p.name===$('newProje
 function typ(){ const p=proj(); return p?.types?.find(t=>t.name===$('newType').value) || p?.types?.[0]; }
 function fill(sel, arr, cur){ sel.innerHTML=(arr||[]).map(v=>`<option ${v===cur?'selected':''}>${esc(v)}</option>`).join(''); }
 export function renderSetup(){
-  $('setupNotice').textContent = editable() ? '自分の棚卸しです。編集できます。' : '他メンバーの棚卸しは閲覧中心です。';
-  renderProfileSettings();
-  renderAchievementArchive();
+  $('setupNotice').textContent = editable() ? '自分のタスク追加画面です。棚・登録済みタスクを編集できます。' : '他メンバーのタスク追加画面は閲覧中心です。';
   renderCategories(); renderSelectors(); renderCategoryEditor(); renderRegisteredTasks();
   document.querySelectorAll('#setup input,#setup select,#setup textarea,#setup button').forEach(el=>{ if(!el.closest('.tabs')) el.disabled = !editable(); });
+}
+
+export function renderProfilePage(){
+  state.selectedMemberId = state.user.id;
+  renderProfileSettings();
+  renderAchievementArchive(state.user.id);
 }
 
 function renderProfileSettings(){
   const panel = $('profileSettingsPanel');
   if(!panel) return;
-  const isMine = state.selectedMemberId === state.user.id;
-  panel.classList.toggle('hidden', !isMine);
-  if(!isMine) return;
+  panel.classList.remove('hidden');
   const profile = state.profile || {};
   $('profileName').value = profile.display_name || '自分';
   $('profileEmoji').value = profile.display_emoji || '🌙';
@@ -38,15 +40,15 @@ function renderProfilePreview(){
 }
 
 
-function renderAchievementArchive(){
+function renderAchievementArchive(memberId = state.user?.id){
   const box = $('achievementArchive');
   if(!box) return;
-  const member = state.members.find(m=>m.id===state.selectedMemberId) || state.profile || {};
+  const member = state.members.find(m=>m.id===memberId) || state.profile || {};
   const name = member.name || '自分';
   const emoji = member.emoji || '🌙';
   const color = member.color || '#5d9cec';
   const doneTasks = state.tasks
-    .filter(t=>t.owner_id===state.selectedMemberId && t.done)
+    .filter(t=>t.owner_id===memberId && t.done)
     .slice()
     .sort((a,b)=>String(b.updated_at||b.created_at||'').localeCompare(String(a.updated_at||a.created_at||'')));
 
@@ -358,6 +360,7 @@ function renderRegisteredTasks(){
 }
 
 export function initSetupEvents(){
+  $('backToBoardBtn')?.addEventListener('click', ()=>showView('board'));
   $('saveProfileBtn').addEventListener('click', async()=>{
     try{
       const updated = await updateMyProfile({
@@ -367,8 +370,9 @@ export function initSetupEvents(){
       });
       state.profile = updated;
       state.members = await loadMembers(state.team.id);
+      $('loginPill').textContent = `${updated.display_emoji || '🌙'} ${updated.display_name || '自分'}`;
       alert('自分設定を保存しました');
-      renderSetup();
+      renderProfilePage();
       refreshAll();
     }catch(e){ alert(e.message || '自分設定の保存に失敗しました'); }
   });

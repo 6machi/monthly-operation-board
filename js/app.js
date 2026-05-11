@@ -6,7 +6,7 @@ import { state } from './state.js';
 import { $, qsa, todayISO, nowTimeText, fmtDate, addDays } from './utils.js';
 import { initBoardEvents, renderBoard } from './board.js';
 import { initCalendarEvents, renderCalendar } from './calendar.js';
-import { initSetupEvents, renderSetup } from './setup-view.js';
+import { initSetupEvents, renderSetup, renderProfilePage } from './setup-view.js';
 
 export function showView(view){
   state.view = view;
@@ -21,6 +21,7 @@ function renderCurrent(){
   if(state.view==='board') renderBoard();
   if(state.view==='calendar') renderCalendar();
   if(state.view==='setup') renderSetup();
+  if(state.view==='profile') renderProfilePage();
 }
 function renderHero(){
   $('heroDate').textContent = fmtDate(todayISO());
@@ -28,9 +29,11 @@ function renderHero(){
 }
 function renderMemberTabs(){
   const html = state.members.map(m=>`<button class="memberTab ${m.id===state.selectedMemberId?'active':''}" data-member="${m.id}" style="--member-color:${m.color || '#5d9cec'}"><span>${m.emoji || '🌙'}</span>${m.name}</button>`).join('');
-  $('memberTabs').innerHTML = html;
-  $('setupMemberTabs').innerHTML = html;
-  [...$('memberTabs').querySelectorAll('button'), ...$('setupMemberTabs').querySelectorAll('button')].forEach(btn=>{
+  const boardTabs = $('memberTabs');
+  const setupTabs = $('setupMemberTabs');
+  if(boardTabs) boardTabs.innerHTML = html;
+  if(setupTabs) setupTabs.innerHTML = html;
+  [...(boardTabs?.querySelectorAll('button') || []), ...(setupTabs?.querySelectorAll('button') || [])].forEach(btn=>{
     btn.addEventListener('click', async()=>{
       state.selectedMemberId = btn.dataset.member;
       if(state.selectedMemberId === state.user.id){
@@ -73,6 +76,7 @@ async function init(){
   }
   initBoardEvents(); initCalendarEvents(); initSetupEvents();
   qsa('#mainNav button').forEach(btn=>btn.addEventListener('click',()=>showView(btn.dataset.view)));
+  $('loginPill').addEventListener('click',()=>{ if(state.user) showView('profile'); });
   $('signinBtn').addEventListener('click', async()=>{
     try{ const session = await signIn($('authEmail').value, $('authPassword').value); await bootAuthed(session); }
     catch(e){ authMsg(e.message || 'ログインに失敗しました', true); }
