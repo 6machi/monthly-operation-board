@@ -185,38 +185,46 @@ function renderProjectTree(c){
   if(!projects.length){
     return '<div class="empty">このカテゴリにはまだプロジェクトがありません。</div>';
   }
-  return `<div class="categoryTreeList">${projects.map((p,pi)=>`
-    <section class="treeProject">
+  return `<div class="categoryTreeList slimTree">${projects.map((p,pi)=>`
+    <section class="treeProject simpleTreeProject">
       <div class="treeProjectHead">
         <b>${esc(p.name)}</b>
         <span>${p.types?.length || 0} 種類</span>
       </div>
-      <div class="actions compactActions">
-        <button type="button" class="ghost" data-edit-project="${pi}">プロジェクト名を修正</button>
-        <button type="button" class="danger" data-delete-project="${pi}">プロジェクト削除</button>
-      </div>
       <div class="treeTypeList">
         ${(p.types||[]).map((ty,ti)=>`
-          <div class="treeType">
+          <div class="treeType simpleTreeType">
             <div class="treeTypeHead">
               <span>タスク種類</span>
               <b>${esc(ty.name)}</b>
             </div>
-            <div class="actions compactActions">
-              <button type="button" class="ghost" data-edit-type="${pi}:${ti}">種類名を修正</button>
-              <button type="button" class="danger" data-delete-type="${pi}:${ti}">種類削除</button>
-            </div>
             <div class="candidateChips">
               ${(ty.tasks||[]).length ? (ty.tasks||[]).map((name,ci)=>`
-                <span class="candidateChip">${esc(name)}
+                <span class="candidateChip editableCandidate">${esc(name)}
                   <button type="button" class="chipEdit" data-edit-cand="${pi}:${ti}:${ci}" title="修正">修正</button>
                   <button type="button" class="chipDelete" data-del-cand="${pi}:${ti}:${ci}" title="削除">×</button>
                 </span>
               `).join('') : '<span class="muted">タスク名候補はまだありません。</span>'}
             </div>
+            <details class="tinyEditDetails">
+              <summary>このタスク種類を編集</summary>
+              <div class="actions compactActions">
+                <button type="button" class="ghost" data-edit-type="${pi}:${ti}">種類名を修正</button>
+                <button type="button" class="ghost" data-add-cand-to="${pi}:${ti}">候補を追加</button>
+                <button type="button" class="danger" data-delete-type="${pi}:${ti}">種類削除</button>
+              </div>
+            </details>
           </div>
         `).join('')}
       </div>
+      <details class="tinyEditDetails">
+        <summary>このプロジェクトを編集</summary>
+        <div class="actions compactActions">
+          <button type="button" class="ghost" data-edit-project="${pi}">プロジェクト名を修正</button>
+          <button type="button" class="ghost" data-add-type-to="${pi}">タスク種類を追加</button>
+          <button type="button" class="danger" data-delete-project="${pi}">プロジェクト削除</button>
+        </div>
+      </details>
     </section>
   `).join('')}</div>`;
 }
@@ -257,15 +265,24 @@ function renderCategoryEditor(){
       </div>
       ${renderSharePicker(c)}
     </section>
-    <div class="actions">
+    <div class="actions mainActions">
       <button id="saveCatBtn" class="primary">カテゴリを保存</button>
-      <button id="addCategoryBtn" class="ghost">カテゴリ追加</button>
-      <button id="deleteCategoryBtn" class="danger">カテゴリ削除</button>
-      <button id="addProjectBtn" class="ghost">プロジェクト追加</button>
-      <button id="addTypeBtn" class="ghost">タスク種類追加</button>
-      <button id="addCandidateBtn" class="ghost">タスク名候補追加</button>
     </div>
-    <div class="sectionline"><b>登録されている棚</b><p class="muted">プロジェクト名・タスク種類・タスク名候補はここから修正できます。</p>${renderProjectTree(c)}</div>`;
+    <details class="softDetails" open>
+      <summary>登録されている棚</summary>
+      <p class="muted">タスク名候補は、候補チップの「修正」から名前を変えられます。</p>
+      ${renderProjectTree(c)}
+    </details>
+    <details class="softDetails adminDetails">
+      <summary>棚の追加・削除など</summary>
+      <div class="actions">
+        <button id="addCategoryBtn" class="ghost">カテゴリ追加</button>
+        <button id="addProjectBtn" class="ghost">プロジェクト追加</button>
+        <button id="addTypeBtn" class="ghost">タスク種類追加</button>
+        <button id="addCandidateBtn" class="ghost">タスク名候補追加</button>
+        <button id="deleteCategoryBtn" class="danger">カテゴリ削除</button>
+      </div>
+    </details>`;
 
   $('saveCatBtn').onclick = async()=>{
     c.name=$('editCatName').value.trim()||c.name;
@@ -286,6 +303,22 @@ function renderCategoryEditor(){
   $('addProjectBtn').onclick = async()=>{ const name=prompt('追加するプロジェクト名'); if(!name)return; c.projects=c.projects||[]; c.projects.push({name, types:[{name:'未分類',tasks:[]}]}); await persist(); };
   $('addTypeBtn').onclick = async()=>{ const pName=prompt('どのプロジェクトに追加しますか？', c.projects?.[0]?.name||''); const p=c.projects?.find(x=>x.name===pName); if(!p)return alert('プロジェクトが見つかりません'); const name=prompt('追加するタスク種類'); if(!name)return; p.types=p.types||[]; p.types.push({name,tasks:[]}); await persist(); };
   $('addCandidateBtn').onclick = async()=>{ const pName=prompt('プロジェクト名', c.projects?.[0]?.name||''); const p=c.projects?.find(x=>x.name===pName); if(!p)return alert('プロジェクトが見つかりません'); const tName=prompt('タスク種類', p.types?.[0]?.name||''); const ty=p.types?.find(x=>x.name===tName); if(!ty)return alert('タスク種類が見つかりません'); const name=prompt('追加するタスク名候補'); if(!name)return; ty.tasks=ty.tasks||[]; ty.tasks.push(name); await persist(); };
+
+  box.querySelectorAll('[data-add-type-to]').forEach(btn=>{
+    btn.onclick = async()=>{
+      const pi=Number(btn.dataset.addTypeTo); const p=c.projects?.[pi]; if(!p)return;
+      const name=prompt('追加するタスク種類'); if(!name)return;
+      p.types=p.types||[]; p.types.push({name:name.trim(),tasks:[]}); await persist();
+    };
+  });
+  box.querySelectorAll('[data-add-cand-to]').forEach(btn=>{
+    btn.onclick = async()=>{
+      const [pi,ti]=btn.dataset.addCandTo.split(':').map(Number);
+      const ty=c.projects?.[pi]?.types?.[ti]; if(!ty)return;
+      const name=prompt('追加するタスク名候補'); if(!name)return;
+      ty.tasks=ty.tasks||[]; ty.tasks.push(name.trim()); await persist();
+    };
+  });
 
   box.querySelectorAll('[data-edit-project]').forEach(btn=>{
     btn.onclick = async()=>{

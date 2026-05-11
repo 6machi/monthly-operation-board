@@ -137,3 +137,27 @@ input[type="color"]::-moz-color-swatch{
 .shareMemberOption input{width:16px;height:16px;accent-color:var(--share-color)}
 .shareEmoji{font-size:16px}.shareName{font-size:13px;color:#445066}
 @media(max-width:650px){.catgrid .cat{min-width:210px;flex-basis:220px}.sharePickerHead{flex-direction:column}.shareMemberOption{width:100%}}
+
+
+/* v15: task add page cleanup */
+.mainActions{margin-top:12px;margin-bottom:8px}
+.softDetails{background:#fff;border:1px solid var(--line);border-radius:18px;padding:12px 14px;margin-top:12px;box-shadow:0 5px 14px rgba(40,50,80,.04)}
+.softDetails summary{cursor:pointer;font-weight:950;color:var(--dark);list-style:none;display:flex;align-items:center;gap:8px}
+.softDetails summary::-webkit-details-marker{display:none}
+.softDetails summary::before{content:'›';display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:999px;background:#f3f5f9;color:var(--muted);font-weight:950;transition:.15s ease}
+.softDetails[open] summary::before{transform:rotate(90deg);background:#eef5ff;color:#2e6fb4}
+.adminDetails{background:#fbfcff}
+.slimTree{display:grid;gap:10px;margin-top:10px}
+.simpleTreeProject{border:1px solid #eef1f6;border-radius:16px;padding:12px;background:#fff}
+.simpleTreeType{border:1px solid #f0f2f7;border-radius:14px;padding:10px;margin-top:8px;background:#fcfdff}
+.tinyEditDetails{margin-top:8px}
+.tinyEditDetails summary{cursor:pointer;color:var(--muted);font-size:12px;font-weight:900;display:inline-flex;align-items:center;gap:5px;background:#f7f9fc;border:1px solid #edf0f6;border-radius:999px;padding:6px 9px;list-style:none}
+.tinyEditDetails summary::-webkit-details-marker{display:none}
+.tinyEditDetails[open] summary{background:#eef5ff;color:#2e6fb4}
+.compactActions{margin-top:8px}
+.compactActions button,.candidateChip button{font-size:11px;padding:5px 8px}
+.editableCandidate{padding-right:4px}
+.candidateChip .chipEdit{margin-left:6px;border:0;background:#eef5ff;color:#2e6fb4;border-radius:999px;box-shadow:none;cursor:pointer}
+.candidateChip .chipDelete{margin-left:3px;border:0;background:#fff0f0;color:#b23a3a;border-radius:999px;box-shadow:none;cursor:pointer}
+#categoryEditor .actions:not(.mainActions){gap:6px}
+#categoryEditor .actions:not(.mainActions) button{font-size:12px;padding:7px 10px}
