@@ -149,7 +149,8 @@
             <button class="primary" id="icsImportBtn" type="button">選んだ予定を稼働不可として取り込む</button>
           </div>
         </details>
-        <section class="panel"><h2>日付別の予定量 <button class="infoDot" type="button" data-info="日付ごとの予定量と稼働不可を確認できます。日付をクリックすると、その日のタイムラインを開けます。">i</button></h2><div class="monthGrid" id="monthGrid"></div></section>
+        <section class="panel"><h2>日付別の予定量 <button class="infoDot" type="button" data-info="日付ごとの予定量と稼働不可を確認できます。日付をクリックすると、その日のタスク一覧を確認できます。">i</button></h2><div class="monthGrid" id="monthGrid"></div></section>
+        <section class="panel" id="selectedDayPanel"><h2><span id="selectedDayTitle">選択日の予定</span> <button class="infoDot" type="button" data-info="カレンダーで選んだ日のタスクと稼働不可を、日別カードで確認できます。タイムラインで細かく調整したい時は「タイムラインで調整」を押してください。">i</button></h2><div id="selectedDayTasks" class="selectedDayTasks"></div></section>
         <details class="panel sideDetails">
           <summary>稼働できない日・時間 <button class="infoDot" type="button" data-info="稼働不可の追加・解除は、右上の自分の名前から開く「自分のページ」で管理できます。">i</button></summary>
           <button class="ghost" type="button" id="openProfileFromCalendar">自分のページで管理する</button>
@@ -256,6 +257,6 @@
   </template>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script type="module" src="js/app.js?v=47"></script>
+  <script type="module" src="js/app.js?v=48"></script>
 </body>
 </html>

@@ -1,10 +1,11 @@
-import { $, esc, toISO, todayISO, diffDays, taskOccursOnDate, minutesFromTime, fullClock, fmtDate } from './utils.js?v=46';
-import { state } from './state.js?v=46';
-import { openDateOnBoard } from './board.js?v=46';
-import { createTask, deleteTask, updateTask } from './tasks.js?v=46';
-import { refreshAll } from './app.js?v=46';
+import { $, esc, toISO, todayISO, diffDays, taskOccursOnDate, minutesFromTime, fullClock, fmtDate } from './utils.js?v=48';
+import { state } from './state.js?v=48';
+import { openDateOnBoard } from './board.js?v=48';
+import { createTask, deleteTask, updateTask } from './tasks.js?v=48';
+import { refreshAll } from './app.js?v=48';
 
 const DAY_MINUTES = 24 * 60;
+let selectedCalendarDate = todayISO();
 function taskArray(){ return Array.isArray(state.tasks) ? state.tasks.filter(t=>t && typeof t === 'object') : []; }
 function memberArray(){ return Array.isArray(state.members) ? state.members.filter(m=>m && typeof m === 'object') : []; }
 function clampMinute(n){ return Math.max(0, Math.min(DAY_MINUTES, Math.round(Number(n)||0))); }
@@ -33,7 +34,9 @@ function unavailableDuration(t){
 export function renderCalendar(){
   $('calendarMonth').value = state.calendarMonth;
   renderUnavailableList();
+  ensureSelectedCalendarDate();
   renderMonthGrid();
+  renderSelectedDayTasks();
   renderMemberSummary();
 }
 
@@ -207,6 +210,7 @@ function renderMonthGrid(){
     if(isToday) cell.classList.add('today');
     if(diffDays(iso, today) < 0) cell.classList.add('past');
     if(unavailableMembers.length) cell.classList.add('unavailableDay');
+    if(iso === selectedCalendarDate) cell.classList.add('selected');
 
     const header = `
       <div class="dayHead">
@@ -230,9 +234,71 @@ function renderMonthGrid(){
     const partialText = unavailableMembers.length && !allDayMembers.length ? '稼働不可時間あり' : '稼働不可あり';
     const footer = `<div class="dayMood">${unavailableMembers.length ? partialText : (carryovers ? `持ち越し ${carryovers}件` : '持ち越しなし')}</div>`;
     cell.innerHTML = header + chips + footer;
-    cell.addEventListener('click',()=>openDateOnBoard(iso));
+    cell.addEventListener('click',()=>{ selectedCalendarDate = iso; renderCalendar(); });
     grid.appendChild(cell);
   }
+}
+
+function ensureSelectedCalendarDate(){
+  const month = state.calendarMonth;
+  if(!selectedCalendarDate || !String(selectedCalendarDate).startsWith(month)){
+    const today = todayISO();
+    selectedCalendarDate = String(today).startsWith(month) ? today : `${month}-01`;
+  }
+}
+function categoryColor(name){
+  const tree = Array.isArray(state.tree) ? state.tree : [];
+  const found = tree.find(c=>c?.name===name);
+  if(found?.color) return found.color;
+  if(name === '稼働不可') return '#9aa4b6';
+  return '#9aa4b6';
+}
+function formatTaskTime(t){
+  const start = (t.start_time || '00:00').slice(0,5);
+  const duration = Math.max(15, Number(t.estimated_minutes || 30));
+  if(isUnavailableTask(t)) return formatUnavailable(t);
+  return `${start}〜${fullClock(minutesFromTime(start)+duration)} / ${duration}分`;
+}
+function taskTitleForList(t){
+  if(isUnavailableTask(t)) return t.memo || t.title || '稼働不可';
+  return t.title || t.memo || '無題のタスク';
+}
+function selectedDayItemsForMember(dateIso, mem){
+  const normal = taskArray()
+    .filter(t=>t && t.id && t.owner_id===mem.id && !isUnavailableTask(t) && taskOccursOnDate(t, dateIso))
+    .map(t=>({ type:'task', task:t }));
+  const unavailable = unavailableTasksForMember(dateIso, mem.id).map(t=>({ type:'unavailable', task:t }));
+  return [...unavailable, ...normal].sort((a,b)=>String(a.task.start_time||'00:00').localeCompare(String(b.task.start_time||'00:00')));
+}
+function renderSelectedDayTasks(){
+  const title = $('selectedDayTitle');
+  const box = $('selectedDayTasks');
+  if(!box) return;
+  const dateIso = selectedCalendarDate || todayISO();
+  if(title) title.textContent = `${fmtDate(dateIso)} の予定`;
+
+  const groups = memberArray().map(mem=>({ mem, items:selectedDayItemsForMember(dateIso, mem) })).filter(g=>g.items.length);
+  if(!groups.length){
+    box.innerHTML = `<div class="empty">この日のタスク・稼働不可はありません。<div class="actions"><button class="ghost" type="button" id="openSelectedDayTimelineEmpty">タイムラインで見る</button></div></div>`;
+    $('openSelectedDayTimelineEmpty')?.addEventListener('click',()=>openDateOnBoard(dateIso));
+    return;
+  }
+
+  box.innerHTML = `<div class="selectedDayTop"><button class="primary" type="button" id="openSelectedDayTimeline">タイムラインで調整</button></div>
+    <div class="selectedDayGroups">${groups.map(({mem,items})=>`
+      <section class="selectedDayGroup" style="--member-color:${esc(mem.color || '#5d9cec')}">
+        <h3><span class="memberEmojiMini">${esc(mem.emoji || '🌙')}</span>${esc(mem.name)}<small>${items.length}件</small></h3>
+        <div class="selectedDayCardGrid">
+          ${items.map(({type,task:t})=>`
+            <article class="selectedDayCard ${type==='unavailable'?'unavailable':''} ${t.done?'done':''}" style="--task-color:${esc(categoryColor(t.category))}">
+              <span class="timeBadge">${esc(formatTaskTime(t))}</span>
+              <b>${esc(taskTitleForList(t))}</b>
+              <small>${esc(t.category || '未分類')}${t.project ? ` / ${esc(t.project)}` : ''}${t.done ? ' / 完了' : ''}</small>
+              ${t.memo && !isUnavailableTask(t) ? `<p>${esc(t.memo)}</p>` : ''}
+            </article>`).join('')}
+        </div>
+      </section>`).join('')}</div>`;
+  $('openSelectedDayTimeline')?.addEventListener('click',()=>openDateOnBoard(dateIso));
 }
 
 function renderMemberSummary(){
