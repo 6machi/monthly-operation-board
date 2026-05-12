@@ -1,9 +1,9 @@
-import { $, esc, todayISO, addDays, fmtDate, diffDays, relativeFrom, taskOccursOnDate, occurrenceLabel, fullClock, minutesFromTime } from './utils.js?v=55';
-import { state } from './state.js?v=55';
-import { createTask, markCarryover, returnToSchedule, updateTask, deleteTask } from './tasks.js?v=55';
-import { refreshAll, showView } from './app.js?v=55';
-import { isUnavailableTask, isUnavailableForMember, unavailableBlocksForMember } from './calendar.js?v=55';
-import { updateMyProfile, loadMembers } from './auth.js?v=55';
+import { $, esc, todayISO, addDays, fmtDate, diffDays, relativeFrom, taskOccursOnDate, occurrenceLabel, fullClock, minutesFromTime } from './utils.js?v=57';
+import { state } from './state.js?v=57';
+import { createTask, markCarryover, returnToSchedule, updateTask, deleteTask } from './tasks.js?v=57';
+import { refreshAll, showView } from './app.js?v=57';
+import { isUnavailableTask, isUnavailableForMember, unavailableBlocksForMember } from './calendar.js?v=57';
+import { updateMyProfile, loadMembers } from './auth.js?v=57';
 
 const SLOT_MINUTES = 15;
 const PX_PER_MINUTE = 1.15; // 15分 = 約17px / 60分 = 約69px
@@ -722,6 +722,12 @@ export function openTaskEditor(t){
   $('editTaskTitle').focus();
 }
 
+async function completeTaskQuick(t){
+  if(!t || !t.id || !isEditable()) return;
+  await updateTask(t.id, { done:true, status:'done' });
+  await refreshAll();
+}
+
 function makeEventElement(t, index, baseMin, instanceDate=state.scheduleDate, absStartOverride=null){
   if(!t || !t.id){ const empty=document.createElement('div'); return empty; }
   const duration = taskDuration(t);
@@ -746,6 +752,10 @@ function makeEventElement(t, index, baseMin, instanceDate=state.scheduleDate, ab
       <small>${instanceDate !== state.scheduleDate ? esc(fmtDate(instanceDate)) + ' ' : ''}${timeLabel(start)} - ${timeLabel(start + duration)} / ${Math.round(duration)}分 / ${esc(t.project || t.category || '')}</small>
     </div>
     <div class="eventMeta">${occurrenceLabel(t.occurrence)}</div>
+    <div class="eventActions">
+      <button type="button" class="eventCompleteBtn">✓ 完了</button>
+      <button type="button" class="eventEditBtn">修正</button>
+    </div>
     <div class="resizeHandle" title="下に引っぱると時間を変更"></div>`;
 
   if(!isEditable()){
@@ -753,6 +763,17 @@ function makeEventElement(t, index, baseMin, instanceDate=state.scheduleDate, ab
     el.addEventListener('click',()=>{});
     return el;
   }
+
+  el.querySelector('.eventCompleteBtn')?.addEventListener('click', async(e)=>{
+    e.preventDefault();
+    e.stopPropagation();
+    await completeTaskQuick(t);
+  });
+  el.querySelector('.eventEditBtn')?.addEventListener('click', (e)=>{
+    e.preventDefault();
+    e.stopPropagation();
+    openTaskEditor(t);
+  });
 
   let mode = null;
   let pointerId = null;
@@ -777,6 +798,7 @@ function makeEventElement(t, index, baseMin, instanceDate=state.scheduleDate, ab
     originalTop = parseFloat(el.style.top) || 0;
     originalHeight = parseFloat(el.style.height) || Math.max(22, duration * PX_PER_MINUTE - 4);
     moved = false;
+    state.timelineDragging = true;
     el.classList.add(mode === 'resize' ? 'resizing' : 'moving');
     try{ el.setPointerCapture(pointerId); }catch(_e){}
     document.addEventListener('pointermove', onMove);
@@ -789,13 +811,13 @@ function makeEventElement(t, index, baseMin, instanceDate=state.scheduleDate, ab
     const dy = e.clientY - startY;
     if(Math.abs(dy) > 4) moved = true;
     if(mode === 'move'){
+      // ドラッグ中に15分刻みへ吸着させると、カードが元の場所へ戻ろうとするように見えるため、
+      // 移動中は指/カーソルに素直についてきて、離した瞬間だけ15分単位に丸めます。
       const rawTop = Math.max(0, Math.min(DAY_MINUTES * PX_PER_MINUTE - originalHeight, originalTop + dy));
-      const snappedTop = snapMinutes(rawTop / PX_PER_MINUTE) * PX_PER_MINUTE;
-      el.style.top = `${snappedTop}px`;
+      el.style.top = `${rawTop}px`;
     }else{
       const rawHeight = Math.max(SLOT_MINUTES * PX_PER_MINUTE - 4, originalHeight + dy);
-      const snappedDuration = snapDuration((rawHeight + 4) / PX_PER_MINUTE);
-      el.style.height = `${snappedDuration * PX_PER_MINUTE - 4}px`;
+      el.style.height = `${rawHeight}px`;
     }
   };
 
@@ -820,10 +842,11 @@ function makeEventElement(t, index, baseMin, instanceDate=state.scheduleDate, ab
     }
 
     if(currentMode === 'move'){
-      const abs = absoluteMinutesFromTimelineTop(parseFloat(el.style.top)||0, timelineBaseMinutes());
+      const snappedTop = snapMinutes((parseFloat(el.style.top)||0) / PX_PER_MINUTE) * PX_PER_MINUTE;
+      el.style.top = `${snappedTop}px`;
+      const abs = absoluteMinutesFromTimelineTop(snappedTop, timelineBaseMinutes());
       const targetDate = timelineDateForAbsolute(abs);
-      let newStart = wrapMinutes(abs);
-      if(!fitsAt(targetDate, newStart, taskDuration(t), state.selectedMemberId, t.id, t)) newStart = findAvailableStart(targetDate, taskDuration(t), newStart, state.selectedMemberId, t.id, t);
+      const newStart = wrapMinutes(abs);
       const keepCarry = !!t.carryover_date;
       await updateTask(t.id, keepCarry
         ? { start_time: timeLabelWrap(newStart), carryover_date: targetDate, schedule_date:null, status:'carryover' }
@@ -831,18 +854,22 @@ function makeEventElement(t, index, baseMin, instanceDate=state.scheduleDate, ab
       );
     }else{
       const newDuration = snapDuration(((parseFloat(el.style.height)||0) + 4) / PX_PER_MINUTE);
+      el.style.height = `${newDuration * PX_PER_MINUTE - 4}px`;
       await updateTask(t.id, { estimated_minutes: newDuration });
     }
+    state.timelineDragging = false;
     await refreshAll();
   };
 
   const onCancel = ()=>{
     mode = null; pointerId = null;
+    state.timelineDragging = false;
     cleanup();
+    renderBoard();
   };
 
   el.addEventListener('pointerdown', e=>{
-    if(e.target.closest('.resizeHandle')) return;
+    if(e.target.closest('button,.resizeHandle')) return;
     begin(e, false);
   });
   el.querySelector('.resizeHandle').addEventListener('pointerdown', e=>begin(e, true));
@@ -857,7 +884,7 @@ function taskCard(t){
   art.draggable = true;
   art.dataset.id = t.id;
   art.style.setProperty('--c', colorFor(t));
-  art.innerHTML = `<b>${esc(t.title)}</b><small>${esc(t.category || '')} / ${esc(t.project || '')} / ${Math.round(t.estimated_minutes||30)}分</small><div class="badges"><span class="badge">${esc(t.status || '')}</span><span class="badge">${occurrenceLabel(t.occurrence)}</span>${t.due_date?`<span class="badge">期限 ${esc(t.due_date)}</span>`:''}</div><div class="actions"><button data-act="return">この日のタイムラインへ戻す</button><button data-act="done">完了</button></div>`;
+  art.innerHTML = `<b>${esc(t.title)}</b><small>${esc(t.category || '')} / ${esc(t.project || '')} / ${Math.round(t.estimated_minutes||30)}分</small><div class="badges"><span class="badge">${esc(t.status || '')}</span><span class="badge">${occurrenceLabel(t.occurrence)}</span>${t.due_date?`<span class="badge">期限 ${esc(t.due_date)}</span>`:''}</div><div class="actions"><button data-act="return">この日のタイムラインへ戻す</button><button data-act="done">✓ 完了</button></div>`;
   art.addEventListener('dragstart', e=>{ state.draggingTaskId = t.id; e.dataTransfer.setData('text/plain', t.id); });
   art.addEventListener('click', e=>{ if(e.target.closest('button')) return; if(isEditable()) openTaskEditor(t); });
   art.querySelector('[data-act="return"]').addEventListener('click', async(e)=>{ e.stopPropagation(); await scheduleTaskOnDate(t.id, state.scheduleDate); await refreshAll(); });

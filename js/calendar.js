@@ -1,8 +1,8 @@
-import { $, esc, toISO, todayISO, diffDays, taskOccursOnDate, minutesFromTime, fullClock, fmtDate } from './utils.js?v=55';
-import { state } from './state.js?v=55';
-import { openDateOnBoard, openTaskEditor } from './board.js?v=55';
-import { createTask, deleteTask, updateTask } from './tasks.js?v=55';
-import { refreshAll } from './app.js?v=55';
+import { $, esc, toISO, todayISO, diffDays, taskOccursOnDate, minutesFromTime, fullClock, fmtDate } from './utils.js?v=57';
+import { state } from './state.js?v=57';
+import { openDateOnBoard, openTaskEditor } from './board.js?v=57';
+import { createTask, deleteTask, updateTask } from './tasks.js?v=57';
+import { refreshAll } from './app.js?v=57';
 
 const DAY_MINUTES = 24 * 60;
 let selectedCalendarDate = todayISO();
@@ -315,10 +315,29 @@ function renderSelectedDayTasks(){
               <b>${esc(taskTitleForList(t))}</b>
               <small>${esc(t.category || '未分類')}${t.project ? ` / ${esc(t.project)}` : ''}${t.done ? ' / 完了' : ''}</small>
               ${t.memo && !isUnavailableTask(t) ? `<p>${esc(t.memo)}</p>` : ''}
+              ${t.owner_id===state.user?.id && !t.done && type!=='unavailable' ? `<div class="selectedDayActions"><button type="button" class="selectedDayDoneBtn" data-selected-done-id="${esc(t.id)}">✓ 完了</button><button type="button" class="selectedDayEditBtn" data-selected-edit-id="${esc(t.id)}">修正</button></div>` : ''}
             </article>`).join('')}
         </div>
       </section>`).join('')}</div>`;
   $('openSelectedDayTimeline')?.addEventListener('click',()=>openDateOnBoard(dateIso));
+  box.querySelectorAll('[data-selected-done-id]').forEach(btn=>{
+    btn.addEventListener('click', async(e)=>{
+      e.preventDefault();
+      e.stopPropagation();
+      const t = taskArray().find(x=>String(x.id)===String(btn.dataset.selectedDoneId));
+      if(!t) return;
+      await updateTask(t.id, { done:true, status:'done' });
+      await refreshAll();
+    });
+  });
+  box.querySelectorAll('[data-selected-edit-id]').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{
+      e.preventDefault();
+      e.stopPropagation();
+      const t = taskArray().find(x=>String(x.id)===String(btn.dataset.selectedEditId));
+      if(t) openTaskEditor(t);
+    });
+  });
   box.querySelectorAll('[data-selected-task-id]').forEach(card=>{
     card.addEventListener('click',()=>{
       const t = taskArray().find(x=>String(x.id)===String(card.dataset.selectedTaskId));

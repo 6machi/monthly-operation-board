@@ -624,3 +624,21 @@ h2 .infoDot,h3 .infoDot,summary .infoDot,small .infoDot{margin-left:6px}
 .workEvent{position:absolute;left:86px;right:14px;background:rgba(93,156,236,.12);border:1px dashed rgba(93,156,236,.45);border-left:6px solid var(--blue);border-radius:14px;padding:8px 10px;color:#315f91;pointer-events:none;z-index:1;overflow:hidden}
 .workEvent b{display:block;font-size:12px;font-weight:950;margin-bottom:2px}.workEvent small{font-size:11px;font-weight:850;color:#51749c}.activityCard.work{border-left:7px solid var(--blue);background:linear-gradient(180deg,#fff,#f3f8ff)}
 @media(max-width:650px){.workEvent{left:66px;right:8px}}
+
+
+/* v57 quick complete buttons */
+.eventActions{position:absolute;right:8px;top:8px;display:flex;gap:6px;z-index:3;opacity:.08;transition:.15s ease;pointer-events:auto}
+.taskEvent:hover .eventActions,.taskEvent:focus-within .eventActions{opacity:1}
+.eventActions button{padding:4px 8px;font-size:11px;box-shadow:0 3px 8px rgba(40,50,80,.12);background:#fff;border:1px solid var(--line);color:var(--text)}
+.eventActions .eventCompleteBtn{background:#eafff0;color:#287443;border-color:#bde8c9}
+.taskEvent.readonly .eventActions{display:none}
+.selectedDayActions{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.selectedDayActions button{padding:6px 9px;font-size:12px}
+.selectedDayDoneBtn{background:#eafff0;color:#287443;border:1px solid #bde8c9}
+.selectedDayEditBtn{background:#fff;border:1px solid var(--line)}
+@media(max-width:650px){.eventActions{opacity:1;top:auto;bottom:8px}.taskEvent{padding-bottom:34px}}
+
+/* v57: smoother timeline drag */
+.taskEvent.moving,.taskEvent.resizing{transition:none!important;will-change:top,height;z-index:20;}
+.taskEvent.moving{outline:2px solid rgba(245,166,35,.35);outline-offset:2px;}
+.taskEvent.resizing{outline:2px solid rgba(93,156,236,.35);outline-offset:2px;}
