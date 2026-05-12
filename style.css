@@ -433,3 +433,12 @@ details.sideDetails[open] > summary{margin-bottom:12px}
 .icsDate,.icsTime{font-size:12px;color:var(--muted);font-weight:900;white-space:nowrap}
 .icsItem b{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media(max-width:650px){.icsImportBox{grid-template-columns:1fr}.icsItem{grid-template-columns:auto 1fr}.icsTime,.icsDate{grid-column:2}.icsItem b{grid-column:2;white-space:normal}}
+
+/* v44: UI整理とタスク再配分メニュー */
+.organizeBox{display:grid;gap:10px}
+.organizeActions{display:grid;grid-template-columns:1fr;gap:8px}
+.organizeActions button{justify-content:center;text-align:center}
+#organizeMsg.hidden{display:none}
+.panelDetails summary,.sideDetails summary{user-select:none}
+.boardPanel .panelDetails{margin-bottom:8px}
+@media(min-width:900px){.organizeActions{grid-template-columns:1fr 1fr}}

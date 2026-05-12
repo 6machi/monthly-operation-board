@@ -1,8 +1,8 @@
-import { $, esc, todayISO, addDays, fmtDate, diffDays, relativeFrom, taskOccursOnDate, occurrenceLabel, fullClock, minutesFromTime } from './utils.js?v=43';
-import { state } from './state.js?v=43';
-import { createTask, markCarryover, returnToSchedule, updateTask, deleteTask } from './tasks.js?v=43';
-import { refreshAll, showView } from './app.js?v=43';
-import { isUnavailableTask, isUnavailableForMember, unavailableBlocksForMember } from './calendar.js?v=43';
+import { $, esc, todayISO, addDays, fmtDate, diffDays, relativeFrom, taskOccursOnDate, occurrenceLabel, fullClock, minutesFromTime } from './utils.js?v=44';
+import { state } from './state.js?v=44';
+import { createTask, markCarryover, returnToSchedule, updateTask, deleteTask } from './tasks.js?v=44';
+import { refreshAll, showView } from './app.js?v=44';
+import { isUnavailableTask, isUnavailableForMember, unavailableBlocksForMember } from './calendar.js?v=44';
 
 const SLOT_MINUTES = 15;
 const PX_PER_MINUTE = 1.15; // 15分 = 約17px / 60分 = 約69px
@@ -376,6 +376,154 @@ async function carryTaskToDate(taskId, carryDate){
   const preferred = minutesFromTime(sleep.end || '09:00');
   const start = findAvailableStart(carryDate, duration, preferred, t?.owner_id || state.selectedMemberId, taskId);
   await updateTask(taskId, { carryover_date: carryDate, schedule_date: null, status:'carryover', start_time: timeLabel(start), sort_order: Date.now()*-1 });
+}
+
+function monthEndIso(dateIso){
+  const [y,m] = String(dateIso || todayISO()).split('-').map(Number);
+  const d = new Date(y, m, 0);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function dateRangeInclusive(startIso, endIso){
+  const out=[];
+  if(!startIso || !endIso || diffDays(endIso,startIso)<0) return out;
+  for(let d=startIso; diffDays(d,endIso)<=0; d=addDays(d,1)) out.push(d);
+  return out;
+}
+function effectiveTaskDate(t){ return t?.carryover_date || t?.schedule_date || t?.due_date || state.scheduleDate || todayISO(); }
+function isWholeDayBlocked(dateIso, memberId=state.selectedMemberId){
+  try{ return isUnavailableForMember(dateIso, memberId); }catch(_e){ return false; }
+}
+function blockedOnlyIntervals(dateIso, memberId=state.selectedMemberId){
+  return memberBlockedIntervals(dateIso, memberId).map(b=>({ start:Number(b.start||0), end:Number(b.end||0) }));
+}
+function fixedBusyIntervals(dateIso, memberId, excludeIds){
+  const exclude = new Set((excludeIds||[]).map(String));
+  const blocks = blockedOnlyIntervals(dateIso, memberId);
+  const tasks = taskArray()
+    .filter(t=>t && t.id && t.owner_id===memberId && !t.done && !isUnavailableTask(t) && !exclude.has(String(t.id)) && taskOccursOnDate(t, dateIso))
+    .map((t,i)=>({ start:taskStartMinutes(t,i), end:taskStartMinutes(t,i)+taskDuration(t) }));
+  return mergeIntervals([...blocks, ...tasks]);
+}
+function findSlotWithBusy(preferred, duration, busy){
+  duration = snapDuration(duration);
+  const start = snapMinutes(preferred);
+  const candidates=[];
+  for(let m=start; m<=DAY_MINUTES-duration; m+=SLOT_MINUTES) candidates.push(m);
+  for(let m=0; m<start; m+=SLOT_MINUTES) candidates.push(m);
+  return candidates.find(m=>!busy.some(b=>intervalsOverlap(m,m+duration,b.start,b.end))) ?? null;
+}
+function getCategoryColorByName(name){
+  const cat = (state.tree || []).find(c=>c.name===name);
+  return cat?.color || '#9aa4b6';
+}
+function showOrganizeMessage(text, error=false){
+  const el = $('organizeMsg');
+  if(!el) return;
+  el.textContent = text;
+  el.className = `notice ${error ? 'error' : 'ok'}`;
+  el.classList.remove('hidden');
+}
+async function reflowTasksAvoidingUnavailable(){
+  if(!isEditable()) return alert('自分のタスクだけ整理できます');
+  const startDate = state.scheduleDate || todayISO();
+  const endDate = monthEndIso(startDate);
+  const ownerId = state.selectedMemberId || state.user.id;
+  const movable = selectedTasks()
+    .filter(t=>t && t.id && !isUnavailableTask(t) && (t.occurrence || 'single') === 'single')
+    .filter(t=>diffDays(effectiveTaskDate(t), startDate) >= 0 && diffDays(effectiveTaskDate(t), endDate) <= 0)
+    .sort((a,b)=>{
+      const da = effectiveTaskDate(a), db = effectiveTaskDate(b);
+      if(da!==db) return da.localeCompare(db);
+      return taskStartMinutes(a,0)-taskStartMinutes(b,0);
+    });
+  if(!movable.length){ showOrganizeMessage('並べ直せる単発タスクはありません。'); return; }
+  const excludeIds = movable.map(t=>t.id);
+  const busyByDate = new Map();
+  function busyFor(date){
+    if(!busyByDate.has(date)) busyByDate.set(date, fixedBusyIntervals(date, ownerId, excludeIds));
+    return busyByDate.get(date);
+  }
+  let moved=0, skipped=0;
+  for(const t of movable){
+    const duration = taskDuration(t);
+    const original = effectiveTaskDate(t);
+    const due = t.due_date && diffDays(t.due_date, startDate)>=0 ? t.due_date : endDate;
+    const searchStart = diffDays(original, startDate)<0 ? startDate : original;
+    let placed = null;
+    for(const date of dateRangeInclusive(searchStart, due)){
+      if(isWholeDayBlocked(date, ownerId)) continue;
+      const busy = busyFor(date);
+      const preferred = date===original ? taskStartMinutes(t,0) : minutesFromTime(memberSleep().end || '09:00');
+      const slot = findSlotWithBusy(preferred, duration, busy);
+      if(slot !== null){
+        placed = { date, start:slot };
+        busy.push({ start:slot, end:slot+duration });
+        busy.sort((a,b)=>a.start-b.start);
+        break;
+      }
+    }
+    if(!placed){ skipped++; continue; }
+    const patch = { schedule_date:placed.date, carryover_date:null, status:'scheduled', start_time:timeLabel(placed.start) };
+    if(t.schedule_date!==patch.schedule_date || t.carryover_date || t.start_time!==patch.start_time){
+      await updateTask(t.id, patch);
+      moved++;
+    }
+  }
+  showOrganizeMessage(`${moved}件を稼働不可・睡眠を避けて並べ直しました。${skipped ? ` ${skipped}件は空き枠が見つかりませんでした。` : ''}`, !!skipped);
+  await refreshAll();
+}
+async function redistributeDailyTasksFromToday(){
+  if(!isEditable()) return alert('自分のタスクだけ整理できます');
+  const ownerId = state.selectedMemberId || state.user.id;
+  const startDate = state.scheduleDate || todayISO();
+  const daily = selectedTasks()
+    .filter(t=>t && t.id && !isUnavailableTask(t) && (t.occurrence || 'single') === 'daily')
+    .filter(t=>!t.due_date || diffDays(t.due_date, startDate)>=0);
+  if(!daily.length){ showOrganizeMessage('今日以降に分け直せる毎日タスクはありません。'); return; }
+  if(!confirm(`毎日タスク ${daily.length}件を、今日以降の単発タスクに分け直します。元の毎日タスクは完了扱いにして、できたことログには入れません。よろしいですか？`)) return;
+  let created=0, originals=0, skipped=0;
+  const ACHIEVE_EXCLUDE = '#achievement-exclude';
+  for(const t of daily){
+    const from = diffDays(t.schedule_date || startDate, startDate)>0 ? t.schedule_date : startDate;
+    const to = t.due_date || monthEndIso(from);
+    const dates = dateRangeInclusive(from, to).filter(d=>!isWholeDayBlocked(d, ownerId));
+    if(!dates.length){ skipped++; continue; }
+    const excludeIds = [t.id];
+    const busyByDate = new Map();
+    for(let i=0;i<dates.length;i++){
+      const date = dates[i];
+      if(!busyByDate.has(date)) busyByDate.set(date, fixedBusyIntervals(date, ownerId, excludeIds));
+      const busy = busyByDate.get(date);
+      const duration = taskDuration(t);
+      const preferred = t.start_time ? minutesFromTime(t.start_time) : minutesFromTime(memberSleep().end || '09:00');
+      const slot = findSlotWithBusy(preferred, duration, busy);
+      if(slot === null){ skipped++; continue; }
+      busy.push({ start:slot, end:slot+duration });
+      busy.sort((a,b)=>a.start-b.start);
+      await createTask({
+        team_id:state.team.id,
+        owner_id:ownerId,
+        created_by:state.user.id,
+        title:`${t.title}${dates.length>1 ? `（${i+1}/${dates.length}）` : ''}`,
+        category:t.category || '未分類',
+        project:t.project || '未分類',
+        task_type:'',
+        estimated_minutes:duration,
+        start_time:timeLabel(slot),
+        schedule_date:date,
+        due_date:t.due_date || null,
+        occurrence:'single',
+        status:'scheduled',
+        memo:`${t.memo || ''}${t.memo ? '\n' : ''}毎日タスクから再配分`,
+        sort_order:(Date.now()*-1)-created
+      });
+      created++;
+    }
+    await updateTask(t.id, { done:true, status:'done', memo:`${t.memo || ''}${t.memo ? '\n' : ''}${ACHIEVE_EXCLUDE}\n毎日タスクを単発タスクへ再配分済み` });
+    originals++;
+  }
+  showOrganizeMessage(`${created}件の単発タスクを作りました。元の毎日タスク ${originals}件はログ対象外の完了扱いにしました。${skipped ? ` ${skipped}枠は空きが見つかりませんでした。` : ''}`, !!skipped);
+  await refreshAll();
 }
 async function scheduleTaskOnDate(taskId, scheduleDate){
   const t = taskArray().find(x=>String(x.id)===String(taskId));
@@ -922,6 +1070,12 @@ export function initBoardEvents(){
   $('clearWorkStartBtn')?.addEventListener('click', ()=>{
     setWorkStartTime(null, todayISO());
     renderBoard();
+  });
+  $('reflowFromTodayBtn')?.addEventListener('click', async()=>{
+    try{ await reflowTasksAvoidingUnavailable(); }catch(e){ console.error(e); showOrganizeMessage(e.message || 'タスクの並べ直しに失敗しました', true); }
+  });
+  $('reflowDailyTasksBtn')?.addEventListener('click', async()=>{
+    try{ await redistributeDailyTasksFromToday(); }catch(e){ console.error(e); showOrganizeMessage(e.message || '毎日タスクの分け直しに失敗しました', true); }
   });
   $('quickCategory')?.addEventListener('change', renderQuickSelectors);
   $('quickProject')?.addEventListener('change', renderQuickSelectors);

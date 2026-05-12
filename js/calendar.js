@@ -1,8 +1,8 @@
-import { $, esc, toISO, todayISO, diffDays, taskOccursOnDate, minutesFromTime, fullClock } from './utils.js?v=43';
-import { state } from './state.js?v=43';
-import { openDateOnBoard } from './board.js?v=43';
-import { createTask, deleteTask, updateTask } from './tasks.js?v=43';
-import { refreshAll } from './app.js?v=43';
+import { $, esc, toISO, todayISO, diffDays, taskOccursOnDate, minutesFromTime, fullClock } from './utils.js?v=44';
+import { state } from './state.js?v=44';
+import { openDateOnBoard } from './board.js?v=44';
+import { createTask, deleteTask, updateTask } from './tasks.js?v=44';
+import { refreshAll } from './app.js?v=44';
 
 const DAY_MINUTES = 24 * 60;
 function taskArray(){ return Array.isArray(state.tasks) ? state.tasks.filter(t=>t && typeof t === 'object') : []; }

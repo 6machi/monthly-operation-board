@@ -80,6 +80,17 @@
                 </div>
               </div>
             </details>
+            <details class="panelDetails compactTool organizeTool">
+              <summary>タスクを整理する</summary>
+              <div class="organizeBox">
+                <p class="muted">稼働不可・睡眠にかぶっている未完了タスクを、空いている時間へ並べ直します。</p>
+                <div class="organizeActions">
+                  <button class="ghost" type="button" id="reflowFromTodayBtn">表示日以降のタスクを並べ直す</button>
+                  <button class="ghost" type="button" id="reflowDailyTasksBtn">毎日タスクを今日から分け直す</button>
+                </div>
+                <div id="organizeMsg" class="notice hidden"></div>
+              </div>
+            </details>
             <details class="panelDetails compactTool">
               <summary>睡眠・表示設定</summary>
               <div class="form two compactForm">
@@ -259,6 +270,6 @@
   </template>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script type="module" src="js/app.js?v=43"></script>
+  <script type="module" src="js/app.js?v=44"></script>
 </body>
 </html>
