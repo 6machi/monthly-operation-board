@@ -274,8 +274,7 @@ function openTaskEditor(t){
       start_time:$('editTaskStartTime').value || t.start_time || '09:00',
       schedule_date:targetDate, carryover_date:null, due_date:targetDate,
       occurrence:'single', done:false, status:'scheduled',
-      memo:($('editTaskMemo').value || t.memo || '稼働不可') + '
-タスクから稼働不可予定へ変更'
+      memo:($('editTaskMemo').value || t.memo || '稼働不可') + '\nタスクから稼働不可予定へ変更'
     });
     closeTaskEditor();
     await refreshAll();
