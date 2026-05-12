@@ -64,8 +64,18 @@
               <button class="scheduleMove" id="scheduleNext" title="次の日へ">&gt;&gt;</button>
             </div>
             <div class="workStartBox" id="workStartBox">
-              <div><b id="workStartText">起きた時間：未設定</b><span>押した時間を、今日の実際のスタート時間として使います。</span></div>
-              <div class="workStartActions"><button class="primary" type="button" id="setWorkStartBtn">起きた時間にする</button><button class="ghost" type="button" id="clearWorkStartBtn">起きた時間を解除</button></div>
+              <div>
+                <b id="workStartText">起きた時間：未設定</b>
+                <span>設定するまでは今の予定をそのまま表示します。起きた時間を入れると、その時刻を今日の実際のスタート時間として使います。</span>
+              </div>
+              <div class="workStartControls">
+                <label><small>起きた時間</small><input id="workStartInput" type="time"></label>
+                <div class="workStartActions">
+                  <button class="ghost" type="button" id="fillNowWorkStartBtn">今の時刻を入れる</button>
+                  <button class="primary" type="button" id="setWorkStartBtn">この時間にする</button>
+                  <button class="ghost" type="button" id="clearWorkStartBtn">解除</button>
+                </div>
+              </div>
             </div>
             <div class="form two compactForm">
               <label><small>就寝予定</small><input type="time" id="sleepAt" value="01:00"></label>
@@ -91,6 +101,11 @@
             <section class="panel">
               <h2>差し込みタスク</h2>
               <div class="quickAddBox">
+                <div class="form two">
+                  <label><small>カテゴリ</small><select id="quickCategory"></select></label>
+                  <label><small>プロジェクト</small><select id="quickProject"></select></label>
+                </div>
+                <label><small>タスク候補</small><select id="quickCandidate"></select></label>
                 <label><small>タスク名</small><input id="quickTitle" placeholder="急ぎの依頼・今日やるメモ"></label>
                 <div class="form two">
                   <label><small>見積もり時間</small><input id="quickMinutes" type="number" min="5" step="5" placeholder="分"></label>
@@ -223,6 +238,6 @@
   </template>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script type="module" src="js/app.js?v=37"></script>
+  <script type="module" src="js/app.js?v=39"></script>
 </body>
 </html>

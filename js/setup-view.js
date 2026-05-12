@@ -1,16 +1,16 @@
-import { $, esc, occurrenceLabel, addDays, diffDays, fmtDate, minutesFromTime, fullClock } from './utils.js?v=37';
-import { state } from './state.js?v=37';
-import { saveTree } from './setup.js?v=37';
-import { updateMyProfile, loadMembers } from './auth.js?v=37';
-import { createTask, updateTask, deleteTask } from './tasks.js?v=37';
-import { refreshAll, showView } from './app.js?v=37';
-import { renderUnavailableList, isUnavailableTask } from './calendar.js?v=37';
+import { $, esc, occurrenceLabel, addDays, diffDays, fmtDate, minutesFromTime, fullClock } from './utils.js?v=39';
+import { state } from './state.js?v=39';
+import { saveTree } from './setup.js?v=39';
+import { updateMyProfile, loadMembers } from './auth.js?v=39';
+import { createTask, updateTask, deleteTask } from './tasks.js?v=39';
+import { refreshAll, showView } from './app.js?v=39';
+import { renderUnavailableList, isUnavailableTask } from './calendar.js?v=39';
 
 let draggingCategoryIndex = null;
 const ACHIEVEMENT_EXCLUDE = '[[achievement_excluded]]';
 function achievementExcluded(t){ return String(t?.memo||'').includes(ACHIEVEMENT_EXCLUDE); }
 function stripAchievementMarker(memo){ return String(memo||'').replace(ACHIEVEMENT_EXCLUDE,'').trim(); }
-function categoryColor(name){ const c=(state.tree||[]).find(x=>x.name===name); return c?.color || (name==='差し込みタスク'?'#f5a623':name==='仕事'?'#5d9cec':name==='プライベート'?'#63b978':'#9aa4b6'); }
+function categoryColor(name){ const c=(state.tree||[]).find(x=>x.name===name); return c?.color || (name==='仕事'?'#5d9cec':name==='プライベート'?'#63b978':'#9aa4b6'); }
 
 function editable(){ return state.selectedMemberId === state.user.id; }
 function cat(){ normalizeTree(); return state.tree[state.selectedCategoryIndex] || state.tree[0]; }

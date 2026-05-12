@@ -1,8 +1,8 @@
-import { $, esc, todayISO, addDays, fmtDate, diffDays, relativeFrom, taskOccursOnDate, occurrenceLabel, fullClock, minutesFromTime } from './utils.js?v=37';
-import { state } from './state.js?v=37';
-import { createTask, markCarryover, returnToSchedule, updateTask, deleteTask } from './tasks.js?v=37';
-import { refreshAll, showView } from './app.js?v=37';
-import { isUnavailableTask, isUnavailableForMember, unavailableBlocksForMember } from './calendar.js?v=37';
+import { $, esc, todayISO, addDays, fmtDate, diffDays, relativeFrom, taskOccursOnDate, occurrenceLabel, fullClock, minutesFromTime } from './utils.js?v=39';
+import { state } from './state.js?v=39';
+import { createTask, markCarryover, returnToSchedule, updateTask, deleteTask } from './tasks.js?v=39';
+import { refreshAll, showView } from './app.js?v=39';
+import { isUnavailableTask, isUnavailableForMember, unavailableBlocksForMember } from './calendar.js?v=39';
 
 const SLOT_MINUTES = 15;
 const PX_PER_MINUTE = 1.15; // 15分 = 約17px / 60分 = 約69px
@@ -10,6 +10,51 @@ const DAY_MINUTES = 24 * 60;
 const DEFAULT_START_MINUTES = 9 * 60;
 function taskArray(){ return Array.isArray(state.tasks) ? state.tasks.filter(t=>t && typeof t === 'object') : []; }
 function memberArray(){ return Array.isArray(state.members) ? state.members.filter(m=>m && typeof m === 'object') : []; }
+
+function uniq(arr){ return [...new Set((arr||[]).map(v=>String(v||'').trim()).filter(Boolean))]; }
+function normalizeQuickCategory(c){
+  if(!c) return c;
+  if(!Array.isArray(c.projects)) c.projects=[];
+  const categoryLevelCandidates = uniq(c.candidates || []);
+  const normalizedProjects = [];
+  c.projects.forEach(p=>{
+    if(typeof p === 'string'){
+      normalizedProjects.push({ name:p, candidates:[] });
+      return;
+    }
+    if(!p?.name) return;
+    const candidates = [];
+    if(Array.isArray(p.candidates)) candidates.push(...p.candidates);
+    (p.types||[]).forEach(ty=>(ty?.tasks||[]).forEach(t=>candidates.push(t)));
+    normalizedProjects.push({ name:p.name, candidates:uniq(candidates) });
+  });
+  if(!normalizedProjects.length && categoryLevelCandidates.length){
+    normalizedProjects.push({ name:'未分類', candidates:categoryLevelCandidates });
+  }else if(categoryLevelCandidates.length && normalizedProjects[0]){
+    normalizedProjects[0].candidates = uniq([...(normalizedProjects[0].candidates||[]), ...categoryLevelCandidates]);
+  }
+  c.projects = normalizedProjects;
+  delete c.candidates;
+  return c;
+}
+function normalizeQuickTree(){ state.tree = (Array.isArray(state.tree) ? state.tree : []).map(normalizeQuickCategory); }
+function quickCategories(){ normalizeQuickTree(); return state.tree.filter(c=>c?.name); }
+function quickCategory(){ const cats = quickCategories(); const selected = $('quickCategory')?.value; return cats.find(c=>c.name===selected) || cats[0] || null; }
+function quickProject(){ const c = quickCategory(); const projects = c?.projects || []; const selected = $('quickProject')?.value; return projects.find(p=>p.name===selected) || projects[0] || null; }
+function optionHtml(values, current){ return (values||[]).map(v=>`<option ${v===current?'selected':''}>${esc(v)}</option>`).join(''); }
+function renderQuickSelectors(){
+  const catSel = $('quickCategory');
+  const projectSel = $('quickProject');
+  const candSel = $('quickCandidate');
+  if(!catSel || !projectSel || !candSel) return;
+  const oldCat = catSel.value, oldProj = projectSel.value, oldCand = candSel.value;
+  const cats = quickCategories();
+  catSel.innerHTML = optionHtml(cats.map(c=>c.name), oldCat);
+  const c = quickCategory();
+  projectSel.innerHTML = optionHtml((c?.projects||[]).map(p=>p.name), oldProj);
+  const p = quickProject();
+  candSel.innerHTML = optionHtml(['候補から選ぶ', ...(p?.candidates||[])], oldCand);
+}
 function workStartStorageKey(dateIso=state.scheduleDate){
   return `task-kanri-work-start:${state.user?.id || 'anon'}:${dateIso}`;
 }
@@ -23,12 +68,26 @@ function setWorkStartTime(value, dateIso=state.scheduleDate){
     else localStorage.removeItem(workStartStorageKey(dateIso));
   }catch(_e){}
 }
+function earliestUnfinishedTaskStartHour(dateIso=state.scheduleDate){
+  try{
+    const starts = selectedTasks()
+      .filter(t => taskOccursOnDate(t, dateIso))
+      .map((t,i)=>taskStartMinutes(t,i))
+      .filter(v=>Number.isFinite(v));
+    if(!starts.length) return null;
+    return Math.floor(Math.min(...starts) / 60) * 60;
+  }catch(_e){ return null; }
+}
 function timelineBaseMinutes(){
   if(state.scheduleDate === todayISO()){
     const saved = getWorkStartTime(state.scheduleDate);
     if(saved) return Math.floor(minutesFromTime(saved) / 60) * 60;
     const now = new Date();
-    return now.getHours() * 60;
+    const currentHour = now.getHours() * 60;
+    const earliest = earliestUnfinishedTaskStartHour(state.scheduleDate);
+    // 起きた時間を設定するまでは、未完了の過去タスクが画面の遥か下に流れないように、
+    // 現在時刻の時台と未完了タスクの最初の時台のうち早い方から表示します。
+    return earliest == null ? currentHour : Math.min(currentHour, earliest);
   }
   return 0;
 }
@@ -53,7 +112,6 @@ function carryTasks(){ return selectedTasks().filter(t => t.carryover_date === s
 function colorFor(t){
   const cat = (state.tree || []).find(c => c.name === t.category);
   if(cat?.color) return cat.color;
-  if(t.category === '差し込みタスク') return '#f5a623';
   if(t.category === 'プライベート') return '#63b978';
   if(t.category === '仕事') return '#5d9cec';
   if(t.category === '副業') return '#a78bfa';
@@ -311,6 +369,11 @@ function makeEventElement(t, index, baseMin){
     : findAvailableStart(state.scheduleDate, duration, rawStart, state.selectedMemberId, t.id);
   const el = document.createElement('div');
   el.className = 'taskEvent';
+  if(state.scheduleDate === todayISO()){
+    const now = new Date();
+    const nowMin = now.getHours()*60 + now.getMinutes();
+    if(start + duration <= nowMin) el.classList.add('pastUnfinished');
+  }
   el.dataset.id = t.id;
   el.style.setProperty('--c', colorFor(t));
   el.style.top = `${relativeTimelineTop(start, baseMin)}px`;
@@ -493,9 +556,10 @@ function renderWorkStartStatus(){
   const isToday = state.scheduleDate === todayISO();
   box.classList.toggle('hidden', !isToday);
   const text = $('workStartText');
-  if(!text) return;
+  const input = $('workStartInput');
   const saved = getWorkStartTime(state.scheduleDate);
-  text.textContent = saved ? `起きた時間：${saved.slice(0,5)}` : '起きた時間：未設定';
+  if(text) text.textContent = saved ? `起きた時間：${saved.slice(0,5)}` : '起きた時間：未設定';
+  if(input) input.value = saved ? saved.slice(0,5) : '';
 }
 
 export function renderBoard(){
@@ -531,6 +595,7 @@ export function renderBoard(){
     try{ renderWorkStartStatus(); }catch(e){ console.warn('work start status skipped', e); }
     try{ renderTimeline(); }catch(e){ console.error('timeline render failed', e); renderTimelineFallback(e); }
     try{ renderCarryList(); }catch(e){ console.warn('carry list skipped', e); }
+    try{ renderQuickSelectors(); }catch(e){ console.warn('quick selectors skipped', e); }
   }catch(e){
     console.error('board render hard failed', e);
     renderTimelineFallback(e);
@@ -673,9 +738,17 @@ export function initBoardEvents(){
     state.draggingTaskId = null;
     await refreshAll();
   });
-  $('setWorkStartBtn')?.addEventListener('click', ()=>{
+  $('fillNowWorkStartBtn')?.addEventListener('click', ()=>{
     const now = new Date();
     const value = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+    const input = $('workStartInput');
+    if(input) input.value = value;
+  });
+  $('setWorkStartBtn')?.addEventListener('click', ()=>{
+    const input = $('workStartInput');
+    const now = new Date();
+    const fallback = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+    const value = (input?.value || fallback).slice(0,5);
     setWorkStartTime(value, todayISO());
     renderBoard();
   });
@@ -683,6 +756,9 @@ export function initBoardEvents(){
     setWorkStartTime(null, todayISO());
     renderBoard();
   });
+  $('quickCategory')?.addEventListener('change', renderQuickSelectors);
+  $('quickProject')?.addEventListener('change', renderQuickSelectors);
+  $('quickCandidate')?.addEventListener('change', ()=>{ const v=$('quickCandidate')?.value; if(v && v !== '候補から選ぶ') $('quickTitle').value = v; });
   $('quickAddBtn').addEventListener('click', async()=>{
     const title = $('quickTitle').value.trim();
     if(!title) return alert('タスク名を入れてください');
@@ -696,14 +772,14 @@ export function initBoardEvents(){
       owner_id: state.user.id,
       created_by: state.user.id,
       title,
-      category:'差し込みタスク', project:'差し込み', task_type:'差し込み',
+      category:$('quickCategory')?.value || '未分類', project:$('quickProject')?.value || '未分類', task_type:'',
       estimated_minutes:duration,
       start_time: timeLabel(startMin),
       due_date:$('quickDue').value || null,
       schedule_date: state.scheduleDate,
       status:'scheduled', memo:$('quickMemo').value || '', sort_order: Date.now()*-1
     });
-    $('quickTitle').value=''; $('quickMinutes').value=''; $('quickDue').value=''; $('quickMemo').value='';
+    $('quickTitle').value=''; $('quickMinutes').value=''; $('quickDue').value=''; $('quickMemo').value=''; if($('quickCandidate')) $('quickCandidate').value='候補から選ぶ';
     await refreshAll();
   });
 }

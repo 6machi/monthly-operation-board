@@ -1,8 +1,8 @@
-import { $, esc, toISO, todayISO, diffDays, taskOccursOnDate, minutesFromTime, fullClock } from './utils.js?v=37';
-import { state } from './state.js?v=37';
-import { openDateOnBoard } from './board.js?v=37';
-import { createTask, deleteTask, updateTask } from './tasks.js?v=37';
-import { refreshAll } from './app.js?v=37';
+import { $, esc, toISO, todayISO, diffDays, taskOccursOnDate, minutesFromTime, fullClock } from './utils.js?v=39';
+import { state } from './state.js?v=39';
+import { openDateOnBoard } from './board.js?v=39';
+import { createTask, deleteTask, updateTask } from './tasks.js?v=39';
+import { refreshAll } from './app.js?v=39';
 
 const DAY_MINUTES = 24 * 60;
 function taskArray(){ return Array.isArray(state.tasks) ? state.tasks.filter(t=>t && typeof t === 'object') : []; }
@@ -91,7 +91,7 @@ export function renderUnavailableList(){
     if(!title) return;
     const oldMemo = t.memo && t.memo !== '稼働不可' ? t.memo : '';
     const newMemo = [oldMemo, '稼働不可予定からタスクに変更'].filter(Boolean).join(' / ');
-    await updateTask(t.id, { title:title.trim(), category:'差し込みタスク', project:'カレンダー予定', task_type:'', status:'scheduled', done:false, memo:newMemo });
+    await updateTask(t.id, { title:title.trim(), category:'未分類', project:'カレンダー予定', task_type:'', status:'scheduled', done:false, memo:newMemo });
     await refreshAll();
   }));
   box.querySelectorAll('[data-del-unavailable]').forEach(btn=>btn.addEventListener('click', async()=>{
