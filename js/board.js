@@ -1,8 +1,9 @@
-import { $, esc, todayISO, addDays, fmtDate, diffDays, relativeFrom, taskOccursOnDate, occurrenceLabel, fullClock, minutesFromTime } from './utils.js?v=50';
-import { state } from './state.js?v=50';
-import { createTask, markCarryover, returnToSchedule, updateTask, deleteTask } from './tasks.js?v=50';
-import { refreshAll, showView } from './app.js?v=50';
-import { isUnavailableTask, isUnavailableForMember, unavailableBlocksForMember } from './calendar.js?v=50';
+import { $, esc, todayISO, addDays, fmtDate, diffDays, relativeFrom, taskOccursOnDate, occurrenceLabel, fullClock, minutesFromTime } from './utils.js?v=51';
+import { state } from './state.js?v=51';
+import { createTask, markCarryover, returnToSchedule, updateTask, deleteTask } from './tasks.js?v=51';
+import { refreshAll, showView } from './app.js?v=51';
+import { isUnavailableTask, isUnavailableForMember, unavailableBlocksForMember } from './calendar.js?v=51';
+import { updateMyProfile, loadMembers } from './auth.js?v=51';
 
 const SLOT_MINUTES = 15;
 const PX_PER_MINUTE = 1.15; // 15分 = 約17px / 60分 = 約69px
@@ -866,6 +867,46 @@ function renderWorkStartStatus(){
   if(input) input.value = saved ? saved.slice(0,5) : '';
 }
 
+function renderBoardSleepSettings(){
+  const startInput = $('boardSleepStart');
+  const endInput = $('boardSleepEnd');
+  if(!startInput || !endInput) return;
+  const sleep = memberSleep();
+  startInput.value = sleep.start || '02:00';
+  endInput.value = sleep.end || '09:00';
+}
+
+function showSleepSaveMessage(text, error=false){
+  const msg = $('sleepSaveMsg');
+  if(!msg) return;
+  msg.textContent = text;
+  msg.className = `notice ${error ? 'error' : 'ok'}`;
+  msg.classList.remove('hidden');
+  setTimeout(()=>msg.classList.add('hidden'), 2400);
+}
+
+async function saveBoardSleepSettings(){
+  if(!isEditable()) return alert('他メンバーの睡眠時間は変更できません');
+  const start = ($('boardSleepStart')?.value || '02:00').slice(0,5);
+  const end = ($('boardSleepEnd')?.value || '09:00').slice(0,5);
+  try{
+    const updated = await updateMyProfile({
+      display_name: state.profile?.display_name || '自分',
+      display_emoji: state.profile?.display_emoji || '🌙',
+      display_color: state.profile?.display_color || '#5d9cec',
+      sleep_start_time: start,
+      sleep_end_time: end
+    });
+    state.profile = updated;
+    state.members = await loadMembers(state.team.id);
+    showSleepSaveMessage('睡眠時間を保存しました');
+    renderBoard();
+  }catch(e){
+    console.error(e);
+    showSleepSaveMessage(e.message || '睡眠時間の保存に失敗しました', true);
+  }
+}
+
 export function renderBoard(){
   try{
     if(!state.user){ renderTimelineFallback(new Error('未ログインです')); return; }
@@ -897,6 +938,7 @@ export function renderBoard(){
 
     try{ renderActivitySummary(); }catch(e){ console.warn('activity summary skipped', e); }
     try{ renderWorkStartStatus(); }catch(e){ console.warn('work start status skipped', e); }
+    try{ renderBoardSleepSettings(); }catch(e){ console.warn('sleep settings skipped', e); }
     try{ renderTimeline(); }catch(e){ console.error('timeline render failed', e); renderTimelineFallback(e); }
     try{ renderCarryList(); }catch(e){ console.warn('carry list skipped', e); }
     try{ renderQuickSelectors(); }catch(e){ console.warn('quick selectors skipped', e); }
@@ -1076,6 +1118,7 @@ export function initBoardEvents(){
   $('reflowDailyTasksBtn')?.addEventListener('click', async()=>{
     try{ await redistributeDailyTasksFromToday(); }catch(e){ console.error(e); showOrganizeMessage(e.message || '毎日タスクの分け直しに失敗しました', true); }
   });
+  $('saveBoardSleepBtn')?.addEventListener('click', saveBoardSleepSettings);
   $('quickCategory')?.addEventListener('change', renderQuickSelectors);
   $('quickProject')?.addEventListener('change', renderQuickSelectors);
   $('quickCandidate')?.addEventListener('change', ()=>{ const v=$('quickCandidate')?.value; if(v && v !== '候補から選ぶ') $('quickTitle').value = v; });

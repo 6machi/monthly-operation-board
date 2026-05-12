@@ -85,11 +85,15 @@
               </div>
             </details>
             <details class="panelDetails compactTool">
-              <summary>睡眠・表示設定 <button class="infoDot" type="button" data-info="睡眠時間はタイムライン上で灰色の予定として表示されます。活動可能時間の計算にも使います。">i</button></summary>
+              <summary>睡眠時間 <button class="infoDot" type="button" data-info="寝る時間〜起きる時間は、タイムライン上で灰色のすいみん予定として表示されます。活動可能時間の計算にも使います。">i</button></summary>
               <div class="form two compactForm">
-                <label><small>就寝予定</small><input type="time" id="sleepAt" value="01:00"></label>
-                <label><small>睡眠時間</small><select id="sleepHours"><option>8</option><option>7</option><option>6</option><option>9</option></select></label>
+                <label><small>寝る時間</small><input type="time" step="900" id="boardSleepStart" value="02:00"></label>
+                <label><small>起きる時間</small><input type="time" step="900" id="boardSleepEnd" value="09:00"></label>
               </div>
+              <div class="actions compactActions">
+                <button class="primary" type="button" id="saveBoardSleepBtn">睡眠時間を保存</button>
+              </div>
+              <div id="sleepSaveMsg" class="notice hidden"></div>
               <div id="planMsg" class="notice ok"></div>
             </details>
             <div class="timelineBox" id="timelineBox"><div id="timeline" class="timeline"></div></div>
@@ -257,6 +261,6 @@
   </template>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script type="module" src="js/app.js?v=50"></script>
+  <script type="module" src="js/app.js?v=51"></script>
 </body>
 </html>
