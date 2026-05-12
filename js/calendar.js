@@ -1,8 +1,8 @@
-import { $, esc, toISO, todayISO, diffDays, taskOccursOnDate, minutesFromTime, fullClock, fmtDate } from './utils.js?v=48';
-import { state } from './state.js?v=48';
-import { openDateOnBoard } from './board.js?v=48';
-import { createTask, deleteTask, updateTask } from './tasks.js?v=48';
-import { refreshAll } from './app.js?v=48';
+import { $, esc, toISO, todayISO, diffDays, taskOccursOnDate, minutesFromTime, fullClock, fmtDate } from './utils.js?v=49';
+import { state } from './state.js?v=49';
+import { openDateOnBoard } from './board.js?v=49';
+import { createTask, deleteTask, updateTask } from './tasks.js?v=49';
+import { refreshAll } from './app.js?v=49';
 
 const DAY_MINUTES = 24 * 60;
 let selectedCalendarDate = todayISO();
@@ -171,6 +171,20 @@ function relativeMonthStats(iso){
   return { total, carryovers };
 }
 
+
+function selectCalendarDate(iso, shouldScroll=true){
+  if(!iso) return;
+  selectedCalendarDate = iso;
+  try{ renderMonthGrid(); }catch(e){ console.error('calendar grid refresh error', e); }
+  try{ renderSelectedDayTasks(); }catch(e){ console.error('selected day render error', e); }
+  if(shouldScroll){
+    requestAnimationFrame(()=>{
+      const panel = $('selectedDayPanel');
+      if(panel) panel.scrollIntoView({behavior:'smooth', block:'start'});
+    });
+  }
+}
+
 function renderMonthGrid(){
   const grid = $('monthGrid');
   grid.innerHTML = '';
@@ -207,6 +221,8 @@ function renderMonthGrid(){
     const cell = document.createElement('button');
     cell.type='button';
     cell.className='dayCell fancy';
+    cell.dataset.date = iso;
+    cell.setAttribute('aria-label', `${iso} の予定を見る`);
     if(isToday) cell.classList.add('today');
     if(diffDays(iso, today) < 0) cell.classList.add('past');
     if(unavailableMembers.length) cell.classList.add('unavailableDay');
@@ -234,7 +250,11 @@ function renderMonthGrid(){
     const partialText = unavailableMembers.length && !allDayMembers.length ? '稼働不可時間あり' : '稼働不可あり';
     const footer = `<div class="dayMood">${unavailableMembers.length ? partialText : (carryovers ? `持ち越し ${carryovers}件` : '持ち越しなし')}</div>`;
     cell.innerHTML = header + chips + footer;
-    cell.addEventListener('click',()=>{ selectedCalendarDate = iso; renderCalendar(); });
+    cell.addEventListener('click',(ev)=>{
+      ev.preventDefault();
+      ev.stopPropagation();
+      selectCalendarDate(iso, true);
+    });
     grid.appendChild(cell);
   }
 }

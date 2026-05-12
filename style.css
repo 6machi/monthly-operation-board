@@ -592,3 +592,8 @@ h2 .infoDot,h3 .infoDot,summary .infoDot,small .infoDot{margin-left:6px}
 .timeBadge{display:inline-flex;align-self:start;width:max-content;max-width:100%;border-radius:999px;background:#f5f7fb;color:#566176;padding:4px 8px;font-size:11px;font-weight:950;line-height:1.2}
 .selectedDayCard.unavailable .timeBadge{background:#e7e2ed;color:#6f6680}
 @media(max-width:650px){.selectedDayTop{justify-content:stretch}.selectedDayTop button{width:100%}.selectedDayCardGrid{grid-template-columns:1fr}}
+
+/* v49: make calendar day selection obvious */
+.dayCell.fancy{touch-action:manipulation}
+.dayCell.fancy.selected{border-color:var(--orange);box-shadow:0 0 0 4px rgba(245,166,35,.18),0 8px 18px rgba(40,50,80,.08)}
+#selectedDayPanel{scroll-margin-top:92px}

@@ -1,8 +1,8 @@
-import { $, esc, todayISO, addDays, fmtDate, diffDays, relativeFrom, taskOccursOnDate, occurrenceLabel, fullClock, minutesFromTime } from './utils.js?v=48';
-import { state } from './state.js?v=48';
-import { createTask, markCarryover, returnToSchedule, updateTask, deleteTask } from './tasks.js?v=48';
-import { refreshAll, showView } from './app.js?v=48';
-import { isUnavailableTask, isUnavailableForMember, unavailableBlocksForMember } from './calendar.js?v=48';
+import { $, esc, todayISO, addDays, fmtDate, diffDays, relativeFrom, taskOccursOnDate, occurrenceLabel, fullClock, minutesFromTime } from './utils.js?v=49';
+import { state } from './state.js?v=49';
+import { createTask, markCarryover, returnToSchedule, updateTask, deleteTask } from './tasks.js?v=49';
+import { refreshAll, showView } from './app.js?v=49';
+import { isUnavailableTask, isUnavailableForMember, unavailableBlocksForMember } from './calendar.js?v=49';
 
 const SLOT_MINUTES = 15;
 const PX_PER_MINUTE = 1.15; // 15分 = 約17px / 60分 = 約69px
