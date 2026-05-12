@@ -183,6 +183,24 @@
               <label><small>起きる時間</small><input id="profileSleepEnd" type="time" step="900" value="09:00"></label>
             </div>
           </div>
+          <div class="sectionline workSettingsBlock">
+            <h3>仕事時間 <button class="infoDot" type="button" data-info="仕事時間は自由作業時間から除外します。この時間には、指定した仕事カテゴリのタスクだけ入れられます。仕事時間がない人はOFFにできます。">i</button></h3>
+            <label class="toggleLine"><input id="profileWorkEnabled" type="checkbox"> 仕事時間を使う</label>
+            <div class="form three">
+              <label><small>仕事開始</small><input id="profileWorkStart" type="time" step="900" value="10:00"></label>
+              <label><small>仕事終了</small><input id="profileWorkEnd" type="time" step="900" value="19:00"></label>
+              <label><small>仕事カテゴリ名</small><input id="profileWorkCategory" value="仕事" placeholder="例：仕事"></label>
+            </div>
+            <div class="workDayPicker">
+              <label><input class="profileWorkDay" type="checkbox" value="1" checked>月</label>
+              <label><input class="profileWorkDay" type="checkbox" value="2" checked>火</label>
+              <label><input class="profileWorkDay" type="checkbox" value="3" checked>水</label>
+              <label><input class="profileWorkDay" type="checkbox" value="4" checked>木</label>
+              <label><input class="profileWorkDay" type="checkbox" value="5" checked>金</label>
+              <label><input class="profileWorkDay" type="checkbox" value="6">土</label>
+              <label><input class="profileWorkDay" type="checkbox" value="0">日</label>
+            </div>
+          </div>
           <button class="primary" id="saveProfileBtn">自分設定を保存</button>
         </section>
 
@@ -261,6 +279,6 @@
   </template>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script type="module" src="js/app.js?v=53"></script>
+  <script type="module" src="js/app.js?v=54"></script>
 </body>
 </html>

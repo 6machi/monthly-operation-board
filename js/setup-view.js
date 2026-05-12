@@ -1,10 +1,10 @@
-import { $, esc, occurrenceLabel, addDays, diffDays, fmtDate, minutesFromTime, fullClock } from './utils.js?v=53';
-import { state } from './state.js?v=53';
-import { saveTree } from './setup.js?v=53';
-import { updateMyProfile, loadMembers } from './auth.js?v=53';
-import { createTask, updateTask, deleteTask } from './tasks.js?v=53';
-import { refreshAll, showView } from './app.js?v=53';
-import { renderUnavailableList, isUnavailableTask } from './calendar.js?v=53';
+import { $, esc, occurrenceLabel, addDays, diffDays, fmtDate, minutesFromTime, fullClock } from './utils.js?v=54';
+import { state } from './state.js?v=54';
+import { saveTree } from './setup.js?v=54';
+import { updateMyProfile, loadMembers } from './auth.js?v=54';
+import { createTask, updateTask, deleteTask } from './tasks.js?v=54';
+import { refreshAll, showView } from './app.js?v=54';
+import { renderUnavailableList, isUnavailableTask } from './calendar.js?v=54';
 
 let draggingCategoryIndex = null;
 const ACHIEVEMENT_EXCLUDE = '[[achievement_excluded]]';
@@ -94,6 +94,12 @@ function renderProfileSettings(){
   $('profileColor').value = profile.display_color || '#5d9cec';
   $('profileSleepStart').value = String(profile.sleep_start_time || '02:00').slice(0,5);
   $('profileSleepEnd').value = String(profile.sleep_end_time || '09:00').slice(0,5);
+  if($('profileWorkEnabled')) $('profileWorkEnabled').checked = !!profile.work_enabled;
+  if($('profileWorkStart')) $('profileWorkStart').value = String(profile.work_start_time || '10:00').slice(0,5);
+  if($('profileWorkEnd')) $('profileWorkEnd').value = String(profile.work_end_time || '19:00').slice(0,5);
+  if($('profileWorkCategory')) $('profileWorkCategory').value = profile.work_category || '仕事';
+  const workDays = Array.isArray(profile.work_days) ? profile.work_days.map(Number) : [1,2,3,4,5];
+  document.querySelectorAll('.profileWorkDay').forEach(ch=>{ ch.checked = workDays.includes(Number(ch.value)); });
   renderProfilePreview();
 }
 function renderProfilePreview(){
@@ -102,7 +108,11 @@ function renderProfilePreview(){
   const color = $('profileColor').value || '#5d9cec';
   const sleepStart = $('profileSleepStart')?.value || '02:00';
   const sleepEnd = $('profileSleepEnd')?.value || '09:00';
-  $('profilePreview').innerHTML = `<div class="profileChip" style="--profile-color:${esc(color)}"><span>${esc(emoji)}</span><b>${esc(name)}</b><small>睡眠 ${esc(sleepStart)}〜${esc(sleepEnd)}</small></div>`;
+  const workOn = $('profileWorkEnabled')?.checked;
+  const workStart = $('profileWorkStart')?.value || '10:00';
+  const workEnd = $('profileWorkEnd')?.value || '19:00';
+  const workText = workOn ? ` / 仕事 ${esc(workStart)}〜${esc(workEnd)}` : ' / 仕事時間なし';
+  $('profilePreview').innerHTML = `<div class="profileChip" style="--profile-color:${esc(color)}"><span>${esc(emoji)}</span><b>${esc(name)}</b><small>睡眠 ${esc(sleepStart)}〜${esc(sleepEnd)}${workText}</small></div>`;
 }
 
 function renderAchievementArchive(memberId = state.user?.id){
@@ -487,11 +497,13 @@ export function initSetupEvents(){
   $('backToBoardBtn')?.addEventListener('click', ()=>showView('board'));
   $('saveProfileBtn').addEventListener('click', async()=>{
     try{
-      const updated = await updateMyProfile({ display_name:$('profileName').value, display_emoji:$('profileEmoji').value, display_color:$('profileColor').value, sleep_start_time:$('profileSleepStart').value || '02:00', sleep_end_time:$('profileSleepEnd').value || '09:00' });
+      const updated = await updateMyProfile({ display_name:$('profileName').value, display_emoji:$('profileEmoji').value, display_color:$('profileColor').value, sleep_start_time:$('profileSleepStart').value || '02:00', sleep_end_time:$('profileSleepEnd').value || '09:00', work_enabled: $('profileWorkEnabled')?.checked || false, work_start_time:$('profileWorkStart')?.value || '10:00', work_end_time:$('profileWorkEnd')?.value || '19:00', work_category:$('profileWorkCategory')?.value || '仕事', work_days:[...document.querySelectorAll('.profileWorkDay:checked')].map(ch=>Number(ch.value)) });
       state.profile = updated; state.members = await loadMembers(state.team.id); $('loginPill').textContent = `${updated.display_emoji || '🌙'} ${updated.display_name || '自分'}`; alert('自分設定を保存しました'); renderProfilePage(); refreshAll();
     }catch(e){ alert(e.message || '自分設定の保存に失敗しました'); }
   });
-  ['profileName','profileEmoji','profileColor','profileSleepStart','profileSleepEnd'].forEach(id=>$(id)?.addEventListener('input', renderProfilePreview));
+  ['profileName','profileEmoji','profileColor','profileSleepStart','profileSleepEnd','profileWorkStart','profileWorkEnd','profileWorkCategory'].forEach(id=>$(id)?.addEventListener('input', renderProfilePreview));
+  $('profileWorkEnabled')?.addEventListener('change', renderProfilePreview);
+  document.querySelectorAll('.profileWorkDay').forEach(ch=>ch.addEventListener('change', renderProfilePreview));
   ['newCategory','newProject'].forEach(id=>$(id).addEventListener('change',renderSelectors));
   $('newCandidate').addEventListener('change',()=>{ if($('newCandidate').value !== '候補から選ぶ') $('newTitle').value = $('newCandidate').value; renderReversePreview(); });
   ['newTitle','newMinutes','newStart','newDue','newStartTime','newMemo'].forEach(id=>$(id)?.addEventListener('input', renderReversePreview));

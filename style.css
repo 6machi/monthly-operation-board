@@ -614,3 +614,13 @@ h2 .infoDot,h3 .infoDot,summary .infoDot,small .infoDot{margin-left:6px}
 
 /* v53 */
 .miniInlineBtn{margin-left:8px;padding:5px 9px;font-size:12px;vertical-align:middle}
+
+/* v54 work/free time */
+.workSettingsBlock .toggleLine{display:flex;align-items:center;gap:8px;font-weight:900;margin:8px 0 10px;color:var(--text)}
+.workSettingsBlock .toggleLine input{width:18px;height:18px;accent-color:var(--blue)}
+.workDayPicker{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.workDayPicker label{display:inline-flex;align-items:center;gap:5px;background:#fff;border:1px solid var(--line);border-radius:999px;padding:7px 10px;font-size:12px;font-weight:900;color:#566176;box-shadow:0 3px 10px rgba(40,50,80,.04)}
+.workDayPicker input{width:16px;height:16px;accent-color:var(--blue)}
+.workEvent{position:absolute;left:86px;right:14px;background:rgba(93,156,236,.12);border:1px dashed rgba(93,156,236,.45);border-left:6px solid var(--blue);border-radius:14px;padding:8px 10px;color:#315f91;pointer-events:none;z-index:1;overflow:hidden}
+.workEvent b{display:block;font-size:12px;font-weight:950;margin-bottom:2px}.workEvent small{font-size:11px;font-weight:850;color:#51749c}.activityCard.work{border-left:7px solid var(--blue);background:linear-gradient(180deg,#fff,#f3f8ff)}
+@media(max-width:650px){.workEvent{left:66px;right:8px}}

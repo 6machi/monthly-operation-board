@@ -1,9 +1,9 @@
-import { $, esc, todayISO, addDays, fmtDate, diffDays, relativeFrom, taskOccursOnDate, occurrenceLabel, fullClock, minutesFromTime } from './utils.js?v=53';
-import { state } from './state.js?v=53';
-import { createTask, markCarryover, returnToSchedule, updateTask, deleteTask } from './tasks.js?v=53';
-import { refreshAll, showView } from './app.js?v=53';
-import { isUnavailableTask, isUnavailableForMember, unavailableBlocksForMember } from './calendar.js?v=53';
-import { updateMyProfile, loadMembers } from './auth.js?v=53';
+import { $, esc, todayISO, addDays, fmtDate, diffDays, relativeFrom, taskOccursOnDate, occurrenceLabel, fullClock, minutesFromTime } from './utils.js?v=54';
+import { state } from './state.js?v=54';
+import { createTask, markCarryover, returnToSchedule, updateTask, deleteTask } from './tasks.js?v=54';
+import { refreshAll, showView } from './app.js?v=54';
+import { isUnavailableTask, isUnavailableForMember, unavailableBlocksForMember } from './calendar.js?v=54';
+import { updateMyProfile, loadMembers } from './auth.js?v=54';
 
 const SLOT_MINUTES = 15;
 const PX_PER_MINUTE = 1.15; // 15分 = 約17px / 60分 = 約69px
@@ -212,9 +212,48 @@ function memberSleepIntervals(){
   const duration = sleepDurationMinutes(start, end);
   return splitInterval(startMin, duration).map(part=>({ ...part, kind:'sleep', label:'すいみん', meta:`${start} - ${end}` }));
 }
+
+function memberById(id){ return memberArray().find(m=>m.id===id) || null; }
+function memberWorkSettings(memberId=state.selectedMemberId){
+  const member = memberById(memberId);
+  const own = memberId === state.user?.id ? state.profile || {} : {};
+  const enabled = member?.workEnabled ?? !!own.work_enabled;
+  const start = String(member?.workStart || own.work_start_time || '10:00').slice(0,5);
+  const end = String(member?.workEnd || own.work_end_time || '19:00').slice(0,5);
+  const days = Array.isArray(member?.workDays) ? member.workDays : (Array.isArray(own.work_days) ? own.work_days : [1,2,3,4,5]);
+  const category = member?.workCategory || own.work_category || '仕事';
+  return { enabled:!!enabled, start, end, days:days.map(Number), category };
+}
+function weekdayOf(dateIso){
+  const d = new Date(`${dateIso}T00:00:00`);
+  return d.getDay();
+}
+function isWorkDate(dateIso, memberId=state.selectedMemberId){
+  const w = memberWorkSettings(memberId);
+  return w.enabled && w.days.includes(weekdayOf(dateIso));
+}
+function workDurationMinutes(startText, endText){
+  const start = minutesFromTime(startText || '10:00');
+  const end = minutesFromTime(endText || '19:00');
+  let duration = end - start;
+  if(duration <= 0) duration += DAY_MINUTES;
+  return snapDuration(duration);
+}
+function memberWorkIntervals(dateIso=state.scheduleDate, memberId=state.selectedMemberId){
+  const w = memberWorkSettings(memberId);
+  if(!w.enabled || !isWorkDate(dateIso, memberId)) return [];
+  const startMin = snapMinutes(minutesFromTime(w.start));
+  const duration = workDurationMinutes(w.start, w.end);
+  return splitInterval(startMin, duration).map(part=>({ ...part, kind:'work', label:'仕事時間', meta:`${w.start} - ${w.end} / ${w.category}` }));
+}
+function isWorkTask(t, memberId=state.selectedMemberId){
+  const cat = String(t?.category || '').trim();
+  const workCat = String(memberWorkSettings(memberId).category || '仕事').trim();
+  return cat && workCat && cat === workCat;
+}
 function makeBlockedElement(block, baseMin){
   const el = document.createElement('div');
-  el.className = block.kind === 'sleep' ? 'sleepEvent' : 'unavailableEvent';
+  el.className = block.kind === 'sleep' ? 'sleepEvent' : (block.kind === 'work' ? 'workEvent' : 'unavailableEvent');
   const absStart = Number.isFinite(Number(block.absStart)) ? Number(block.absStart) : Number(block.start || 0);
   const absEnd = Number.isFinite(Number(block.absEnd)) ? Number(block.absEnd) : Number(block.end || 0);
   el.style.top = `${timelineTopAbsolute(absStart, baseMin)}px`;
@@ -236,25 +275,28 @@ function memberBlockedIntervals(dateIso=state.scheduleDate, memberId=state.selec
   return [...sleep, ...unavail].sort((a,b)=>a.start-b.start);
 }
 function intervalsOverlap(aStart, aEnd, bStart, bEnd){ return aStart < bEnd && bStart < aEnd; }
-function busyIntervals(dateIso, memberId=state.selectedMemberId, excludeTaskId=null){
+function busyIntervals(dateIso, memberId=state.selectedMemberId, excludeTaskId=null, taskForPlacement=null){
   const blocked = memberBlockedIntervals(dateIso, memberId).map(b=>({start:b.start,end:b.end}));
+  const workBlocks = (!taskForPlacement || !isWorkTask(taskForPlacement, memberId))
+    ? memberWorkIntervals(dateIso, memberId).map(b=>({start:b.start,end:b.end}))
+    : [];
   const tasks = taskArray()
     .filter(t=>t && t.id && t.owner_id===memberId && !t.done && !isUnavailableTask(t) && String(t.id)!==String(excludeTaskId) && taskOccursOnDate(t, dateIso))
     .map((t,i)=>({ start:taskStartMinutes(t, i), end:taskStartMinutes(t, i)+taskDuration(t) }));
-  return [...blocked, ...tasks].sort((a,b)=>a.start-b.start);
+  return [...blocked, ...workBlocks, ...tasks].sort((a,b)=>a.start-b.start);
 }
-function fitsAt(dateIso, start, duration, memberId=state.selectedMemberId, excludeTaskId=null){
+function fitsAt(dateIso, start, duration, memberId=state.selectedMemberId, excludeTaskId=null, taskForPlacement=null){
   const end = start + duration;
   if(start < 0 || end > DAY_MINUTES) return false;
-  return !busyIntervals(dateIso, memberId, excludeTaskId).some(b=>intervalsOverlap(start, end, b.start, b.end));
+  return !busyIntervals(dateIso, memberId, excludeTaskId, taskForPlacement).some(b=>intervalsOverlap(start, end, b.start, b.end));
 }
-function findAvailableStart(dateIso, duration, preferred=DEFAULT_START_MINUTES, memberId=state.selectedMemberId, excludeTaskId=null){
+function findAvailableStart(dateIso, duration, preferred=DEFAULT_START_MINUTES, memberId=state.selectedMemberId, excludeTaskId=null, taskForPlacement=null){
   duration = snapDuration(duration);
   const start = snapMinutes(preferred);
   const candidates = [];
   for(let m=start; m<=DAY_MINUTES-duration; m+=SLOT_MINUTES) candidates.push(m);
   for(let m=0; m<start; m+=SLOT_MINUTES) candidates.push(m);
-  return candidates.find(m=>fitsAt(dateIso, m, duration, memberId, excludeTaskId)) ?? start;
+  return candidates.find(m=>fitsAt(dateIso, m, duration, memberId, excludeTaskId, taskForPlacement)) ?? start;
 }
 
 function unwrapMinuteAtOrAfter(min, baseMin){
@@ -375,7 +417,7 @@ async function carryTaskToDate(taskId, carryDate){
   const duration = taskDuration(t || {});
   const sleep = memberSleep();
   const preferred = minutesFromTime(sleep.end || '09:00');
-  const start = findAvailableStart(carryDate, duration, preferred, t?.owner_id || state.selectedMemberId, taskId);
+  const start = findAvailableStart(carryDate, duration, preferred, t?.owner_id || state.selectedMemberId, taskId, t);
   await updateTask(taskId, { carryover_date: carryDate, schedule_date: null, status:'carryover', start_time: timeLabel(start), sort_order: Date.now()*-1 });
 }
 
@@ -530,7 +572,7 @@ async function scheduleTaskOnDate(taskId, scheduleDate){
   const t = taskArray().find(x=>String(x.id)===String(taskId));
   const duration = taskDuration(t || {});
   const preferred = t?.start_time ? minutesFromTime(t.start_time) : DEFAULT_START_MINUTES;
-  const start = findAvailableStart(scheduleDate, duration, preferred, t?.owner_id || state.selectedMemberId, taskId);
+  const start = findAvailableStart(scheduleDate, duration, preferred, t?.owner_id || state.selectedMemberId, taskId, t);
   await updateTask(taskId, { schedule_date: scheduleDate, carryover_date: null, status:'scheduled', start_time: timeLabel(start), sort_order: Date.now()*-1 });
 }
 
@@ -758,7 +800,7 @@ function makeEventElement(t, index, baseMin, instanceDate=state.scheduleDate, ab
       const abs = absoluteMinutesFromTimelineTop(parseFloat(el.style.top)||0, timelineBaseMinutes());
       const targetDate = timelineDateForAbsolute(abs);
       let newStart = wrapMinutes(abs);
-      if(!fitsAt(targetDate, newStart, taskDuration(t), state.selectedMemberId, t.id)) newStart = findAvailableStart(targetDate, taskDuration(t), newStart, state.selectedMemberId, t.id);
+      if(!fitsAt(targetDate, newStart, taskDuration(t), state.selectedMemberId, t.id, t)) newStart = findAvailableStart(targetDate, taskDuration(t), newStart, state.selectedMemberId, t.id, t);
       const keepCarry = !!t.carryover_date;
       await updateTask(t.id, keepCarry
         ? { start_time: timeLabelWrap(newStart), carryover_date: targetDate, schedule_date:null, status:'carryover' }
@@ -814,8 +856,31 @@ function mergeIntervals(intervals){
   });
   return merged;
 }
-function availableMinutesForDate(dateIso, memberId=state.selectedMemberId){
+function unavailableAndSleepMinutesForDate(dateIso, memberId=state.selectedMemberId){
   const busy = mergeIntervals(memberBlockedIntervals(dateIso, memberId));
+  return busy.reduce((sum,b)=>sum+(b.end-b.start),0);
+}
+function workMinutesForDate(dateIso, memberId=state.selectedMemberId){
+  const blocked = mergeIntervals(memberBlockedIntervals(dateIso, memberId));
+  const work = mergeIntervals(memberWorkIntervals(dateIso, memberId));
+  let total = 0;
+  work.forEach(w=>{
+    let chunks = [{start:w.start,end:w.end}];
+    blocked.forEach(b=>{
+      chunks = chunks.flatMap(c=>{
+        if(!intervalsOverlap(c.start,c.end,b.start,b.end)) return [c];
+        const out=[];
+        if(c.start < b.start) out.push({start:c.start,end:Math.max(c.start,b.start)});
+        if(b.end < c.end) out.push({start:Math.min(c.end,b.end),end:c.end});
+        return out.filter(x=>x.end>x.start);
+      });
+    });
+    total += chunks.reduce((sum,c)=>sum+(c.end-c.start),0);
+  });
+  return Math.max(0,total);
+}
+function availableMinutesForDate(dateIso, memberId=state.selectedMemberId){
+  const busy = mergeIntervals([...memberBlockedIntervals(dateIso, memberId), ...memberWorkIntervals(dateIso, memberId)]);
   const busyMin = busy.reduce((sum,b)=>sum+(b.end-b.start),0);
   return Math.max(0, DAY_MINUTES - busyMin);
 }
@@ -831,28 +896,40 @@ function formatHours(min){
 function renderActivitySummary(){
   const box = $('activitySummary');
   if(!box) return;
-  let dayMin = 0;
-  try{ dayMin = availableMinutesForDate(state.scheduleDate, state.selectedMemberId); }catch(e){ console.warn('day activity calculation failed', e); dayMin = DAY_MINUTES; }
+  const memberId = state.selectedMemberId;
+  let freeDayMin = 0, workDayMin = 0;
+  try{ freeDayMin = availableMinutesForDate(state.scheduleDate, memberId); }catch(e){ console.warn('free activity calculation failed', e); freeDayMin = 0; }
+  try{ workDayMin = workMinutesForDate(state.scheduleDate, memberId); }catch(e){ console.warn('work activity calculation failed', e); workDayMin = 0; }
   const savedWorkStart = getWorkStartTime(state.scheduleDate);
   const currentBase = savedWorkStart ? minutesFromTime(savedWorkStart) : (new Date().getHours()*60 + new Date().getMinutes());
-  const todayMin = state.scheduleDate === todayISO()
-    ? Math.max(0, dayMin - currentBase)
-    : dayMin;
+
+  // 今日の自由作業時間は、現在時刻以降だけざっくり表示します。
+  // 仕事時間は「仕事カテゴリ専用枠」なので、自由時間とは別枠で見ます。
+  const freeTodayMin = state.scheduleDate === todayISO()
+    ? Math.max(0, freeDayMin - Math.min(freeDayMin, Math.max(0, currentBase - 0) * 0))
+    : freeDayMin;
+
   const [,m] = String(state.scheduleDate || todayISO()).split('-').map(Number);
   const remainingMonthDates = monthDatesFrom(state.scheduleDate).filter(d => d >= state.scheduleDate);
-  const monthMin = remainingMonthDates.reduce((sum,d)=>{
-    try{ return sum+availableMinutesForDate(d, state.selectedMemberId); }catch(_e){ return sum; }
-  },0);
+  const monthFreeMin = remainingMonthDates.reduce((sum,d)=>{ try{ return sum+availableMinutesForDate(d, memberId); }catch(_e){ return sum; } },0);
+
   let dayTasks = [];
   try{ dayTasks = timelineTasks(); }catch(e){ console.warn('timeline task calculation failed', e); dayTasks = []; }
-  const workMin = dayTasks.reduce((sum,t)=>sum+taskDuration(t),0);
-  const remainMin = Math.max(0, todayMin - workMin);
+  const workTaskMin = dayTasks.filter(t=>isWorkTask(t, memberId)).reduce((sum,t)=>sum+taskDuration(t),0);
+  const freeTaskMin = dayTasks.filter(t=>!isWorkTask(t, memberId)).reduce((sum,t)=>sum+taskDuration(t),0);
+  const freeRemainMin = Math.max(0, freeTodayMin - freeTaskMin);
+  const overtimeMin = Math.max(0, workTaskMin - workDayMin);
+  const workRemainMin = Math.max(0, workDayMin - workTaskMin);
+  const overtimeText = overtimeMin > 0 ? `残業 ${formatHours(overtimeMin)}必要` : `残業不要 / 余白 ${formatHours(workRemainMin)}`;
   const dayWord = state.scheduleDate === todayISO() ? '今日' : fmtDate(state.scheduleDate);
+
   box.innerHTML = `
-    <div class="activityCard"><b>${formatHours(todayMin)}</b><span>${dayWord}の残り活動可能時間</span></div>
-    <div class="activityCard"><b>${formatHours(monthMin)}</b><span>${m}月の残り活動可能時間（残り${remainingMonthDates.length}日）</span></div>
-    <div class="activityCard"><b>${formatHours(workMin)}</b><span>${dayWord}のタスク予定時間</span></div>
-    <div class="activityCard"><b>${formatHours(remainMin)}</b><span>${dayWord}の余白時間</span></div>`;
+    <div class="activityCard"><b>${formatHours(freeTodayMin)}</b><span>${dayWord}の自由作業時間</span></div>
+    <div class="activityCard"><b>${formatHours(monthFreeMin)}</b><span>${m}月の残り自由作業時間（残り${remainingMonthDates.length}日）</span></div>
+    <div class="activityCard work"><b>${formatHours(workDayMin)}</b><span>${dayWord}の仕事時間</span></div>
+    <div class="activityCard work"><b>${formatHours(workTaskMin)}</b><span>仕事タスク予定 / ${overtimeText}</span></div>
+    <div class="activityCard"><b>${formatHours(freeTaskMin)}</b><span>${dayWord}の自由タスク予定時間</span></div>
+    <div class="activityCard"><b>${formatHours(freeRemainMin)}</b><span>${dayWord}の自由余白時間</span></div>`;
 }
 
 function renderWorkStartStatus(){
@@ -899,7 +976,12 @@ async function saveBoardSleepSettings(){
       display_emoji: state.profile?.display_emoji || '🌙',
       display_color: state.profile?.display_color || '#5d9cec',
       sleep_start_time: start,
-      sleep_end_time: end
+      sleep_end_time: end,
+      work_enabled: !!state.profile?.work_enabled,
+      work_start_time: state.profile?.work_start_time || '10:00',
+      work_end_time: state.profile?.work_end_time || '19:00',
+      work_days: Array.isArray(state.profile?.work_days) ? state.profile.work_days : [1,2,3,4,5],
+      work_category: state.profile?.work_category || '仕事'
     });
     state.profile = updated;
     state.members = await loadMembers(state.team.id);
@@ -1032,7 +1114,7 @@ export function renderTimeline(){
   try{
     for(let offset=0; offset<=1; offset++){
       const dateIso = addDays(state.scheduleDate, offset);
-      (memberBlockedIntervals(dateIso, state.selectedMemberId) || []).forEach(block=>{
+      ([...(memberBlockedIntervals(dateIso, state.selectedMemberId) || []), ...(memberWorkIntervals(dateIso, state.selectedMemberId) || [])]).forEach(block=>{
         const absStart = offset * DAY_MINUTES + Number(block.start || 0);
         const absEnd = offset * DAY_MINUTES + Number(block.end || 0);
         if(absEnd > baseMin && absStart < baseMin + DAY_MINUTES) blocks.push({ ...block, absStart, absEnd });
@@ -1139,7 +1221,7 @@ export function initBoardEvents(){
     const duration = snapDuration(Number($('quickMinutes').value||30));
     const savedStart = getWorkStartTime(state.scheduleDate);
     const preferred = state.scheduleDate === todayISO() ? snapMinutes(savedStart ? minutesFromTime(savedStart) : now.getHours()*60 + now.getMinutes()) : DEFAULT_START_MINUTES;
-    const startMin = findAvailableStart(state.scheduleDate, duration, preferred, state.user.id);
+    const startMin = findAvailableStart(state.scheduleDate, duration, preferred, state.user.id, null, { category:$('quickCategory')?.value || '未分類' });
     await createTask({
       team_id: state.team.id,
       owner_id: state.user.id,
