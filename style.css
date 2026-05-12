@@ -350,3 +350,76 @@ input[type="date"]::-webkit-calendar-picker-indicator,input[type="time"]::-webki
 .taskEvent.pastUnfinished{box-shadow:0 0 0 3px rgba(245,166,35,.16),0 8px 18px rgba(40,50,80,.12)}
 .taskEvent.pastUnfinished::before{content:'未完了';position:absolute;right:8px;top:6px;background:#fff3d8;color:#9b6500;border-radius:999px;padding:3px 7px;font-size:10px;font-weight:950;z-index:2}
 @media(max-width:760px){.workStartControls{grid-template-columns:1fr;min-width:0;width:100%}.workStartActions{justify-content:flex-start}}
+
+/* v42: UI整理。機能は残して、管理系を折りたたむ */
+details.panel,
+details.sideDetails{
+  display:block;
+}
+details.panel > summary,
+details.sideDetails > summary,
+.panelDetails > summary{
+  list-style:none;
+  cursor:pointer;
+  user-select:none;
+  font-weight:950;
+  color:var(--dark);
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+}
+details.panel > summary::-webkit-details-marker,
+details.sideDetails > summary::-webkit-details-marker,
+.panelDetails > summary::-webkit-details-marker{display:none}
+details.panel > summary::after,
+details.sideDetails > summary::after,
+.panelDetails > summary::after{
+  content:'開く';
+  font-size:12px;
+  font-weight:900;
+  color:var(--muted);
+  background:#f5f7fb;
+  border:1px solid var(--line);
+  border-radius:999px;
+  padding:5px 9px;
+}
+details.panel[open] > summary::after,
+details.sideDetails[open] > summary::after,
+.panelDetails[open] > summary::after{content:'閉じる'}
+details.panel > summary,
+details.sideDetails > summary{font-size:19px;margin:0}
+details.panel[open] > summary,
+details.sideDetails[open] > summary{margin-bottom:12px}
+.panelDetails{
+  background:#fff;
+  border:1px solid var(--line);
+  border-radius:16px;
+  padding:11px 12px;
+  margin:0 0 10px;
+  box-shadow:0 4px 12px rgba(40,50,80,.05);
+}
+.panelDetails > summary{font-size:14px}
+.panelDetails[open] > summary{margin-bottom:10px}
+.compactTool .notice{margin:8px 0 0}
+#setup .panel:first-of-type{
+  border-color:color-mix(in srgb,var(--blue) 26%,var(--line));
+  box-shadow:0 12px 28px rgba(93,156,236,.10);
+}
+.bulkTaskActions,
+.actions,
+.workStartActions{
+  row-gap:7px;
+}
+.sideDetails:not([open]){
+  padding-top:14px;
+  padding-bottom:14px;
+}
+.sideDetails:not([open]) + .sideDetails{
+  margin-top:8px;
+}
+@media(max-width:650px){
+  details.panel > summary,
+  details.sideDetails > summary{font-size:17px}
+  .panelDetails{padding:10px;border-radius:14px}
+}
