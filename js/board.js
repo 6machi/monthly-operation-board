@@ -1,8 +1,8 @@
-import { $, esc, todayISO, addDays, fmtDate, diffDays, relativeFrom, taskOccursOnDate, occurrenceLabel, fullClock, minutesFromTime } from './utils.js?v=44';
-import { state } from './state.js?v=44';
-import { createTask, markCarryover, returnToSchedule, updateTask, deleteTask } from './tasks.js?v=44';
-import { refreshAll, showView } from './app.js?v=44';
-import { isUnavailableTask, isUnavailableForMember, unavailableBlocksForMember } from './calendar.js?v=44';
+import { $, esc, todayISO, addDays, fmtDate, diffDays, relativeFrom, taskOccursOnDate, occurrenceLabel, fullClock, minutesFromTime } from './utils.js?v=46';
+import { state } from './state.js?v=46';
+import { createTask, markCarryover, returnToSchedule, updateTask, deleteTask } from './tasks.js?v=46';
+import { refreshAll, showView } from './app.js?v=46';
+import { isUnavailableTask, isUnavailableForMember, unavailableBlocksForMember } from './calendar.js?v=46';
 
 const SLOT_MINUTES = 15;
 const PX_PER_MINUTE = 1.15; // 15分 = 約17px / 60分 = 約69px
@@ -862,7 +862,7 @@ function renderWorkStartStatus(){
   const text = $('workStartText');
   const input = $('workStartInput');
   const saved = getWorkStartTime(state.scheduleDate);
-  if(text) text.textContent = saved ? `起きた時間：${saved.slice(0,5)}` : '起きた時間：未設定';
+  if(text) text.textContent = saved ? `活動開始時間：${saved.slice(0,5)}` : '活動開始時間：未設定';
   if(input) input.value = saved ? saved.slice(0,5) : '';
 }
 
@@ -1054,11 +1054,10 @@ export function initBoardEvents(){
     state.draggingTaskId = null;
     await refreshAll();
   });
-  $('fillNowWorkStartBtn')?.addEventListener('click', ()=>{
-    const now = new Date();
-    const value = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
-    const input = $('workStartInput');
-    if(input) input.value = value;
+  $('workStartInfoBtn')?.addEventListener('click', (e)=>{
+    e.preventDefault();
+    const info = $('workStartInfoText');
+    if(info) info.classList.toggle('hidden');
   });
   $('setWorkStartBtn')?.addEventListener('click', async()=>{
     const input = $('workStartInput');

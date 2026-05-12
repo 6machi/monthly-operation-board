@@ -1,12 +1,12 @@
-import { isConfigured } from './supabase-client.js?v=44';
-import { getSession, signIn, signUp, signOut, ensureProfileAndTeam, loadMembers } from './auth.js?v=44';
-import { loadTasks } from './tasks.js?v=44';
-import { loadTree } from './setup.js?v=44';
-import { state } from './state.js?v=44';
-import { $, qsa, todayISO, nowTimeText, fmtDate } from './utils.js?v=44';
-import { initBoardEvents, renderBoard } from './board.js?v=44';
-import { initCalendarEvents, renderCalendar } from './calendar.js?v=44';
-import { initSetupEvents, renderSetup, renderProfilePage } from './setup-view.js?v=44';
+import { isConfigured } from './supabase-client.js?v=46';
+import { getSession, signIn, signUp, signOut, ensureProfileAndTeam, loadMembers } from './auth.js?v=46';
+import { loadTasks } from './tasks.js?v=46';
+import { loadTree } from './setup.js?v=46';
+import { state } from './state.js?v=46';
+import { $, qsa, todayISO, nowTimeText, fmtDate } from './utils.js?v=46';
+import { initBoardEvents, renderBoard } from './board.js?v=46';
+import { initCalendarEvents, renderCalendar } from './calendar.js?v=46';
+import { initSetupEvents, renderSetup, renderProfilePage } from './setup-view.js?v=46';
 
 function safeGet(id){ return document.getElementById(id); }
 function safeOn(id, event, fn){
@@ -126,6 +126,14 @@ function bindAuthEvents(){
   });
 }
 function bindCommonEvents(){
+
+  document.addEventListener('click', (e)=>{
+    const info = e.target?.closest?.('.infoDot[data-info]');
+    if(!info) return;
+    e.preventDefault();
+    e.stopPropagation();
+    alert(info.dataset.info || info.getAttribute('title') || '説明はありません。');
+  }, true);
   document.addEventListener('click', (e)=>{
     const input = e.target?.closest?.('input[type="date"], input[type="time"]');
     if(!input || input.disabled) return;

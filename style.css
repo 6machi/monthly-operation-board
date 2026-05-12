@@ -442,3 +442,58 @@ details.sideDetails[open] > summary{margin-bottom:12px}
 .panelDetails summary,.sideDetails summary{user-select:none}
 .boardPanel .panelDetails{margin-bottom:8px}
 @media(min-width:900px){.organizeActions{grid-template-columns:1fr 1fr}}
+
+/* v45: activity start compact UI + readable unavailable cards */
+.workStartTool > summary::after{content:'設定'}
+.workStartTool[open] > summary::after{content:'閉じる'}
+.workStartBox.slim{
+  display:grid;
+  grid-template-columns:minmax(160px,220px) auto;
+  align-items:end;
+  justify-content:start;
+  gap:10px;
+  background:#fff;
+  border:1px solid var(--line);
+  border-left:6px solid var(--orange);
+  padding:10px 12px;
+  margin:0;
+}
+.workStartBox.slim label{margin:0}
+.workStartTimeField small{display:flex;align-items:center;gap:6px}
+.infoDot{
+  width:19px;height:19px;min-width:19px;
+  display:inline-flex;align-items:center;justify-content:center;
+  padding:0;border-radius:999px;
+  background:#f5f7fb;border:1px solid var(--line);
+  color:var(--muted);font-size:12px;font-weight:950;
+  box-shadow:none;line-height:1;
+}
+.workStartActions.slim{display:flex;gap:7px;flex-wrap:nowrap;justify-content:flex-start}
+.workStartActions.slim button{padding:9px 12px;font-size:12px;white-space:nowrap}
+.infoText{margin-top:8px;background:#f8fafc;border:1px solid var(--line);border-radius:14px;padding:10px 12px;color:var(--muted);font-weight:850;font-size:12px;line-height:1.55}
+.infoText b{display:block;color:var(--dark);font-size:13px;margin-bottom:4px}
+.infoText p{margin:0}
+.unavailableList{display:block;margin-top:12px}
+.unavailableGroups{display:grid;gap:12px}
+.unavailableDayGroup{background:#fff;border:1px solid #ece7f3;border-radius:18px;padding:12px;box-shadow:0 5px 14px rgba(40,50,80,.05)}
+.unavailableDayGroup h4{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 10px;font-size:14px;color:var(--dark)}
+.unavailableDayGroup h4 small{background:#f4f1f7;color:#6e647e;border-radius:999px;padding:4px 8px;font-size:11px;font-weight:950}
+.unavailableCardGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px}
+.unavailableCard{background:linear-gradient(180deg,#fff,#fbf9ff);border:1px solid #e3dbea;border-left:7px solid #a68ac5;border-radius:16px;padding:10px;display:grid;gap:9px;min-width:0}
+.unavailableCard.allDay{border-left-color:#7d8798;background:linear-gradient(180deg,#fff,#f6f7fa)}
+.unavailableCardMain{display:grid;gap:4px;min-width:0}
+.unavailableTimeBadge{display:inline-flex;align-self:start;background:#f0ebf6;color:#6b5d7d;border-radius:999px;padding:5px 9px;font-size:12px;font-weight:950}
+.unavailableCard.allDay .unavailableTimeBadge{background:#eceff4;color:#566176}
+.unavailableCardMain b{font-size:13px;line-height:1.35;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#30384b}
+.unavailableCardMain small{font-size:11px;color:var(--muted);font-weight:850}
+.unavailableCardActions{display:flex;gap:6px;flex-wrap:wrap}
+.unavailableCardActions button{font-size:11px;padding:6px 9px;box-shadow:none}
+.unavailableCardActions .danger{background:#fff0f0;color:#b23a3a}
+@media(max-width:700px){.workStartBox.slim{grid-template-columns:1fr}.workStartActions.slim{flex-wrap:wrap}.unavailableCardGrid{grid-template-columns:1fr}}
+
+/* v46: descriptions are gathered into info buttons */
+h1 .infoDot,h2 .infoDot,h3 .infoDot,summary .infoDot,small .infoDot{vertical-align:middle;margin-left:6px}
+.infoDot{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:999px;border:1px solid var(--line);background:#fff;color:var(--muted);font-size:12px;font-weight:950;line-height:1;box-shadow:none;padding:0;cursor:pointer}
+.infoDot:hover{background:#f5f7fb;color:var(--dark);border-color:#cbd4e4}
+summary .infoDot{width:18px;height:18px;font-size:11px}
+.title h1{display:flex;align-items:center;gap:4px;flex-wrap:wrap}

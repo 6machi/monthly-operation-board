@@ -11,8 +11,7 @@
     <div class="wrap head">
       <div class="top">
         <div class="title">
-          <h1>タスクかんりシート</h1>
-          <p>月1で棚卸し、日々はスケジュール・持ち越し・差し込みを見る</p>
+          <h1>タスクかんりシート <button class="infoDot" type="button" data-info="月1で棚卸し、日々はスケジュール・持ち越し・差し込みを見るためのシートです。">i</button></h1>
         </div>
         <div class="userBox">
           <button class="pill profileOpen" id="loginPill" type="button" title="自分のページを開く">未ログイン</button>
@@ -29,13 +28,11 @@
 
   <main class="wrap">
     <section id="configWarning" class="panel warning hidden">
-      <h2>Supabase設定がまだです</h2>
-      <p><code>config.js</code> に Supabase Project URL と anon / publishable key を入れてください。</p>
+      <h2>Supabase設定がまだです <button class="infoDot" type="button" data-info="config.js に Supabase Project URL と anon / publishable key を入れてください。">i</button></h2>
     </section>
 
     <section id="authView" class="panel authPanel">
-      <h2>ログイン</h2>
-      <p class="muted">未ログインではタスクデータを読み込みません。先にSupabaseのSQL設定を済ませてから使ってください。</p>
+      <h2>ログイン <button class="infoDot" type="button" data-info="未ログインではタスクデータを読み込みません。先にSupabaseのSQL設定を済ませてから使ってください。">i</button></h2>
       <div class="form two">
         <label><small>メールアドレス</small><input id="authEmail" type="email" autocomplete="email" placeholder="you@example.com"></label>
         <label><small>パスワード</small><input id="authPassword" type="password" autocomplete="current-password" placeholder="8文字以上推奨"></label>
@@ -63,27 +60,23 @@
               <span class="scheduleTitle" id="scheduleTitle">今日のスケジュール</span>
               <button class="scheduleMove" id="scheduleNext" title="次の日へ">&gt;&gt;</button>
             </div>
-            <details class="panelDetails compactTool">
-              <summary>起きた時間・並べ直し</summary>
-              <div class="workStartBox" id="workStartBox">
-                <div>
-                  <b id="workStartText">起きた時間：未設定</b>
-                  <span>設定するまでは今の予定をそのまま表示します。起きた時間を入れると、その時間以降に未完了タスクを並べ直します。</span>
-                </div>
-                <div class="workStartControls">
-                  <label><small>起きた時間</small><input id="workStartInput" type="time"></label>
-                  <div class="workStartActions">
-                    <button class="ghost" type="button" id="fillNowWorkStartBtn">今の時刻を入れる</button>
-                    <button class="primary" type="button" id="setWorkStartBtn">この時間にして並べ直す</button>
-                    <button class="ghost" type="button" id="clearWorkStartBtn">解除</button>
-                  </div>
+            <details class="panelDetails compactTool workStartTool">
+              <summary>活動開始時間 <button class="infoDot" type="button" data-info="現在時刻はそのまま表示します。ここに時間を入れると、その時間以降へ未完了タスクを並べ直します。睡眠時間・稼働不可時間は避けます。">i</button></summary>
+              <div class="workStartBox slim" id="workStartBox">
+                <label class="workStartTimeField">
+                  <small>活動開始時間</small>
+                  <input id="workStartInput" type="time" step="900">
+                </label>
+                <div class="workStartActions slim">
+                  <button class="primary" type="button" id="setWorkStartBtn">反映</button>
+                  <button class="ghost" type="button" id="clearWorkStartBtn">解除</button>
                 </div>
               </div>
+              <div class="infoText hidden" id="workStartInfoText"><b id="workStartText">活動開始時間：未設定</b></div>
             </details>
             <details class="panelDetails compactTool organizeTool">
-              <summary>タスクを整理する</summary>
+              <summary>タスクを整理する <button class="infoDot" type="button" data-info="稼働不可・睡眠にかぶっている未完了タスクを、空いている時間へ並べ直します。">i</button></summary>
               <div class="organizeBox">
-                <p class="muted">稼働不可・睡眠にかぶっている未完了タスクを、空いている時間へ並べ直します。</p>
                 <div class="organizeActions">
                   <button class="ghost" type="button" id="reflowFromTodayBtn">表示日以降のタスクを並べ直す</button>
                   <button class="ghost" type="button" id="reflowDailyTasksBtn">毎日タスクを今日から分け直す</button>
@@ -92,7 +85,7 @@
               </div>
             </details>
             <details class="panelDetails compactTool">
-              <summary>睡眠・表示設定</summary>
+              <summary>睡眠・表示設定 <button class="infoDot" type="button" data-info="睡眠時間はタイムライン上で灰色の予定として表示されます。活動可能時間の計算にも使います。">i</button></summary>
               <div class="form two compactForm">
                 <label><small>就寝予定</small><input type="time" id="sleepAt" value="01:00"></label>
                 <label><small>睡眠時間</small><select id="sleepHours"><option>8</option><option>7</option><option>6</option><option>9</option></select></label>
@@ -103,7 +96,7 @@
           </section>
           <aside>
             <details class="panel sideDetails" open>
-              <summary>持ち越しタスク</summary>
+              <summary>持ち越しタスク <button class="infoDot" type="button" data-info="タイムラインのタスクをここへドラッグすると、選択中の日付の持ち越しタスクになります。">i</button></summary>
               <div class="carryNav simple">
                 <button class="carryMove" id="carryPrev" title="前の日へ">&lt;&lt;</button>
                 <span class="carryDateText" id="carryDateText">----/--/--</span>
@@ -111,12 +104,11 @@
               </div>
               <div class="dateHint" id="carryRelative">(明日)</div>
               <div class="dropzone" id="carryDrop">
-                <p class="drophelp">タイムラインのタスクをここへドラッグすると、上の日付の持ち越しタスクになります。</p>
                 <div class="list" id="carryList"></div>
               </div>
             </details>
             <details class="panel sideDetails" open>
-              <summary>差し込みタスク</summary>
+              <summary>差し込みタスク <button class="infoDot" type="button" data-info="急に入った作業を、カテゴリ・プロジェクトを選んで今日のタスクとして追加できます。">i</button></summary>
               <div class="quickAddBox">
                 <div class="form two">
                   <label><small>カテゴリ</small><select id="quickCategory"></select></label>
@@ -144,8 +136,7 @@
           </div>
         </section>
         <details class="panel sideDetails" id="icsImportPanel">
-          <summary>Googleカレンダーを読み込む</summary>
-          <p class="muted">Googleカレンダーから書き出した <code>.ics</code> ファイルを読み込んで、予定を稼働不可時間として取り込めます。zipで出た場合は、先に解凍して中の .ics を選んでください。</p>
+          <summary>Googleカレンダーを読み込む <button class="infoDot" type="button" data-info="Googleカレンダーから書き出した .ics ファイルを読み込んで、予定を稼働不可時間として取り込めます。zipで出た場合は、先に解凍して中の .ics を選んでください。">i</button></summary>
           <div class="icsImportBox">
             <label><small>.icsファイル</small><input type="file" id="icsFileInput" accept=".ics,text/calendar"></label>
             <button class="primary" id="icsParseBtn" type="button">予定を読み込む</button>
@@ -158,21 +149,19 @@
             <button class="primary" id="icsImportBtn" type="button">選んだ予定を稼働不可として取り込む</button>
           </div>
         </details>
-        <section class="panel"><h2>日付別の予定量</h2><div class="monthGrid" id="monthGrid"></div></section>
+        <section class="panel"><h2>日付別の予定量 <button class="infoDot" type="button" data-info="日付ごとの予定量と稼働不可を確認できます。日付をクリックすると、その日のタイムラインを開けます。">i</button></h2><div class="monthGrid" id="monthGrid"></div></section>
         <details class="panel sideDetails">
-          <summary>稼働できない日・時間</summary>
-          <p class="muted">稼働不可の追加・解除は、右上の自分の名前から開く「自分のページ」で管理できます。</p>
+          <summary>稼働できない日・時間 <button class="infoDot" type="button" data-info="稼働不可の追加・解除は、右上の自分の名前から開く「自分のページ」で管理できます。">i</button></summary>
           <button class="ghost" type="button" id="openProfileFromCalendar">自分のページで管理する</button>
         </details>
-        <details class="panel sideDetails" open><summary>メンバー別・今月のタスク</summary><div class="memberSummary" id="memberSummary"></div></details>
+        <details class="panel sideDetails" open><summary>メンバー別・今月のタスク <button class="infoDot" type="button" data-info="メンバーごとの今月のタスク数と進行度をカテゴリ/プロジェクト単位で確認できます。">i</button></summary><div class="memberSummary" id="memberSummary"></div></details>
       </section>
 
       <section id="profile" class="view">
         <section class="panel profilePagePanel" id="profileSettingsPanel">
           <div class="profilePageHead">
             <div>
-              <h2>自分のページ</h2>
-              <p class="muted">表示名・絵文字・色を変えたり、できたことログを見られます。</p>
+              <h2>自分のページ <button class="infoDot" type="button" data-info="表示名・絵文字・色を変えたり、できたことログを見られます。">i</button></h2>
             </div>
             <button class="ghost" id="backToBoardBtn" type="button">今日やることへ戻る</button>
           </div>
@@ -183,8 +172,7 @@
             <label><small>自分の色</small><input id="profileColor" type="color" value="#5d9cec" aria-label="自分の色"></label>
           </div>
           <div class="sectionline sleepSettingsBlock">
-            <h3>すいみん時間</h3>
-            <p class="muted">デフォルトは 02:00〜09:00。タイムライン上では灰色の予定として表示します。</p>
+            <h3>すいみん時間 <button class="infoDot" type="button" data-info="デフォルトは 02:00〜09:00。タイムライン上では灰色の予定として表示します。">i</button></h3>
             <div class="form two">
               <label><small>寝る時間</small><input id="profileSleepStart" type="time" step="900" value="02:00"></label>
               <label><small>起きる時間</small><input id="profileSleepEnd" type="time" step="900" value="09:00"></label>
@@ -194,8 +182,7 @@
         </section>
 
         <details class="panel unavailablePanel sideDetails" id="profileUnavailablePanel">
-          <summary>稼働できない日・時間</summary>
-          <p class="muted">外出・通院・予定など、作業できない日や時間を先に入れておくと、分割タスクや持ち越しタスクがその時間を避けます。</p>
+          <summary>稼働できない日・時間 <button class="infoDot" type="button" data-info="外出・通院・予定など、作業できない日や時間を先に入れておくと、分割タスクや持ち越しタスクがその時間を避けます。">i</button></summary>
           <div class="form unavailableForm">
             <label><small>稼働不可の日</small><input type="date" id="unavailableDate"></label>
             <label><small>開始時間</small><input type="time" id="unavailableStart" value="00:00" step="900"></label>
@@ -209,7 +196,7 @@
           <div id="unavailableList" class="unavailableList"></div>
         </details>
         <details class="panel sideDetails" id="achievementPanel" open>
-          <summary>できたことログ</summary>
+          <summary>できたことログ <button class="infoDot" type="button" data-info="完了したタスクをカテゴリごとに確認できます。テスト用などはログから外せます。">i</button></summary>
           <div id="achievementArchive"></div>
         </details>
       </section>
@@ -218,7 +205,7 @@
         <div class="tabs" id="setupMemberTabs"></div>
         <div id="setupNotice" class="notice ok"></div>
         <section class="panel">
-          <h2>今月タスクを追加</h2>
+          <h2>今月タスクを追加 <button class="infoDot" type="button" data-info="カテゴリ・プロジェクト・タスク候補を選んで、今月のタスクを追加します。納期から逆算して分割することもできます。">i</button></h2>
           <div class="form">
             <label><small>カテゴリ</small><select id="newCategory"></select></label>
             <label><small>プロジェクト</small><select id="newProject"></select></label>
@@ -246,14 +233,13 @@
           </div>
           <button class="primary" id="addMonthlyTaskBtn">追加する</button>
         </section>
-        <details class="panel sideDetails"><summary>カテゴリ管理</summary><div class="catgrid" id="categoryGrid"></div></details>
+        <details class="panel sideDetails"><summary>カテゴリ管理 <button class="infoDot" type="button" data-info="カテゴリカードを選ぶと、そのカテゴリの中身を編集できます。ドラッグで並び替えもできます。">i</button></summary><div class="catgrid" id="categoryGrid"></div></details>
         <details class="panel sideDetails" id="categoryEditorPanel">
-          <summary>カテゴリ編集</summary>
+          <summary>カテゴリ編集 <button class="infoDot" type="button" data-info="カテゴリ名、色、プロジェクト、タスク候補、一緒に頑張る人などを編集できます。">i</button></summary>
           <div id="categoryEditor" class="empty">カテゴリカードをクリックすると編集できます。</div>
         </details>
         <details class="panel sideDetails">
-          <summary>登録済みタスクの修正</summary>
-          <p class="muted">追加済みのタスク名・カテゴリ・プロジェクト・日付・期限などをあとから直せます。</p>
+          <summary>登録済みタスクの修正 <button class="infoDot" type="button" data-info="追加済みのタスク名・カテゴリ・プロジェクト・日付・期限などをあとから直せます。まとめて削除もできます。">i</button></summary>
           <div class="bulkTaskActions">
             <button class="ghost" type="button" id="selectAllRegisteredTasks">表示中を選択</button>
             <button class="ghost" type="button" id="clearRegisteredTaskSelection">選択解除</button>
@@ -270,6 +256,6 @@
   </template>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script type="module" src="js/app.js?v=44"></script>
+  <script type="module" src="js/app.js?v=46"></script>
 </body>
 </html>

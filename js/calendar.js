@@ -1,8 +1,8 @@
-import { $, esc, toISO, todayISO, diffDays, taskOccursOnDate, minutesFromTime, fullClock } from './utils.js?v=44';
-import { state } from './state.js?v=44';
-import { openDateOnBoard } from './board.js?v=44';
-import { createTask, deleteTask, updateTask } from './tasks.js?v=44';
-import { refreshAll } from './app.js?v=44';
+import { $, esc, toISO, todayISO, diffDays, taskOccursOnDate, minutesFromTime, fullClock, fmtDate } from './utils.js?v=46';
+import { state } from './state.js?v=46';
+import { openDateOnBoard } from './board.js?v=46';
+import { createTask, deleteTask, updateTask } from './tasks.js?v=46';
+import { refreshAll } from './app.js?v=46';
 
 const DAY_MINUTES = 24 * 60;
 function taskArray(){ return Array.isArray(state.tasks) ? state.tasks.filter(t=>t && typeof t === 'object') : []; }
@@ -83,7 +83,67 @@ export function renderUnavailableList(){
     box.innerHTML = '<div class="empty">この月の稼働不可はまだありません。</div>';
     return;
   }
-  box.innerHTML = list.map(t=>`<div class="unavailableItem"><b>${esc(t.schedule_date || '')}</b><span>${esc(formatUnavailable(t))}</span><span>${esc(t.memo || '稼働不可')}</span>${mine?`<button class="ghost" data-convert-unavailable="${esc(t.id)}" type="button">タスクにする</button><button class="ghost" data-del-unavailable="${esc(t.id)}" type="button">解除</button>`:''}</div>`).join('');
+
+  const groups = new Map();
+  list.forEach(t=>{
+    const key = t.schedule_date || '日付なし';
+    if(!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(t);
+  });
+
+  box.innerHTML = `<div class="unavailableGroups">${Array.from(groups.entries()).map(([date, items])=>`
+    <section class="unavailableDayGroup">
+      <h4><span>${esc(date && date !== '日付なし' ? fmtDate(date) : date)}</span><small>${items.length}件</small></h4>
+      <div class="unavailableCardGrid">
+        ${items.map(t=>{
+          const duration = unavailableDuration(t);
+          const allDay = duration >= DAY_MINUTES;
+          return `<article class="unavailableCard ${allDay ? 'allDay' : ''}">
+            <div class="unavailableCardMain">
+              <span class="unavailableTimeBadge">${esc(formatUnavailable(t))}</span>
+              <b>${esc(t.memo || '稼働不可')}</b>
+              <small>${allDay ? '終日稼働不可' : `${esc(t.start_time || '00:00')} 開始 / ${Math.round(duration/15)*15}分`}</small>
+            </div>
+            ${mine?`<div class="unavailableCardActions">
+              <button class="ghost" data-edit-unavailable="${esc(t.id)}" type="button">修正</button>
+              <button class="ghost" data-convert-unavailable="${esc(t.id)}" type="button">タスクにする</button>
+              <button class="danger" data-del-unavailable="${esc(t.id)}" type="button">解除</button>
+            </div>`:''}
+          </article>`;
+        }).join('')}
+      </div>
+    </section>`).join('')}</div>`;
+
+  box.querySelectorAll('[data-edit-unavailable]').forEach(btn=>btn.addEventListener('click', async()=>{
+    const t = taskArray().find(x=>String(x.id)===String(btn.dataset.editUnavailable));
+    if(!t) return;
+    const currentDuration = unavailableDuration(t);
+    const currentStart = (t.start_time || '00:00').slice(0,5);
+    const currentEnd = currentDuration >= DAY_MINUTES ? '23:59' : fullClock(minutesFromTime(currentStart) + currentDuration);
+    const date = prompt('稼働不可の日（YYYY-MM-DD）', t.schedule_date || todayISO());
+    if(!date) return;
+    const start = prompt('開始時間（HH:MM）', currentStart);
+    if(!start) return;
+    const end = prompt('終了時間（HH:MM / 終日は23:59）', currentEnd);
+    if(!end) return;
+    const memo = prompt('理由メモ', t.memo || '稼働不可');
+    const duration = String(end).slice(0,5) === '23:59' && String(start).slice(0,5) === '00:00'
+      ? DAY_MINUTES
+      : durationBetween(start, end);
+    await updateTask(t.id, {
+      schedule_date: date,
+      due_date: date,
+      carryover_date: null,
+      start_time: start.slice(0,5),
+      estimated_minutes: duration,
+      memo: memo || '稼働不可',
+      category: '稼働不可',
+      project: t.project || '予定',
+      status: 'scheduled'
+    });
+    await refreshAll();
+  }));
+
   box.querySelectorAll('[data-convert-unavailable]').forEach(btn=>btn.addEventListener('click', async()=>{
     const t = taskArray().find(x=>String(x.id)===String(btn.dataset.convertUnavailable));
     if(!t) return;
