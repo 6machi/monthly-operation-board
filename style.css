@@ -603,3 +603,11 @@ h2 .infoDot,h3 .infoDot,summary .infoDot,small .infoDot{margin-left:6px}
 .selectedDayCard.editable{cursor:pointer;transition:transform .12s ease, box-shadow .12s ease, border-color .12s ease;}
 .selectedDayCard.editable:hover{transform:translateY(-1px);box-shadow:0 10px 20px rgba(40,50,80,.10);border-color:color-mix(in srgb,var(--task-color) 42%,var(--line));}
 .selectedDayCard.editable::after{content:'クリックで修正';display:inline-flex;margin-top:8px;border-radius:999px;background:color-mix(in srgb,var(--task-color) 10%,#fff);color:#566176;padding:4px 8px;font-size:11px;font-weight:900;}
+
+
+/* v52: make sleep settings clearly visible */
+.sleepTool{border:1px solid #dfe4ee;background:rgba(255,255,255,.96)}
+.sleepTool[open] summary{margin-bottom:10px}
+.sleepTool .compactActions{justify-content:flex-start;margin-top:8px}
+.sleepTool #saveBoardSleepBtn{min-width:220px;box-shadow:0 8px 18px rgba(38,48,68,.12)}
+@media(max-width:650px){.sleepTool #saveBoardSleepBtn{width:100%;min-width:0}}

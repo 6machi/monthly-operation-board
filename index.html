@@ -84,14 +84,14 @@
                 <div id="organizeMsg" class="notice hidden"></div>
               </div>
             </details>
-            <details class="panelDetails compactTool">
+            <details class="panelDetails compactTool sleepTool" open>
               <summary>睡眠時間 <button class="infoDot" type="button" data-info="寝る時間〜起きる時間は、タイムライン上で灰色のすいみん予定として表示されます。活動可能時間の計算にも使います。">i</button></summary>
               <div class="form two compactForm">
                 <label><small>寝る時間</small><input type="time" step="900" id="boardSleepStart" value="02:00"></label>
                 <label><small>起きる時間</small><input type="time" step="900" id="boardSleepEnd" value="09:00"></label>
               </div>
               <div class="actions compactActions">
-                <button class="primary" type="button" id="saveBoardSleepBtn">睡眠時間を保存</button>
+                <button class="primary" type="button" id="saveBoardSleepBtn">保存してタイムラインに反映</button>
               </div>
               <div id="sleepSaveMsg" class="notice hidden"></div>
               <div id="planMsg" class="notice ok"></div>
@@ -261,6 +261,6 @@
   </template>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script type="module" src="js/app.js?v=51"></script>
+  <script type="module" src="js/app.js?v=52"></script>
 </body>
 </html>
