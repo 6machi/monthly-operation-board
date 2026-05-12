@@ -597,3 +597,9 @@ h2 .infoDot,h3 .infoDot,summary .infoDot,small .infoDot{margin-left:6px}
 .dayCell.fancy{touch-action:manipulation}
 .dayCell.fancy.selected{border-color:var(--orange);box-shadow:0 0 0 4px rgba(245,166,35,.18),0 8px 18px rgba(40,50,80,.08)}
 #selectedDayPanel{scroll-margin-top:92px}
+
+
+/* v50: selected day task cards are editable */
+.selectedDayCard.editable{cursor:pointer;transition:transform .12s ease, box-shadow .12s ease, border-color .12s ease;}
+.selectedDayCard.editable:hover{transform:translateY(-1px);box-shadow:0 10px 20px rgba(40,50,80,.10);border-color:color-mix(in srgb,var(--task-color) 42%,var(--line));}
+.selectedDayCard.editable::after{content:'クリックで修正';display:inline-flex;margin-top:8px;border-radius:999px;background:color-mix(in srgb,var(--task-color) 10%,#fff);color:#566176;padding:4px 8px;font-size:11px;font-weight:900;}

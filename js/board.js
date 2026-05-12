@@ -1,8 +1,8 @@
-import { $, esc, todayISO, addDays, fmtDate, diffDays, relativeFrom, taskOccursOnDate, occurrenceLabel, fullClock, minutesFromTime } from './utils.js?v=49';
-import { state } from './state.js?v=49';
-import { createTask, markCarryover, returnToSchedule, updateTask, deleteTask } from './tasks.js?v=49';
-import { refreshAll, showView } from './app.js?v=49';
-import { isUnavailableTask, isUnavailableForMember, unavailableBlocksForMember } from './calendar.js?v=49';
+import { $, esc, todayISO, addDays, fmtDate, diffDays, relativeFrom, taskOccursOnDate, occurrenceLabel, fullClock, minutesFromTime } from './utils.js?v=50';
+import { state } from './state.js?v=50';
+import { createTask, markCarryover, returnToSchedule, updateTask, deleteTask } from './tasks.js?v=50';
+import { refreshAll, showView } from './app.js?v=50';
+import { isUnavailableTask, isUnavailableForMember, unavailableBlocksForMember } from './calendar.js?v=50';
 
 const SLOT_MINUTES = 15;
 const PX_PER_MINUTE = 1.15; // 15分 = 約17px / 60分 = 約69px
@@ -581,7 +581,7 @@ function projectNamesForCategory(category){
   const c = (state.tree || []).find(x=>x.name===category);
   return (c?.projects || []).map(p=>p.name);
 }
-function openTaskEditor(t){
+export function openTaskEditor(t){
   if(!isEditable()) return;
   const modal = ensureTaskEditor();
   modal.dataset.taskId = t.id;

@@ -1,8 +1,8 @@
-import { $, esc, toISO, todayISO, diffDays, taskOccursOnDate, minutesFromTime, fullClock, fmtDate } from './utils.js?v=49';
-import { state } from './state.js?v=49';
-import { openDateOnBoard } from './board.js?v=49';
-import { createTask, deleteTask, updateTask } from './tasks.js?v=49';
-import { refreshAll } from './app.js?v=49';
+import { $, esc, toISO, todayISO, diffDays, taskOccursOnDate, minutesFromTime, fullClock, fmtDate } from './utils.js?v=50';
+import { state } from './state.js?v=50';
+import { openDateOnBoard, openTaskEditor } from './board.js?v=50';
+import { createTask, deleteTask, updateTask } from './tasks.js?v=50';
+import { refreshAll } from './app.js?v=50';
 
 const DAY_MINUTES = 24 * 60;
 let selectedCalendarDate = todayISO();
@@ -310,7 +310,7 @@ function renderSelectedDayTasks(){
         <h3><span class="memberEmojiMini">${esc(mem.emoji || '🌙')}</span>${esc(mem.name)}<small>${items.length}件</small></h3>
         <div class="selectedDayCardGrid">
           ${items.map(({type,task:t})=>`
-            <article class="selectedDayCard ${type==='unavailable'?'unavailable':''} ${t.done?'done':''}" style="--task-color:${esc(categoryColor(t.category))}">
+            <article class="selectedDayCard ${type==='unavailable'?'unavailable':''} ${t.done?'done':''} ${t.owner_id===state.user?.id?'editable':''}" data-selected-task-id="${esc(t.id)}" style="--task-color:${esc(categoryColor(t.category))}" title="${t.owner_id===state.user?.id?'クリックして修正':'閲覧のみ'}">
               <span class="timeBadge">${esc(formatTaskTime(t))}</span>
               <b>${esc(taskTitleForList(t))}</b>
               <small>${esc(t.category || '未分類')}${t.project ? ` / ${esc(t.project)}` : ''}${t.done ? ' / 完了' : ''}</small>
@@ -319,6 +319,17 @@ function renderSelectedDayTasks(){
         </div>
       </section>`).join('')}</div>`;
   $('openSelectedDayTimeline')?.addEventListener('click',()=>openDateOnBoard(dateIso));
+  box.querySelectorAll('[data-selected-task-id]').forEach(card=>{
+    card.addEventListener('click',()=>{
+      const t = taskArray().find(x=>String(x.id)===String(card.dataset.selectedTaskId));
+      if(!t) return;
+      if(t.owner_id !== state.user?.id){
+        alert('他メンバーの予定は閲覧のみです。');
+        return;
+      }
+      openTaskEditor(t);
+    });
+  });
 }
 
 function renderMemberSummary(){
