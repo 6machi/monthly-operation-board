@@ -475,7 +475,7 @@ function renderWorkStartStatus(){
   const text = $('workStartText');
   if(!text) return;
   const saved = getWorkStartTime(state.scheduleDate);
-  text.textContent = saved ? `作業開始：${saved.slice(0,5)}` : '作業開始：未設定';
+  text.textContent = saved ? `起きた時間：${saved.slice(0,5)}` : '起きた時間：未設定';
 }
 
 export function renderBoard(){
