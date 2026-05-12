@@ -1,13 +1,15 @@
-import { $, esc, todayISO, addDays, fmtDate, diffDays, relativeFrom, taskOccursOnDate, occurrenceLabel, fullClock, minutesFromTime } from './utils.js';
-import { state } from './state.js';
-import { createTask, markCarryover, returnToSchedule, updateTask, deleteTask } from './tasks.js';
-import { refreshAll, showView } from './app.js';
-import { isUnavailableTask, isUnavailableForMember, unavailableBlocksForMember } from './calendar.js';
+import { $, esc, todayISO, addDays, fmtDate, diffDays, relativeFrom, taskOccursOnDate, occurrenceLabel, fullClock, minutesFromTime } from './utils.js?v=37';
+import { state } from './state.js?v=37';
+import { createTask, markCarryover, returnToSchedule, updateTask, deleteTask } from './tasks.js?v=37';
+import { refreshAll, showView } from './app.js?v=37';
+import { isUnavailableTask, isUnavailableForMember, unavailableBlocksForMember } from './calendar.js?v=37';
 
 const SLOT_MINUTES = 15;
 const PX_PER_MINUTE = 1.15; // 15分 = 約17px / 60分 = 約69px
 const DAY_MINUTES = 24 * 60;
 const DEFAULT_START_MINUTES = 9 * 60;
+function taskArray(){ return Array.isArray(state.tasks) ? state.tasks.filter(t=>t && typeof t === 'object') : []; }
+function memberArray(){ return Array.isArray(state.members) ? state.members.filter(m=>m && typeof m === 'object') : []; }
 function workStartStorageKey(dateIso=state.scheduleDate){
   return `task-kanri-work-start:${state.user?.id || 'anon'}:${dateIso}`;
 }
@@ -43,8 +45,8 @@ function minutesFromTimelineTop(topPx, baseMin){
 }
 
 function selectedTasks(){
-  if(!state.user || !state.selectedMemberId || !Array.isArray(state.tasks)) return [];
-  return state.tasks.filter(t => t && t.id && t.owner_id === state.selectedMemberId && !t.done && !isUnavailableTask(t));
+  if(!state.user || !state.selectedMemberId) return [];
+  return taskArray().filter(t => t.id && t.owner_id === state.selectedMemberId && !t.done && !isUnavailableTask(t));
 }
 function timelineTasks(){ if(isUnavailableForMember(state.scheduleDate, state.selectedMemberId)) return []; return selectedTasks().filter(t => taskOccursOnDate(t, state.scheduleDate)); }
 function carryTasks(){ return selectedTasks().filter(t => t.carryover_date === state.carryDate); }
@@ -90,8 +92,7 @@ function timeLabel(min){ return timeLabelWrap(snapMinutes(min)); }
 function isEditable(){ return !!state.user && state.selectedMemberId === state.user.id; }
 
 function selectedMember(){
-  if(!Array.isArray(state.members)) return {};
-  return state.members.find(m=>m && m.id===state.selectedMemberId) || state.profile || {};
+  return memberArray().find(m=>m.id===state.selectedMemberId) || state.profile || {};
 }
 function memberSleep(){
   const member = selectedMember();
@@ -125,20 +126,28 @@ function makeBlockedElement(block, baseMin){
   const el = document.createElement('div');
   el.className = block.kind === 'sleep' ? 'sleepEvent' : 'unavailableEvent';
   el.style.top = `${relativeTimelineTop(block.start, baseMin)}px`;
-  el.style.height = `${Math.max(24, (block.end - block.start) * PX_PER_MINUTE - 4)}px`;
+  el.style.height = `${Math.max(24, Math.max(15, Number(block.end||0) - Number(block.start||0)) * PX_PER_MINUTE - 4)}px`;
   el.innerHTML = `<b>${esc(block.label || '稼働不可')}</b><small>${esc(block.meta || `${timeLabelWrap(block.start)} - ${timeLabelWrap(block.end)}`)}</small>`;
   return el;
 }
 function memberBlockedIntervals(dateIso=state.scheduleDate, memberId=state.selectedMemberId){
   const sleep = memberSleepIntervals();
-  const unavail = unavailableBlocksForMember(dateIso, memberId).map(b=>({ start:b.start, end:b.end, kind:'unavailable', label:b.allDay?'終日稼働不可':'稼働不可', meta:b.allDay ? (b.memo || '稼働不可') : `${timeLabelWrap(b.start)} - ${timeLabelWrap(b.end)} / ${b.memo || '稼働不可'}` }));
+  let unavail = [];
+  try{
+    const blocks = unavailableBlocksForMember(dateIso, memberId) || [];
+    unavail = blocks
+      .filter(b=>b && Number.isFinite(Number(b.start)) && Number.isFinite(Number(b.end)))
+      .map(b=>({ start:Number(b.start), end:Number(b.end), kind:'unavailable', label:b.allDay?'終日稼働不可':'稼働不可', meta:b.allDay ? (b.memo || '稼働不可') : `${timeLabelWrap(b.start)} - ${timeLabelWrap(b.end)} / ${b.memo || '稼働不可'}` }));
+  }catch(e){
+    console.warn('稼働不可時間の読み込みをスキップしました', e);
+  }
   return [...sleep, ...unavail].sort((a,b)=>a.start-b.start);
 }
 function intervalsOverlap(aStart, aEnd, bStart, bEnd){ return aStart < bEnd && bStart < aEnd; }
 function busyIntervals(dateIso, memberId=state.selectedMemberId, excludeTaskId=null){
   const blocked = memberBlockedIntervals(dateIso, memberId).map(b=>({start:b.start,end:b.end}));
-  const tasks = state.tasks
-    .filter(t=>t.owner_id===memberId && !t.done && !isUnavailableTask(t) && String(t.id)!==String(excludeTaskId) && taskOccursOnDate(t, dateIso))
+  const tasks = taskArray()
+    .filter(t=>t && t.id && t.owner_id===memberId && !t.done && !isUnavailableTask(t) && String(t.id)!==String(excludeTaskId) && taskOccursOnDate(t, dateIso))
     .map((t,i)=>({ start:taskStartMinutes(t, i), end:taskStartMinutes(t, i)+taskDuration(t) }));
   return [...blocked, ...tasks].sort((a,b)=>a.start-b.start);
 }
@@ -156,14 +165,14 @@ function findAvailableStart(dateIso, duration, preferred=DEFAULT_START_MINUTES, 
   return candidates.find(m=>fitsAt(dateIso, m, duration, memberId, excludeTaskId)) ?? start;
 }
 async function carryTaskToDate(taskId, carryDate){
-  const t = state.tasks.find(x=>String(x.id)===String(taskId));
+  const t = taskArray().find(x=>String(x.id)===String(taskId));
   const duration = taskDuration(t || {});
   const preferred = t?.start_time ? minutesFromTime(t.start_time) : DEFAULT_START_MINUTES;
   const start = findAvailableStart(carryDate, duration, preferred, t?.owner_id || state.selectedMemberId, taskId);
   await updateTask(taskId, { carryover_date: carryDate, schedule_date: null, status:'carryover', start_time: timeLabel(start), sort_order: Date.now()*-1 });
 }
 async function scheduleTaskOnDate(taskId, scheduleDate){
-  const t = state.tasks.find(x=>String(x.id)===String(taskId));
+  const t = taskArray().find(x=>String(x.id)===String(taskId));
   const duration = taskDuration(t || {});
   const preferred = t?.start_time ? minutesFromTime(t.start_time) : DEFAULT_START_MINUTES;
   const start = findAvailableStart(scheduleDate, duration, preferred, t?.owner_id || state.selectedMemberId, taskId);
@@ -456,20 +465,26 @@ function formatHours(min){
 function renderActivitySummary(){
   const box = $('activitySummary');
   if(!box) return;
-  const dayMin = availableMinutesForDate(state.scheduleDate, state.selectedMemberId);
+  let dayMin = 0;
+  try{ dayMin = availableMinutesForDate(state.scheduleDate, state.selectedMemberId); }catch(e){ console.warn('day activity calculation failed', e); dayMin = DAY_MINUTES; }
   const todayMin = state.scheduleDate === todayISO()
     ? Math.max(0, dayMin - (new Date().getHours()*60 + new Date().getMinutes()))
     : dayMin;
-  const [y,m] = String(state.scheduleDate || todayISO()).split('-').map(Number);
+  const [,m] = String(state.scheduleDate || todayISO()).split('-').map(Number);
   const remainingMonthDates = monthDatesFrom(state.scheduleDate).filter(d => d >= state.scheduleDate);
-  const monthMin = remainingMonthDates.reduce((sum,d)=>sum+availableMinutesForDate(d, state.selectedMemberId),0);
-  const workMin = timelineTasks().reduce((sum,t)=>sum+taskDuration(t),0);
+  const monthMin = remainingMonthDates.reduce((sum,d)=>{
+    try{ return sum+availableMinutesForDate(d, state.selectedMemberId); }catch(_e){ return sum; }
+  },0);
+  let dayTasks = [];
+  try{ dayTasks = timelineTasks(); }catch(e){ console.warn('timeline task calculation failed', e); dayTasks = []; }
+  const workMin = dayTasks.reduce((sum,t)=>sum+taskDuration(t),0);
   const remainMin = Math.max(0, todayMin - workMin);
+  const dayWord = state.scheduleDate === todayISO() ? '今日' : fmtDate(state.scheduleDate);
   box.innerHTML = `
-    <div class="activityCard"><b>${formatHours(todayMin)}</b><span>今日の残り活動可能時間</span></div>
+    <div class="activityCard"><b>${formatHours(todayMin)}</b><span>${dayWord}の残り活動可能時間</span></div>
     <div class="activityCard"><b>${formatHours(monthMin)}</b><span>${m}月の残り活動可能時間（残り${remainingMonthDates.length}日）</span></div>
-    <div class="activityCard"><b>${formatHours(workMin)}</b><span>今日のタスク予定時間</span></div>
-    <div class="activityCard"><b>${formatHours(remainMin)}</b><span>今日の余白時間</span></div>`;
+    <div class="activityCard"><b>${formatHours(workMin)}</b><span>${dayWord}のタスク予定時間</span></div>
+    <div class="activityCard"><b>${formatHours(remainMin)}</b><span>${dayWord}の余白時間</span></div>`;
 }
 
 function renderWorkStartStatus(){
@@ -484,25 +499,77 @@ function renderWorkStartStatus(){
 }
 
 export function renderBoard(){
-  if(!state.user){ return; }
-  if(!state.selectedMemberId){ state.selectedMemberId = state.user.id; }
-  if(!Array.isArray(state.members)) state.members = [];
-  if(!Array.isArray(state.tasks)) state.tasks = [];
-  normalizeCarryDate();
-  $('scheduleTitle').textContent = scheduleTitle();
-  $('schedulePrev').disabled = diffDays(state.scheduleDate, todayISO()) <= 0;
-  $('carryDateText').textContent = fmtDate(state.carryDate);
-  $('carryRelative').textContent = `(${relativeFrom(state.scheduleDate, state.carryDate)})`;
-  $('carryPrev').disabled = diffDays(state.carryDate, addDays(state.scheduleDate,1)) <= 0;
-  const boardNoticeEl = $('boardNotice');
-  if(boardNoticeEl){
-    const mine = isEditable();
-    boardNoticeEl.textContent = isUnavailableForMember(state.scheduleDate, state.selectedMemberId) ? 'この日は終日稼働不可です。毎日タスクや分割タスクは表示されません。' : (mine ? '自分の今日やることです。編集できます。' : '他メンバーの今日やることです。閲覧中心です。');
+  try{
+    if(!state.user){ renderTimelineFallback(new Error('未ログインです')); return; }
+    if(!state.selectedMemberId){ state.selectedMemberId = state.user.id; }
+    if(!Array.isArray(state.members)) state.members = [];
+    if(!Array.isArray(state.tasks)) state.tasks = [];
+    normalizeCarryDate();
+
+    const scheduleTitleEl = $('scheduleTitle');
+    if(scheduleTitleEl) scheduleTitleEl.textContent = scheduleTitle();
+    const schedulePrevEl = $('schedulePrev');
+    if(schedulePrevEl) schedulePrevEl.disabled = diffDays(state.scheduleDate, todayISO()) <= 0;
+    const carryDateTextEl = $('carryDateText');
+    if(carryDateTextEl) carryDateTextEl.textContent = fmtDate(state.carryDate);
+    const carryRelativeEl = $('carryRelative');
+    if(carryRelativeEl) carryRelativeEl.textContent = `(${relativeFrom(state.scheduleDate, state.carryDate)})`;
+    const carryPrevEl = $('carryPrev');
+    if(carryPrevEl) carryPrevEl.disabled = diffDays(state.carryDate, addDays(state.scheduleDate,1)) <= 0;
+
+    const boardNoticeEl = $('boardNotice');
+    if(boardNoticeEl){
+      let unavailable = false;
+      try{ unavailable = isUnavailableForMember(state.scheduleDate, state.selectedMemberId); }catch(e){ console.warn('終日稼働不可の判定をスキップしました', e); }
+      const mine = isEditable();
+      boardNoticeEl.textContent = unavailable
+        ? 'この日は終日稼働不可です。毎日タスクや分割タスクは表示されません。'
+        : (mine ? '自分の今日やることです。編集できます。' : '他メンバーの今日やることです。閲覧中心です。');
+    }
+
+    try{ renderActivitySummary(); }catch(e){ console.warn('activity summary skipped', e); }
+    try{ renderWorkStartStatus(); }catch(e){ console.warn('work start status skipped', e); }
+    try{ renderTimeline(); }catch(e){ console.error('timeline render failed', e); renderTimelineFallback(e); }
+    try{ renderCarryList(); }catch(e){ console.warn('carry list skipped', e); }
+  }catch(e){
+    console.error('board render hard failed', e);
+    renderTimelineFallback(e);
+    const msg = $('planMsg');
+    if(msg) msg.textContent = `今日やることの表示でエラー：${e?.message || '不明なエラー'}`;
   }
-  renderActivitySummary();
-  renderWorkStartStatus();
-  renderTimeline();
-  renderCarryList();
+}
+
+
+function renderTimelineFallback(error){
+  const box = $('timeline');
+  if(!box) return;
+  const baseMin = timelineBaseMinutes();
+  box.innerHTML = '';
+  box.className = 'timeline timelineCalendar';
+  box.style.setProperty('--day-height', `${DAY_MINUTES * PX_PER_MINUTE}px`);
+  const axis = document.createElement('div');
+  axis.className = 'timeAxis';
+  const grid = document.createElement('div');
+  grid.className = 'calendarGrid';
+  for(let h=0; h<24; h++){
+    const label = document.createElement('div');
+    label.className = 'timeMark';
+    label.style.top = `${h*60*PX_PER_MINUTE}px`;
+    label.textContent = timeLabelWrap(baseMin + h*60);
+    axis.appendChild(label);
+    const line = document.createElement('div');
+    line.className = 'hourLine';
+    line.style.top = `${h*60*PX_PER_MINUTE}px`;
+    grid.appendChild(line);
+  }
+  const hint = document.createElement('div');
+  hint.className = 'timelineHint';
+  hint.textContent = 'タイムラインのタスク表示でエラーが出たため、時間軸だけ表示しています。';
+  box.appendChild(axis);
+  box.appendChild(grid);
+  box.appendChild(hint);
+  const msg = $('planMsg');
+  if(msg) msg.textContent = `タイムラインの表示を一時的に保護しました：${error?.message || '不明なエラー'}`;
 }
 
 export function renderTimeline(){
@@ -540,9 +607,12 @@ export function renderTimeline(){
 
   const events = document.createElement('div');
   events.className = 'eventLayer';
-  memberBlockedIntervals(state.scheduleDate, state.selectedMemberId).forEach(block=>events.appendChild(makeBlockedElement(block, baseMin)));
-  const list = timelineTasks();
-  list.forEach((t,idx)=>events.appendChild(makeEventElement(t, idx, baseMin)));
+  let blocks = [];
+  try{ blocks = memberBlockedIntervals(state.scheduleDate, state.selectedMemberId) || []; }catch(e){ console.warn('block list skipped', e); blocks = []; }
+  blocks.forEach(block=>{ try{ events.appendChild(makeBlockedElement(block, baseMin)); }catch(e){ console.warn('block skipped', e); } });
+  let list = [];
+  try{ list = timelineTasks().filter(t=>t && t.id); }catch(e){ console.warn('timeline task list skipped', e); list = []; }
+  list.forEach((t,idx)=>{ try{ events.appendChild(makeEventElement(t, idx, baseMin)); }catch(e){ console.warn('task skipped', t, e); } });
 
   const isToday = state.scheduleDate === todayISO();
   if(isToday){
@@ -565,8 +635,9 @@ export function renderTimeline(){
   box.appendChild(events);
   box.appendChild(dropHint);
 
-  const totalMin = list.reduce((a,t)=>a+(Number(t.estimated_minutes)||30),0);
-  $('planMsg').textContent = totalMin ? `この日の作業予定：${Math.round(totalMin/60*10)/10}時間` : 'この日のタスクはまだありません。時間軸だけ表示しています。';
+  const totalMin = list.reduce((a,t)=>a+(Number(t?.estimated_minutes)||30),0);
+  const planMsgEl = $('planMsg');
+  if(planMsgEl) planMsgEl.textContent = totalMin ? `この日の作業予定：${Math.round(totalMin/60*10)/10}時間` : 'この日のタスクはまだありません。時間軸だけ表示しています。';
 
   requestAnimationFrame(()=>{
     const container = $('timelineBox') || box.parentElement;

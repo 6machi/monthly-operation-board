@@ -1,10 +1,12 @@
-import { $, esc, toISO, todayISO, diffDays, taskOccursOnDate, minutesFromTime, fullClock } from './utils.js';
-import { state } from './state.js';
-import { openDateOnBoard } from './board.js';
-import { createTask, deleteTask, updateTask } from './tasks.js';
-import { refreshAll } from './app.js';
+import { $, esc, toISO, todayISO, diffDays, taskOccursOnDate, minutesFromTime, fullClock } from './utils.js?v=37';
+import { state } from './state.js?v=37';
+import { openDateOnBoard } from './board.js?v=37';
+import { createTask, deleteTask, updateTask } from './tasks.js?v=37';
+import { refreshAll } from './app.js?v=37';
 
 const DAY_MINUTES = 24 * 60;
+function taskArray(){ return Array.isArray(state.tasks) ? state.tasks.filter(t=>t && typeof t === 'object') : []; }
+function memberArray(){ return Array.isArray(state.members) ? state.members.filter(m=>m && typeof m === 'object') : []; }
 function clampMinute(n){ return Math.max(0, Math.min(DAY_MINUTES, Math.round(Number(n)||0))); }
 function snap15(n){ return Math.max(0, Math.min(DAY_MINUTES, Math.round(Number(n||0)/15)*15)); }
 function durationBetween(startText, endText){
@@ -42,8 +44,8 @@ export function isAllDayUnavailableTask(t){
   return isUnavailableTask(t) && unavailableDuration(t) >= DAY_MINUTES;
 }
 export function unavailableTasksForMember(dateIso, memberId = state.user?.id){
-  return state.tasks
-    .filter(t=>t.owner_id===memberId && isUnavailableTask(t) && (t.schedule_date || t.due_date || t.carryover_date) === dateIso)
+  return taskArray()
+    .filter(t=>t && t.id && t.owner_id===memberId && isUnavailableTask(t) && (t.schedule_date || t.due_date || t.carryover_date) === dateIso)
     .sort((a,b)=>String(a.start_time||'00:00').localeCompare(String(b.start_time||'00:00')));
 }
 export function unavailableBlocksForMember(dateIso, memberId = state.user?.id){
@@ -61,7 +63,7 @@ export function hasUnavailableForMember(dateIso, memberId = state.user?.id){
 }
 function visibleTasksOnDate(dateIso, memberId){
   if(isUnavailableForMember(dateIso, memberId)) return [];
-  return state.tasks.filter(t=>t.owner_id===memberId && !isUnavailableTask(t) && taskOccursOnDate(t, dateIso));
+  return taskArray().filter(t=>t && t.id && t.owner_id===memberId && !isUnavailableTask(t) && taskOccursOnDate(t, dateIso));
 }
 function formatUnavailable(t){
   const start = t.start_time || '00:00';
@@ -74,8 +76,8 @@ export function renderUnavailableList(){
   if(!box) return;
   const mine = state.selectedMemberId === state.user?.id;
   const month = state.calendarMonth;
-  const list = state.tasks
-    .filter(t=>t.owner_id===state.user?.id && isUnavailableTask(t) && String(t.schedule_date||'').startsWith(month))
+  const list = taskArray()
+    .filter(t=>t && t.id && t.owner_id===state.user?.id && isUnavailableTask(t) && String(t.schedule_date||'').startsWith(month))
     .sort((a,b)=>String(a.schedule_date||'').localeCompare(String(b.schedule_date||'')) || String(a.start_time||'').localeCompare(String(b.start_time||'')));
   if(!list.length){
     box.innerHTML = '<div class="empty">この月の稼働不可はまだありません。</div>';
@@ -83,7 +85,7 @@ export function renderUnavailableList(){
   }
   box.innerHTML = list.map(t=>`<div class="unavailableItem"><b>${esc(t.schedule_date || '')}</b><span>${esc(formatUnavailable(t))}</span><span>${esc(t.memo || '稼働不可')}</span>${mine?`<button class="ghost" data-convert-unavailable="${esc(t.id)}" type="button">タスクにする</button><button class="ghost" data-del-unavailable="${esc(t.id)}" type="button">解除</button>`:''}</div>`).join('');
   box.querySelectorAll('[data-convert-unavailable]').forEach(btn=>btn.addEventListener('click', async()=>{
-    const t = state.tasks.find(x=>String(x.id)===String(btn.dataset.convertUnavailable));
+    const t = taskArray().find(x=>String(x.id)===String(btn.dataset.convertUnavailable));
     if(!t) return;
     const title = prompt('タスク名に変更', t.memo && t.memo !== '稼働不可' ? t.memo : 'カレンダー予定');
     if(!title) return;
@@ -100,7 +102,7 @@ export function renderUnavailableList(){
 }
 
 function relativeMonthStats(iso){
-  const list = state.tasks.filter(t=>!isUnavailableTask(t) && !isUnavailableForMember(iso, t.owner_id) && taskOccursOnDate(t, iso));
+  const list = taskArray().filter(t=>!isUnavailableTask(t) && !isUnavailableForMember(iso, t.owner_id) && taskOccursOnDate(t, iso));
   const total = list.length;
   const carryovers = list.filter(t=>t.carryover_date===iso).length;
   return { total, carryovers };
@@ -131,9 +133,9 @@ function renderMonthGrid(){
   for(let day=1; day<=last.getDate(); day++){
     const iso = toISO(new Date(y,m-1,day));
     const isToday = iso===today;
-    const unavailableMembers = state.members.filter(mem=>hasUnavailableForMember(iso, mem.id));
-    const allDayMembers = state.members.filter(mem=>isUnavailableForMember(iso, mem.id));
-    const membersWithTasks = state.members.map(mem=>{
+    const unavailableMembers = memberArray().filter(mem=>hasUnavailableForMember(iso, mem.id));
+    const allDayMembers = memberArray().filter(mem=>isUnavailableForMember(iso, mem.id));
+    const membersWithTasks = memberArray().map(mem=>{
       const tasks = visibleTasksOnDate(iso, mem.id);
       return { mem, count: tasks.length, carry: tasks.filter(t=>t.carryover_date===iso).length };
     }).filter(x=>x.count>0);
@@ -178,8 +180,8 @@ function renderMemberSummary(){
   box.innerHTML='';
   const month = state.calendarMonth;
 
-  state.members.forEach(mem=>{
-    const tasks = state.tasks.filter(t=>t.owner_id===mem.id && !isUnavailableTask(t) && String(t.schedule_date||t.carryover_date||t.due_date||'').startsWith(month));
+  memberArray().forEach(mem=>{
+    const tasks = taskArray().filter(t=>t.owner_id===mem.id && !isUnavailableTask(t) && String(t.schedule_date||t.carryover_date||t.due_date||'').startsWith(month));
     const byProject = new Map();
     tasks.forEach(t=>{
       const key=t.project || t.category || '未分類';
