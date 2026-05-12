@@ -87,7 +87,9 @@ export function renderUnavailableList(){
     if(!t) return;
     const title = prompt('タスク名に変更', t.memo && t.memo !== '稼働不可' ? t.memo : 'カレンダー予定');
     if(!title) return;
-    await updateTask(t.id, { title:title.trim(), category:'差し込みタスク', project:'カレンダー予定', task_type:'', status:'scheduled', done:false, memo:`${t.memo || ''}${t.memo ? '\n' : ''}稼働不可予定からタスクに変更` });
+    const oldMemo = t.memo && t.memo !== '稼働不可' ? t.memo : '';
+    const newMemo = [oldMemo, '稼働不可予定からタスクに変更'].filter(Boolean).join(' / ');
+    await updateTask(t.id, { title:title.trim(), category:'差し込みタスク', project:'カレンダー予定', task_type:'', status:'scheduled', done:false, memo:newMemo });
     await refreshAll();
   }));
   box.querySelectorAll('[data-del-unavailable]').forEach(btn=>btn.addEventListener('click', async()=>{
