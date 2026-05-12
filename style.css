@@ -497,3 +497,75 @@ h1 .infoDot,h2 .infoDot,h3 .infoDot,summary .infoDot,small .infoDot{vertical-ali
 .infoDot:hover{background:#f5f7fb;color:var(--dark);border-color:#cbd4e4}
 summary .infoDot{width:18px;height:18px;font-size:11px}
 .title h1{display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+
+
+/* v47: info buttons are hover/focus tooltips, not click alerts */
+.title h1 .infoDot{display:none!important}
+.infoDot[data-info]{
+  position:relative;
+  overflow:visible;
+  cursor:help;
+  vertical-align:middle;
+  flex:0 0 auto;
+}
+.infoDot[data-info]::after{
+  content:attr(data-info);
+  position:absolute;
+  left:50%;
+  bottom:calc(100% + 10px);
+  transform:translateX(-50%) translateY(4px);
+  width:max-content;
+  max-width:min(320px,80vw);
+  white-space:normal;
+  text-align:left;
+  background:#263044;
+  color:#fff;
+  border-radius:12px;
+  padding:9px 11px;
+  font-size:12px;
+  font-weight:800;
+  line-height:1.55;
+  box-shadow:0 12px 28px rgba(35,45,70,.22);
+  opacity:0;
+  pointer-events:none;
+  transition:opacity .12s ease, transform .12s ease;
+  z-index:9999;
+}
+.infoDot[data-info]::before{
+  content:'';
+  position:absolute;
+  left:50%;
+  bottom:calc(100% + 4px);
+  transform:translateX(-50%);
+  border:6px solid transparent;
+  border-top-color:#263044;
+  opacity:0;
+  pointer-events:none;
+  transition:opacity .12s ease;
+  z-index:9999;
+}
+.infoDot[data-info]:hover::after,
+.infoDot[data-info]:focus-visible::after{
+  opacity:1;
+  transform:translateX(-50%) translateY(0);
+}
+.infoDot[data-info]:hover::before,
+.infoDot[data-info]:focus-visible::before{opacity:1}
+/* summary内では「タイトル + i」が左にまとまり、開閉ボタンだけ右端へ */
+details.panel > summary,
+details.sideDetails > summary,
+.panelDetails > summary{
+  justify-content:flex-start;
+}
+details.panel > summary::after,
+details.sideDetails > summary::after,
+.panelDetails > summary::after{
+  margin-left:auto;
+  flex:0 0 auto;
+}
+h2 .infoDot,h3 .infoDot,summary .infoDot,small .infoDot{margin-left:6px}
+@media(max-width:650px){
+  .infoDot[data-info]::after{max-width:260px;left:auto;right:0;transform:translateY(4px)}
+  .infoDot[data-info]:hover::after,.infoDot[data-info]:focus-visible::after{transform:translateY(0)}
+  .infoDot[data-info]::before{left:auto;right:8px;transform:none}
+}

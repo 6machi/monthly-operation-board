@@ -130,9 +130,10 @@ function bindCommonEvents(){
   document.addEventListener('click', (e)=>{
     const info = e.target?.closest?.('.infoDot[data-info]');
     if(!info) return;
+    // 説明はホバー/フォーカスのツールチップで表示する。
+    // summary内の i をクリックしても開閉が暴発しないように止める。
     e.preventDefault();
     e.stopPropagation();
-    alert(info.dataset.info || info.getAttribute('title') || '説明はありません。');
   }, true);
   document.addEventListener('click', (e)=>{
     const input = e.target?.closest?.('input[type="date"], input[type="time"]');
