@@ -1,8 +1,8 @@
-import { $, esc, todayISO, addDays, fmtDate, diffDays, relativeFrom, taskOccursOnDate, occurrenceLabel, fullClock, minutesFromTime } from './utils.js?v=39';
-import { state } from './state.js?v=39';
-import { createTask, markCarryover, returnToSchedule, updateTask, deleteTask } from './tasks.js?v=39';
-import { refreshAll, showView } from './app.js?v=39';
-import { isUnavailableTask, isUnavailableForMember, unavailableBlocksForMember } from './calendar.js?v=39';
+import { $, esc, todayISO, addDays, fmtDate, diffDays, relativeFrom, taskOccursOnDate, occurrenceLabel, fullClock, minutesFromTime } from './utils.js?v=40';
+import { state } from './state.js?v=40';
+import { createTask, markCarryover, returnToSchedule, updateTask, deleteTask } from './tasks.js?v=40';
+import { refreshAll, showView } from './app.js?v=40';
+import { isUnavailableTask, isUnavailableForMember, unavailableBlocksForMember } from './calendar.js?v=40';
 
 const SLOT_MINUTES = 15;
 const PX_PER_MINUTE = 1.15; // 15分 = 約17px / 60分 = 約69px
@@ -221,6 +221,112 @@ function findAvailableStart(dateIso, duration, preferred=DEFAULT_START_MINUTES, 
   for(let m=start; m<=DAY_MINUTES-duration; m+=SLOT_MINUTES) candidates.push(m);
   for(let m=0; m<start; m+=SLOT_MINUTES) candidates.push(m);
   return candidates.find(m=>fitsAt(dateIso, m, duration, memberId, excludeTaskId)) ?? start;
+}
+
+function unwrapMinuteAtOrAfter(min, baseMin){
+  let v = snapMinutes(min);
+  while(v < baseMin) v += DAY_MINUTES;
+  return v;
+}
+function intervalOccurrencesInRange(interval, rangeStart, rangeEnd){
+  const out = [];
+  const start = Number(interval.start);
+  const end = Number(interval.end);
+  if(!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return out;
+  [-DAY_MINUTES,0,DAY_MINUTES].forEach(offset=>{
+    const s = start + offset;
+    const e = end + offset;
+    if(s < rangeEnd && e > rangeStart) out.push({ start:Math.max(s, rangeStart), end:Math.min(e, rangeEnd) });
+  });
+  return out;
+}
+function nextSleepStartAfter(baseMin){
+  const sleep = memberSleep();
+  let sleepStart = snapMinutes(minutesFromTime(sleep.start || '02:00'));
+  while(sleepStart <= baseMin) sleepStart += DAY_MINUTES;
+  return sleepStart;
+}
+function blockedIntervalsUnwrapped(dateIso, memberId, rangeStart, rangeEnd){
+  const blocks = [];
+  memberBlockedIntervals(dateIso, memberId).forEach(block=>{
+    intervalOccurrencesInRange(block, rangeStart, rangeEnd).forEach(x=>blocks.push(x));
+  });
+  return mergeIntervals(blocks);
+}
+function fitsAtUnwrapped(start, duration, busy, rangeEnd){
+  const end = start + duration;
+  if(start < 0 || end > rangeEnd) return false;
+  return !busy.some(b=>intervalsOverlap(start,end,b.start,b.end));
+}
+function findNextSlotUnwrapped(after, duration, busy, rangeEnd){
+  let cursor = Math.max(0, snapMinutes(after));
+  let guard = 0;
+  while(cursor + duration <= rangeEnd && guard < 1000){
+    guard++;
+    const hit = busy.find(b=>intervalsOverlap(cursor, cursor+duration, b.start, b.end));
+    if(!hit) return cursor;
+    cursor = snapMinutes(hit.end + SLOT_MINUTES - 1);
+  }
+  return null;
+}
+function makeReflowPlan(startMin){
+  const dateIso = state.scheduleDate;
+  const memberId = state.selectedMemberId;
+  const rangeStart = snapMinutes(startMin);
+  const rangeEnd = nextSleepStartAfter(rangeStart);
+  const busy = blockedIntervalsUnwrapped(dateIso, memberId, rangeStart, rangeEnd);
+  const tasks = timelineTasks()
+    .filter(t=>t && t.id && !t.done && !isUnavailableTask(t))
+    .map((t,i)=>({ t, oldStart:unwrapMinuteAtOrAfter(taskStartMinutes(t,i), rangeStart), duration:taskDuration(t) }))
+    .sort((a,b)=>a.oldStart-b.oldStart);
+  const moves = [];
+  const carryovers = [];
+  let cursor = rangeStart;
+  tasks.forEach(item=>{
+    const start = findNextSlotUnwrapped(cursor, item.duration, busy, rangeEnd);
+    if(start == null){
+      carryovers.push(item);
+      return;
+    }
+    moves.push({ task:item.t, start, duration:item.duration });
+    busy.push({ start, end:start+item.duration });
+    busy.sort((a,b)=>a.start-b.start);
+    cursor = start + item.duration;
+  });
+  return { moves, carryovers, rangeStart, rangeEnd };
+}
+async function applyReflowPlan(plan, carryUnfit){
+  for(const m of plan.moves){
+    await updateTask(m.task.id, {
+      start_time: timeLabelWrap(m.start),
+      schedule_date: state.scheduleDate,
+      carryover_date: null,
+      status: 'scheduled'
+    });
+  }
+  if(carryUnfit){
+    for(const item of plan.carryovers){
+      await carryTaskToDate(item.t.id, addDays(state.scheduleDate, 1));
+    }
+  }
+}
+async function setWorkStartAndMaybeReflow(value){
+  const start = snapMinutes(minutesFromTime(value));
+  setWorkStartTime(timeLabelWrap(start), todayISO());
+  const plan = makeReflowPlan(start);
+  if(!plan.moves.length && !plan.carryovers.length){
+    renderBoard();
+    return;
+  }
+  let carryUnfit = false;
+  if(plan.carryovers.length){
+    carryUnfit = confirm(`${plan.carryovers.length}件のタスクが今日の睡眠までに入りません。明日へ自動で持ち越しますか？`);
+    if(!carryUnfit){
+      alert('入りきらないタスクはそのまま残します。必要なら手動で修正してください。');
+    }
+  }
+  await applyReflowPlan(plan, carryUnfit);
+  await refreshAll();
 }
 async function carryTaskToDate(taskId, carryDate){
   const t = taskArray().find(x=>String(x.id)===String(taskId));
@@ -530,8 +636,10 @@ function renderActivitySummary(){
   if(!box) return;
   let dayMin = 0;
   try{ dayMin = availableMinutesForDate(state.scheduleDate, state.selectedMemberId); }catch(e){ console.warn('day activity calculation failed', e); dayMin = DAY_MINUTES; }
+  const savedWorkStart = getWorkStartTime(state.scheduleDate);
+  const currentBase = savedWorkStart ? minutesFromTime(savedWorkStart) : (new Date().getHours()*60 + new Date().getMinutes());
   const todayMin = state.scheduleDate === todayISO()
-    ? Math.max(0, dayMin - (new Date().getHours()*60 + new Date().getMinutes()))
+    ? Math.max(0, dayMin - currentBase)
     : dayMin;
   const [,m] = String(state.scheduleDate || todayISO()).split('-').map(Number);
   const remainingMonthDates = monthDatesFrom(state.scheduleDate).filter(d => d >= state.scheduleDate);
@@ -744,13 +852,12 @@ export function initBoardEvents(){
     const input = $('workStartInput');
     if(input) input.value = value;
   });
-  $('setWorkStartBtn')?.addEventListener('click', ()=>{
+  $('setWorkStartBtn')?.addEventListener('click', async()=>{
     const input = $('workStartInput');
     const now = new Date();
     const fallback = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
     const value = (input?.value || fallback).slice(0,5);
-    setWorkStartTime(value, todayISO());
-    renderBoard();
+    await setWorkStartAndMaybeReflow(value);
   });
   $('clearWorkStartBtn')?.addEventListener('click', ()=>{
     setWorkStartTime(null, todayISO());

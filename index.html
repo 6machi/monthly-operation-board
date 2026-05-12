@@ -66,13 +66,13 @@
             <div class="workStartBox" id="workStartBox">
               <div>
                 <b id="workStartText">起きた時間：未設定</b>
-                <span>設定するまでは今の予定をそのまま表示します。起きた時間を入れると、その時刻を今日の実際のスタート時間として使います。</span>
+                <span>設定するまでは今の予定をそのまま表示します。起きた時間を入れると、その時間以降に未完了タスクを並べ直します。</span>
               </div>
               <div class="workStartControls">
                 <label><small>起きた時間</small><input id="workStartInput" type="time"></label>
                 <div class="workStartActions">
                   <button class="ghost" type="button" id="fillNowWorkStartBtn">今の時刻を入れる</button>
-                  <button class="primary" type="button" id="setWorkStartBtn">この時間にする</button>
+                  <button class="primary" type="button" id="setWorkStartBtn">この時間にして並べ直す</button>
                   <button class="ghost" type="button" id="clearWorkStartBtn">解除</button>
                 </div>
               </div>
@@ -238,6 +238,6 @@
   </template>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script type="module" src="js/app.js?v=39"></script>
+  <script type="module" src="js/app.js?v=40"></script>
 </body>
 </html>
