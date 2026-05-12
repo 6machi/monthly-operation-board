@@ -324,3 +324,12 @@ input[type="date"]::-webkit-calendar-picker-indicator,input[type="time"]::-webki
 .registeredTask.compact .taskEditForm{grid-template-columns:repeat(3,1fr)}
 @media(max-width:900px){.registeredCompactList{grid-template-columns:1fr}.registeredTask.compact .taskEditForm{grid-template-columns:1fr 1fr}}
 @media(max-width:650px){.registeredTaskHead.compact{grid-template-columns:auto minmax(0,1fr)}.registeredTask.compact .taskDateBadge{grid-column:2/3}.registeredTask.compact .taskEditForm{grid-template-columns:1fr}}
+
+
+/* v29: work start and conversion */
+.workStartBox{display:flex;justify-content:space-between;gap:10px;align-items:center;background:#fff;border:1px solid var(--line);border-radius:16px;padding:10px 12px;margin:0 0 10px;box-shadow:0 4px 12px rgba(40,50,80,.05)}
+.workStartBox b{display:block;font-size:14px;margin-bottom:2px;color:var(--dark)}
+.workStartBox span{display:block;font-size:12px;color:var(--muted);font-weight:850}
+.workStartActions{display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end}
+.workStartActions button{padding:7px 10px;font-size:12px}
+@media(max-width:700px){.workStartBox{align-items:flex-start;flex-direction:column}.workStartActions{justify-content:flex-start}}

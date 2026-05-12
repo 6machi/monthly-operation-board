@@ -8,8 +8,23 @@ const SLOT_MINUTES = 15;
 const PX_PER_MINUTE = 1.15; // 15分 = 約17px / 60分 = 約69px
 const DAY_MINUTES = 24 * 60;
 const DEFAULT_START_MINUTES = 9 * 60;
+function workStartStorageKey(dateIso=state.scheduleDate){
+  return `task-kanri-work-start:${state.user?.id || 'anon'}:${dateIso}`;
+}
+function getWorkStartTime(dateIso=state.scheduleDate){
+  if(dateIso !== todayISO()) return null;
+  try{ return localStorage.getItem(workStartStorageKey(dateIso)); }catch(_e){ return null; }
+}
+function setWorkStartTime(value, dateIso=state.scheduleDate){
+  try{
+    if(value) localStorage.setItem(workStartStorageKey(dateIso), value);
+    else localStorage.removeItem(workStartStorageKey(dateIso));
+  }catch(_e){}
+}
 function timelineBaseMinutes(){
   if(state.scheduleDate === todayISO()){
+    const saved = getWorkStartTime(state.scheduleDate);
+    if(saved) return Math.floor(minutesFromTime(saved) / 60) * 60;
     const now = new Date();
     return now.getHours() * 60;
   }
@@ -180,6 +195,7 @@ function ensureTaskEditor(){
       <div class="actions">
         <button class="primary" type="button" id="saveTaskFromTimeline">保存</button>
         <button class="ghost" type="button" id="carryTaskFromTimeline">選択中の持ち越し日に移動</button>
+        <button class="ghost" type="button" id="makeUnavailableFromTimeline">稼働不可予定にする</button>
         <button class="danger" type="button" id="deleteTaskFromTimeline">削除</button>
       </div>
     </section>`;
@@ -246,6 +262,21 @@ function openTaskEditor(t){
   };
   $('carryTaskFromTimeline').onclick = async()=>{
     await carryTaskToDate(t.id, state.carryDate);
+    closeTaskEditor();
+    await refreshAll();
+  };
+  $('makeUnavailableFromTimeline').onclick = async()=>{
+    const targetDate = $('editTaskScheduleDate').value || t.schedule_date || state.scheduleDate || todayISO();
+    const minutes = snapDuration(Number($('editTaskMinutes').value||t.estimated_minutes||30));
+    await updateTask(t.id, {
+      title: $('editTaskTitle').value.trim() || t.title || '稼働不可予定',
+      category:'稼働不可', project:'予定', task_type:'', estimated_minutes:minutes,
+      start_time:$('editTaskStartTime').value || t.start_time || '09:00',
+      schedule_date:targetDate, carryover_date:null, due_date:targetDate,
+      occurrence:'single', done:false, status:'scheduled',
+      memo:($('editTaskMemo').value || t.memo || '稼働不可') + '
+タスクから稼働不可予定へ変更'
+    });
     closeTaskEditor();
     await refreshAll();
   };
@@ -436,6 +467,17 @@ function renderActivitySummary(){
     <div class="activityCard"><b>${formatHours(remainMin)}</b><span>今日の余白時間</span></div>`;
 }
 
+function renderWorkStartStatus(){
+  const box = $('workStartBox');
+  if(!box) return;
+  const isToday = state.scheduleDate === todayISO();
+  box.classList.toggle('hidden', !isToday);
+  const text = $('workStartText');
+  if(!text) return;
+  const saved = getWorkStartTime(state.scheduleDate);
+  text.textContent = saved ? `作業開始：${saved.slice(0,5)}` : '作業開始：未設定';
+}
+
 export function renderBoard(){
   normalizeCarryDate();
   $('scheduleTitle').textContent = scheduleTitle();
@@ -445,6 +487,7 @@ export function renderBoard(){
   $('carryPrev').disabled = diffDays(state.carryDate, addDays(state.scheduleDate,1)) <= 0;
   $('boardNotice').textContent = isUnavailableForMember(state.scheduleDate, state.selectedMemberId) ? 'この日は終日稼働不可です。毎日タスクや分割タスクは表示されません。' : (state.selectedMemberId === state.user.id ? '自分の今日やることです。編集できます。' : '他メンバーの今日やることです。閲覧中心です。');
   renderActivitySummary();
+  renderWorkStartStatus();
   renderTimeline();
   renderCarryList();
 }
@@ -543,12 +586,23 @@ export function initBoardEvents(){
     state.draggingTaskId = null;
     await refreshAll();
   });
+  $('setWorkStartBtn')?.addEventListener('click', ()=>{
+    const now = new Date();
+    const value = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+    setWorkStartTime(value, todayISO());
+    renderBoard();
+  });
+  $('clearWorkStartBtn')?.addEventListener('click', ()=>{
+    setWorkStartTime(null, todayISO());
+    renderBoard();
+  });
   $('quickAddBtn').addEventListener('click', async()=>{
     const title = $('quickTitle').value.trim();
     if(!title) return alert('タスク名を入れてください');
     const now = new Date();
     const duration = snapDuration(Number($('quickMinutes').value||30));
-    const preferred = state.scheduleDate === todayISO() ? snapMinutes(now.getHours()*60 + now.getMinutes()) : DEFAULT_START_MINUTES;
+    const savedStart = getWorkStartTime(state.scheduleDate);
+    const preferred = state.scheduleDate === todayISO() ? snapMinutes(savedStart ? minutesFromTime(savedStart) : now.getHours()*60 + now.getMinutes()) : DEFAULT_START_MINUTES;
     const startMin = findAvailableStart(state.scheduleDate, duration, preferred, state.user.id);
     await createTask({
       team_id: state.team.id,

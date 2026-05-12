@@ -331,7 +331,7 @@ function renderRegisteredTasks(){
               </select></label>
               <label style="grid-column:1/-1"><small>メモ</small><textarea data-field="memo">${esc(stripAchievementMarker(t.memo))}</textarea></label>
             </div>
-            <div class="actions"><button type="button" class="primary" data-save-task="${esc(t.id)}">保存</button><button type="button" class="ghost" data-toggle-done="${esc(t.id)}">${t.done?'未完了に戻す':'完了にする'}</button><button type="button" class="ghost" data-toggle-achievement="${esc(t.id)}">${achievementExcluded(t)?'ログに戻す':'ログに入れない'}</button><button type="button" class="danger" data-delete-task="${esc(t.id)}">削除</button></div>
+            <div class="actions"><button type="button" class="primary" data-save-task="${esc(t.id)}">保存</button><button type="button" class="ghost" data-toggle-done="${esc(t.id)}">${t.done?'未完了に戻す':'完了にする'}</button><button type="button" class="ghost" data-toggle-achievement="${esc(t.id)}">${achievementExcluded(t)?'ログに戻す':'ログに入れない'}</button><button type="button" class="ghost" data-convert-to-unavailable="${esc(t.id)}">稼働不可にする</button><button type="button" class="danger" data-delete-task="${esc(t.id)}">削除</button></div>
           </details>
         </article>`).join('')}
       </div>
@@ -347,6 +347,17 @@ function renderRegisteredTasks(){
   });
   box.querySelectorAll('[data-toggle-done]').forEach(btn=>btn.onclick=async()=>{ if(!mine)return alert('他メンバーのタスクは編集できません'); const id=btn.dataset.toggleDone; const t=state.tasks.find(x=>String(x.id)===String(id)); if(!t)return; await updateTask(id,{ done:!t.done, status:!t.done?'done':'scheduled' }); await refreshAll(); });
   box.querySelectorAll('[data-toggle-achievement]').forEach(btn=>btn.onclick=async()=>{ if(!mine)return alert('他メンバーのタスクは編集できません'); const id=btn.dataset.toggleAchievement; const t=state.tasks.find(x=>String(x.id)===String(id)); if(!t)return; const memo=String(t.memo||''); const next=achievementExcluded(t) ? stripAchievementMarker(memo) : `${memo}${memo ? '\n' : ''}${ACHIEVEMENT_EXCLUDE}`; await updateTask(id,{ memo:next }); await refreshAll(); });
+
+  box.querySelectorAll('[data-convert-to-unavailable]').forEach(btn=>btn.onclick=async()=>{
+    if(!mine) return alert('他メンバーのタスクは編集できません');
+    const id = btn.dataset.convertToUnavailable;
+    const t = state.tasks.find(x=>String(x.id)===String(id));
+    if(!t) return;
+    if(!confirm(`タスク「${t.title||''}」を稼働不可予定に変更しますか？`)) return;
+    const date = t.schedule_date || t.carryover_date || t.due_date || new Date().toISOString().slice(0,10);
+    await updateTask(id, { category:'稼働不可', project:'予定', task_type:'', schedule_date:date, carryover_date:null, due_date:date, occurrence:'single', done:false, status:'scheduled', memo:`${t.memo||''}${t.memo?'\n':''}タスクから稼働不可予定へ変更` });
+    await refreshAll();
+  });
   box.querySelectorAll('[data-delete-task]').forEach(btn=>btn.onclick=async()=>{ if(!mine)return alert('他メンバーのタスクは編集できません'); const id=btn.dataset.deleteTask; const t=state.tasks.find(x=>String(x.id)===String(id)); if(!confirm(`タスク「${t?.title||''}」を削除しますか？`))return; await deleteTask(id); await refreshAll(); });
 }
 

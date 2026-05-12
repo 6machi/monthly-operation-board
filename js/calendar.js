@@ -1,7 +1,7 @@
 import { $, esc, toISO, todayISO, diffDays, taskOccursOnDate, minutesFromTime, fullClock } from './utils.js';
 import { state } from './state.js';
 import { openDateOnBoard } from './board.js';
-import { createTask, deleteTask } from './tasks.js';
+import { createTask, deleteTask, updateTask } from './tasks.js';
 import { refreshAll } from './app.js';
 
 const DAY_MINUTES = 24 * 60;
@@ -81,7 +81,16 @@ export function renderUnavailableList(){
     box.innerHTML = '<div class="empty">この月の稼働不可はまだありません。</div>';
     return;
   }
-  box.innerHTML = list.map(t=>`<div class="unavailableItem"><b>${esc(t.schedule_date || '')}</b><span>${esc(formatUnavailable(t))}</span><span>${esc(t.memo || '稼働不可')}</span>${mine?`<button class="ghost" data-del-unavailable="${esc(t.id)}" type="button">解除</button>`:''}</div>`).join('');
+  box.innerHTML = list.map(t=>`<div class="unavailableItem"><b>${esc(t.schedule_date || '')}</b><span>${esc(formatUnavailable(t))}</span><span>${esc(t.memo || '稼働不可')}</span>${mine?`<button class="ghost" data-convert-unavailable="${esc(t.id)}" type="button">タスクにする</button><button class="ghost" data-del-unavailable="${esc(t.id)}" type="button">解除</button>`:''}</div>`).join('');
+  box.querySelectorAll('[data-convert-unavailable]').forEach(btn=>btn.addEventListener('click', async()=>{
+    const t = state.tasks.find(x=>String(x.id)===String(btn.dataset.convertUnavailable));
+    if(!t) return;
+    const title = prompt('タスク名に変更', t.memo && t.memo !== '稼働不可' ? t.memo : 'カレンダー予定');
+    if(!title) return;
+    await updateTask(t.id, { title:title.trim(), category:'差し込みタスク', project:'カレンダー予定', task_type:'', status:'scheduled', done:false, memo:`${t.memo || ''}${t.memo ? '
+' : ''}稼働不可予定からタスクに変更` });
+    await refreshAll();
+  }));
   box.querySelectorAll('[data-del-unavailable]').forEach(btn=>btn.addEventListener('click', async()=>{
     if(!confirm('この稼働不可を解除しますか？')) return;
     await deleteTask(btn.dataset.delUnavailable);
