@@ -42,7 +42,10 @@ function minutesFromTimelineTop(topPx, baseMin){
   return wrapMinutes(baseMin + snapMinutes(topPx / PX_PER_MINUTE));
 }
 
-function selectedTasks(){ return state.tasks.filter(t => t.owner_id === state.selectedMemberId && !t.done && !isUnavailableTask(t)); }
+function selectedTasks(){
+  if(!state.user || !state.selectedMemberId || !Array.isArray(state.tasks)) return [];
+  return state.tasks.filter(t => t && t.id && t.owner_id === state.selectedMemberId && !t.done && !isUnavailableTask(t));
+}
 function timelineTasks(){ if(isUnavailableForMember(state.scheduleDate, state.selectedMemberId)) return []; return selectedTasks().filter(t => taskOccursOnDate(t, state.scheduleDate)); }
 function carryTasks(){ return selectedTasks().filter(t => t.carryover_date === state.carryDate); }
 function colorFor(t){
@@ -71,7 +74,7 @@ function snapMinutes(min){
 function snapDuration(min){
   return Math.max(SLOT_MINUTES, Math.round(min / SLOT_MINUTES) * SLOT_MINUTES);
 }
-function taskDuration(t){ return snapDuration(Number(t.estimated_minutes || 30)); }
+function taskDuration(t){ return snapDuration(Number(t?.estimated_minutes || 30)); }
 function fallbackStart(index){
   if(state.scheduleDate === todayISO()){
     const now = new Date();
@@ -84,10 +87,11 @@ function taskStartMinutes(t, index=0){
   return fallbackStart(index);
 }
 function timeLabel(min){ return timeLabelWrap(snapMinutes(min)); }
-function isEditable(){ return state.selectedMemberId === state.user.id; }
+function isEditable(){ return !!state.user && state.selectedMemberId === state.user.id; }
 
 function selectedMember(){
-  return state.members.find(m=>m.id===state.selectedMemberId) || {};
+  if(!Array.isArray(state.members)) return {};
+  return state.members.find(m=>m && m.id===state.selectedMemberId) || state.profile || {};
 }
 function memberSleep(){
   const member = selectedMember();
@@ -290,6 +294,7 @@ function openTaskEditor(t){
 }
 
 function makeEventElement(t, index, baseMin){
+  if(!t || !t.id){ const empty=document.createElement('div'); return empty; }
   const duration = taskDuration(t);
   const rawStart = taskStartMinutes(t, index);
   const start = fitsAt(state.scheduleDate, rawStart, duration, state.selectedMemberId, t.id)
@@ -407,6 +412,7 @@ function makeEventElement(t, index, baseMin){
 
 function taskCard(t){
   const art = document.createElement('article');
+  if(!t || !t.id){ art.className='empty'; art.textContent='読み込めないタスクがありました'; return art; }
   art.className = 'task';
   art.draggable = true;
   art.dataset.id = t.id;
@@ -478,13 +484,21 @@ function renderWorkStartStatus(){
 }
 
 export function renderBoard(){
+  if(!state.user){ return; }
+  if(!state.selectedMemberId){ state.selectedMemberId = state.user.id; }
+  if(!Array.isArray(state.members)) state.members = [];
+  if(!Array.isArray(state.tasks)) state.tasks = [];
   normalizeCarryDate();
   $('scheduleTitle').textContent = scheduleTitle();
   $('schedulePrev').disabled = diffDays(state.scheduleDate, todayISO()) <= 0;
   $('carryDateText').textContent = fmtDate(state.carryDate);
   $('carryRelative').textContent = `(${relativeFrom(state.scheduleDate, state.carryDate)})`;
   $('carryPrev').disabled = diffDays(state.carryDate, addDays(state.scheduleDate,1)) <= 0;
-  $('boardNotice').textContent = isUnavailableForMember(state.scheduleDate, state.selectedMemberId) ? 'この日は終日稼働不可です。毎日タスクや分割タスクは表示されません。' : (state.selectedMemberId === state.user.id ? '自分の今日やることです。編集できます。' : '他メンバーの今日やることです。閲覧中心です。');
+  const boardNoticeEl = $('boardNotice');
+  if(boardNoticeEl){
+    const mine = isEditable();
+    boardNoticeEl.textContent = isUnavailableForMember(state.scheduleDate, state.selectedMemberId) ? 'この日は終日稼働不可です。毎日タスクや分割タスクは表示されません。' : (mine ? '自分の今日やることです。編集できます。' : '他メンバーの今日やることです。閲覧中心です。');
+  }
   renderActivitySummary();
   renderWorkStartStatus();
   renderTimeline();
@@ -493,6 +507,7 @@ export function renderBoard(){
 
 export function renderTimeline(){
   const box = $('timeline');
+  if(!box) return;
   const baseMin = timelineBaseMinutes();
   box.innerHTML = '';
   box.className = 'timeline timelineCalendar';
@@ -563,7 +578,9 @@ export function renderTimeline(){
 }
 
 export function renderCarryList(){
-  const list = $('carryList'); list.innerHTML = '';
+  const list = $('carryList');
+  if(!list) return;
+  list.innerHTML = '';
   const arr = carryTasks();
   if(!arr.length){ list.innerHTML = '<div class="empty">この日の持ち越しタスクはありません。</div>'; return; }
   arr.forEach(t => list.appendChild(taskCard(t)));
