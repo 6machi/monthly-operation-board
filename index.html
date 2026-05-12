@@ -132,6 +132,21 @@
             <button class="ghost" id="calendarThisMonth">今月</button>
           </div>
         </section>
+        <details class="panel sideDetails" id="icsImportPanel">
+          <summary>Googleカレンダーを読み込む</summary>
+          <p class="muted">Googleカレンダーから書き出した <code>.ics</code> ファイルを読み込んで、予定を稼働不可時間として取り込めます。zipで出た場合は、先に解凍して中の .ics を選んでください。</p>
+          <div class="icsImportBox">
+            <label><small>.icsファイル</small><input type="file" id="icsFileInput" accept=".ics,text/calendar"></label>
+            <button class="primary" id="icsParseBtn" type="button">予定を読み込む</button>
+          </div>
+          <div id="icsImportMsg" class="notice hidden"></div>
+          <div id="icsPreview" class="icsPreview"></div>
+          <div class="actions hidden" id="icsImportActions">
+            <button class="ghost" id="icsSelectAllBtn" type="button">全部選択</button>
+            <button class="ghost" id="icsClearAllBtn" type="button">選択解除</button>
+            <button class="primary" id="icsImportBtn" type="button">選んだ予定を稼働不可として取り込む</button>
+          </div>
+        </details>
         <section class="panel"><h2>日付別の予定量</h2><div class="monthGrid" id="monthGrid"></div></section>
         <details class="panel sideDetails">
           <summary>稼働できない日・時間</summary>
@@ -244,6 +259,6 @@
   </template>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script type="module" src="js/app.js?v=42"></script>
+  <script type="module" src="js/app.js?v=43"></script>
 </body>
 </html>

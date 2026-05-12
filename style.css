@@ -423,3 +423,13 @@ details.sideDetails[open] > summary{margin-bottom:12px}
   details.sideDetails > summary{font-size:17px}
   .panelDetails{padding:10px;border-radius:14px}
 }
+
+/* v43: Google Calendar .ics import */
+.icsImportBox{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end;margin:10px 0 12px}
+.icsPreview{margin-top:10px}
+.icsPreviewList{display:grid;gap:8px;max-height:320px;overflow:auto;padding:2px}
+.icsItem{display:grid;grid-template-columns:auto 104px 110px 1fr;gap:8px;align-items:center;background:#fff;border:1px solid var(--line);border-radius:14px;padding:9px 10px;font-weight:850;box-shadow:0 3px 10px rgba(40,50,80,.04)}
+.icsItem input{width:18px;height:18px;accent-color:var(--blue)}
+.icsDate,.icsTime{font-size:12px;color:var(--muted);font-weight:900;white-space:nowrap}
+.icsItem b{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media(max-width:650px){.icsImportBox{grid-template-columns:1fr}.icsItem{grid-template-columns:auto 1fr}.icsTime,.icsDate{grid-column:2}.icsItem b{grid-column:2;white-space:normal}}

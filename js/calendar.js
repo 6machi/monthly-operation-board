@@ -1,8 +1,8 @@
-import { $, esc, toISO, todayISO, diffDays, taskOccursOnDate, minutesFromTime, fullClock } from './utils.js?v=41';
-import { state } from './state.js?v=41';
-import { openDateOnBoard } from './board.js?v=41';
-import { createTask, deleteTask, updateTask } from './tasks.js?v=41';
-import { refreshAll } from './app.js?v=41';
+import { $, esc, toISO, todayISO, diffDays, taskOccursOnDate, minutesFromTime, fullClock } from './utils.js?v=43';
+import { state } from './state.js?v=43';
+import { openDateOnBoard } from './board.js?v=43';
+import { createTask, deleteTask, updateTask } from './tasks.js?v=43';
+import { refreshAll } from './app.js?v=43';
 
 const DAY_MINUTES = 24 * 60;
 function taskArray(){ return Array.isArray(state.tasks) ? state.tasks.filter(t=>t && typeof t === 'object') : []; }
@@ -233,9 +233,309 @@ function renderMemberSummary(){
   });
 }
 
+
+let icsPreviewEvents = [];
+
+function showIcsMsg(text, error=false){
+  const el = $('icsImportMsg');
+  if(!el) return;
+  el.textContent = text;
+  el.className = `notice ${error ? 'error' : 'ok'}`;
+  el.classList.remove('hidden');
+}
+function unfoldIcs(text){
+  const lines = String(text||'').replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n');
+  const out = [];
+  lines.forEach(line=>{
+    if((line.startsWith(' ') || line.startsWith('\t')) && out.length){
+      out[out.length-1] += line.slice(1);
+    }else{
+      out.push(line);
+    }
+  });
+  return out;
+}
+function unescapeIcs(v){
+  return String(v||'')
+    .replace(/\\n/g,' ')
+    .replace(/\\N/g,' ')
+    .replace(/\\,/g, ',')
+    .replace(/\\;/g, ';')
+    .replace(/\\\\/g, '\\')
+    .trim();
+}
+function parseProp(line){
+  const idx = line.indexOf(':');
+  if(idx < 0) return null;
+  const left = line.slice(0,idx);
+  const value = line.slice(idx+1);
+  const parts = left.split(';');
+  const name = parts.shift().toUpperCase();
+  const params = {};
+  parts.forEach(p=>{
+    const eq = p.indexOf('=');
+    if(eq > -1) params[p.slice(0,eq).toUpperCase()] = p.slice(eq+1);
+  });
+  return { name, params, value };
+}
+function pad2(n){ return String(n).padStart(2,'0'); }
+function localPartsFromDate(d){
+  return { date:`${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`, time:`${pad2(d.getHours())}:${pad2(d.getMinutes())}` };
+}
+function parseIcsDate(prop){
+  if(!prop) return null;
+  const value = prop.value.trim();
+  const isDateOnly = prop.params?.VALUE === 'DATE' || /^\d{8}$/.test(value);
+  if(isDateOnly){
+    return { allDay:true, date:`${value.slice(0,4)}-${value.slice(4,6)}-${value.slice(6,8)}`, time:'00:00', raw:value };
+  }
+  const m = value.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})?(Z)?$/);
+  if(!m) return null;
+  const [,yy,mo,dd,hh,mi,ss,z] = m;
+  if(z){
+    const d = new Date(Date.UTC(Number(yy), Number(mo)-1, Number(dd), Number(hh), Number(mi), Number(ss||0)));
+    return { allDay:false, ...localPartsFromDate(d), raw:value };
+  }
+  return { allDay:false, date:`${yy}-${mo}-${dd}`, time:`${hh}:${mi}`, raw:value };
+}
+function dateFromIso(iso){
+  const [y,m,d] = iso.split('-').map(Number);
+  return new Date(y,m-1,d);
+}
+function addDateDays(iso, days){
+  const d = dateFromIso(iso);
+  d.setDate(d.getDate()+days);
+  return toISO(d);
+}
+function addMonths(iso, months){
+  const d = dateFromIso(iso);
+  const day = d.getDate();
+  d.setMonth(d.getMonth()+months);
+  if(d.getDate() !== day) d.setDate(0);
+  return toISO(d);
+}
+function weekdayCode(iso){
+  return ['SU','MO','TU','WE','TH','FR','SA'][dateFromIso(iso).getDay()];
+}
+function parseRRule(text){
+  const out = {};
+  String(text||'').split(';').forEach(part=>{
+    const [k,v] = part.split('=');
+    if(k) out[k.toUpperCase()] = v;
+  });
+  return out;
+}
+function parseExDates(props){
+  const set = new Set();
+  props.filter(p=>p.name==='EXDATE').forEach(p=>{
+    p.value.split(',').forEach(v=>{
+      const parsed = parseIcsDate({ ...p, value:v });
+      if(parsed?.date) set.add(parsed.date);
+    });
+  });
+  return set;
+}
+function minutesToTime(min){ return fullClock(min).slice(0,5); }
+function buildEventInstance(base, date){
+  const startMin = minutesFromTime(base.startTime || '00:00');
+  const duration = base.allDay ? DAY_MINUTES : Math.max(15, base.duration || 60);
+  return {
+    uid: `${base.uid || base.summary || 'event'}-${date}-${base.startTime || '00:00'}`,
+    date,
+    startTime: base.allDay ? '00:00' : (base.startTime || '00:00'),
+    endTime: base.allDay ? '23:59' : minutesToTime(startMin + duration),
+    duration: base.allDay ? DAY_MINUTES : duration,
+    allDay: base.allDay,
+    summary: base.summary || 'Googleカレンダー予定'
+  };
+}
+function expandRecurring(base, rruleText, exDates, monthStart, monthEnd){
+  const rule = parseRRule(rruleText);
+  const freq = rule.FREQ;
+  const interval = Math.max(1, Number(rule.INTERVAL || 1));
+  const countLimit = rule.COUNT ? Number(rule.COUNT) : 500;
+  const untilParsed = rule.UNTIL ? parseIcsDate({ value: rule.UNTIL, params:{} }) : null;
+  const until = untilParsed?.date || monthEnd;
+  const bydays = rule.BYDAY ? rule.BYDAY.split(',') : null;
+  const result = [];
+  let safety = 0;
+
+  if(freq === 'DAILY'){
+    let cur = base.startDate;
+    let count = 0;
+    while(cur <= monthEnd && cur <= until && count < countLimit && safety++ < 2000){
+      if(cur >= monthStart && !exDates.has(cur)) result.push(buildEventInstance(base, cur));
+      cur = addDateDays(cur, interval);
+      count++;
+    }
+  }else if(freq === 'WEEKLY'){
+    let cur = base.startDate;
+    let count = 0;
+    const validDays = bydays || [weekdayCode(base.startDate)];
+    while(cur <= monthEnd && cur <= until && count < countLimit && safety++ < 2000){
+      const weekStart = addDateDays(cur, -((dateFromIso(cur).getDay()+6)%7));
+      validDays.forEach(code=>{
+        const idx = {MO:0,TU:1,WE:2,TH:3,FR:4,SA:5,SU:6}[code] ?? 0;
+        const d = addDateDays(weekStart, idx);
+        if(d >= base.startDate && d >= monthStart && d <= monthEnd && d <= until && !exDates.has(d)) result.push(buildEventInstance(base, d));
+      });
+      cur = addDateDays(cur, interval*7);
+      count++;
+    }
+  }else if(freq === 'MONTHLY'){
+    let cur = base.startDate;
+    let count = 0;
+    while(cur <= monthEnd && cur <= until && count < countLimit && safety++ < 500){
+      if(cur >= monthStart && !exDates.has(cur)) result.push(buildEventInstance(base, cur));
+      cur = addMonths(cur, interval);
+      count++;
+    }
+  }else{
+    if(base.startDate >= monthStart && base.startDate <= monthEnd && !exDates.has(base.startDate)) result.push(buildEventInstance(base, base.startDate));
+  }
+  return result.sort((a,b)=>a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime));
+}
+function parseIcsEvents(text){
+  const lines = unfoldIcs(text);
+  const events = [];
+  let current = null;
+  lines.forEach(line=>{
+    if(line === 'BEGIN:VEVENT') current = [];
+    else if(line === 'END:VEVENT'){
+      if(current) events.push(current);
+      current = null;
+    }else if(current){
+      const prop = parseProp(line);
+      if(prop) current.push(prop);
+    }
+  });
+
+  const [y,m] = state.calendarMonth.split('-').map(Number);
+  const monthStart = `${y}-${pad2(m)}-01`;
+  const monthEnd = toISO(new Date(y, m, 0));
+  const output = [];
+
+  events.forEach(props=>{
+    const get = name => props.find(p=>p.name===name);
+    const start = parseIcsDate(get('DTSTART'));
+    if(!start) return;
+    const end = parseIcsDate(get('DTEND'));
+    const summary = unescapeIcs(get('SUMMARY')?.value || 'Googleカレンダー予定');
+    const uid = unescapeIcs(get('UID')?.value || summary);
+    let duration = DAY_MINUTES;
+    if(!start.allDay){
+      const startMin = minutesFromTime(start.time);
+      let endMin = end?.date === start.date ? minutesFromTime(end.time) : (end ? minutesFromTime(end.time) + DAY_MINUTES : startMin + 60);
+      duration = Math.max(15, snap15(endMin - startMin));
+    }
+    const base = { uid, summary, startDate:start.date, startTime:start.time, duration, allDay:start.allDay };
+    const exDates = parseExDates(props);
+    const rrule = get('RRULE')?.value;
+    if(rrule){
+      output.push(...expandRecurring(base, rrule, exDates, monthStart, monthEnd));
+    }else{
+      if(start.allDay && end?.date){
+        let cur = start.date;
+        const last = addDateDays(end.date, -1);
+        while(cur <= last){
+          if(cur >= monthStart && cur <= monthEnd && !exDates.has(cur)) output.push(buildEventInstance(base, cur));
+          cur = addDateDays(cur, 1);
+        }
+      }else if(start.date >= monthStart && start.date <= monthEnd && !exDates.has(start.date)){
+        output.push(buildEventInstance(base, start.date));
+      }
+    }
+  });
+
+  const seen = new Set();
+  return output
+    .filter(e=>{
+      const key = `${e.date}|${e.startTime}|${e.duration}|${e.summary}`;
+      if(seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort((a,b)=>a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime));
+}
+function renderIcsPreview(){
+  const box = $('icsPreview');
+  const actions = $('icsImportActions');
+  if(!box || !actions) return;
+  if(!icsPreviewEvents.length){
+    box.innerHTML = '<div class="empty">読み込んだ予定はありません。</div>';
+    actions.classList.add('hidden');
+    return;
+  }
+  actions.classList.remove('hidden');
+  box.innerHTML = `<div class="icsPreviewList">${icsPreviewEvents.map((e,i)=>`
+    <label class="icsItem">
+      <input type="checkbox" data-ics-index="${i}" checked>
+      <span class="icsDate">${esc(e.date)}</span>
+      <span class="icsTime">${e.allDay ? '終日' : `${esc(e.startTime)}〜${esc(e.endTime)}`}</span>
+      <b>${esc(e.summary)}</b>
+    </label>`).join('')}</div>`;
+}
+async function loadIcsFile(){
+  const input = $('icsFileInput');
+  const file = input?.files?.[0];
+  if(!file) return alert('.icsファイルを選んでください');
+  try{
+    const text = await file.text();
+    icsPreviewEvents = parseIcsEvents(text);
+    renderIcsPreview();
+    showIcsMsg(`${icsPreviewEvents.length}件の予定を読み込みました。取り込む予定にチェックを入れてください。`);
+  }catch(e){
+    console.error(e);
+    showIcsMsg(e.message || '.icsの読み込みに失敗しました', true);
+  }
+}
+async function importSelectedIcs(){
+  const checks = [...document.querySelectorAll('[data-ics-index]:checked')];
+  if(!checks.length) return alert('取り込む予定を選んでください');
+  let created = 0, skipped = 0;
+  for(const chk of checks){
+    const ev = icsPreviewEvents[Number(chk.dataset.icsIndex)];
+    if(!ev) continue;
+    const exists = taskArray().some(t=>
+      t.owner_id===state.user.id &&
+      isUnavailableTask(t) &&
+      t.schedule_date===ev.date &&
+      String(t.start_time||'00:00').slice(0,5)===ev.startTime &&
+      Number(t.estimated_minutes||0)===Number(ev.duration||0) &&
+      String(t.memo||'').includes(ev.summary)
+    );
+    if(exists){ skipped++; continue; }
+    await createTask({
+      team_id:state.team.id,
+      owner_id:state.user.id,
+      created_by:state.user.id,
+      title: ev.allDay ? '終日稼働不可' : '稼働不可時間',
+      category:'稼働不可',
+      project:'Googleカレンダー',
+      task_type:'',
+      estimated_minutes: ev.duration,
+      start_time: ev.startTime,
+      schedule_date: ev.date,
+      due_date: ev.date,
+      occurrence:'single',
+      status:'scheduled',
+      memo: ev.summary || 'Googleカレンダー予定',
+      sort_order:Date.now()*-1 - created
+    });
+    created++;
+  }
+  await refreshAll();
+  showIcsMsg(`${created}件を稼働不可として取り込みました。${skipped ? `重複っぽい予定 ${skipped}件はスキップしました。` : ''}`);
+}
+
 export function initCalendarEvents(){
   $('calendarMonth').addEventListener('change',()=>{ state.calendarMonth = $('calendarMonth').value; renderCalendar(); });
   $('calendarThisMonth').addEventListener('click',()=>{ state.calendarMonth = new Date().toISOString().slice(0,7); renderCalendar(); });
+  $('icsParseBtn')?.addEventListener('click', loadIcsFile);
+  $('icsFileInput')?.addEventListener('change', loadIcsFile);
+  $('icsSelectAllBtn')?.addEventListener('click',()=>document.querySelectorAll('[data-ics-index]').forEach(c=>c.checked=true));
+  $('icsClearAllBtn')?.addEventListener('click',()=>document.querySelectorAll('[data-ics-index]').forEach(c=>c.checked=false));
+  $('icsImportBtn')?.addEventListener('click', importSelectedIcs);
   $('openProfileFromCalendar')?.addEventListener('click',()=>{ import('./app.js').then(m=>m.showView('profile')); });
   $('unavailableAllDay')?.addEventListener('change',()=>{
     const allDay = $('unavailableAllDay').checked;
