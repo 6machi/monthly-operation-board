@@ -1,9 +1,9 @@
-import { $, esc, todayISO, addDays, fmtDate, diffDays, relativeFrom, taskOccursOnDate, occurrenceLabel, fullClock, minutesFromTime } from './utils.js?v=51';
-import { state } from './state.js?v=51';
-import { createTask, markCarryover, returnToSchedule, updateTask, deleteTask } from './tasks.js?v=51';
-import { refreshAll, showView } from './app.js?v=51';
-import { isUnavailableTask, isUnavailableForMember, unavailableBlocksForMember } from './calendar.js?v=51';
-import { updateMyProfile, loadMembers } from './auth.js?v=51';
+import { $, esc, todayISO, addDays, fmtDate, diffDays, relativeFrom, taskOccursOnDate, occurrenceLabel, fullClock, minutesFromTime } from './utils.js?v=53';
+import { state } from './state.js?v=53';
+import { createTask, markCarryover, returnToSchedule, updateTask, deleteTask } from './tasks.js?v=53';
+import { refreshAll, showView } from './app.js?v=53';
+import { isUnavailableTask, isUnavailableForMember, unavailableBlocksForMember } from './calendar.js?v=53';
+import { updateMyProfile, loadMembers } from './auth.js?v=53';
 
 const SLOT_MINUTES = 15;
 const PX_PER_MINUTE = 1.15; // 15分 = 約17px / 60分 = 約69px
@@ -886,7 +886,11 @@ function showSleepSaveMessage(text, error=false){
 }
 
 async function saveBoardSleepSettings(){
-  if(!isEditable()) return alert('他メンバーの睡眠時間は変更できません');
+  let switchedToMe = false;
+  if(state.user && state.selectedMemberId !== state.user.id){
+    state.selectedMemberId = state.user.id;
+    switchedToMe = true;
+  }
   const start = ($('boardSleepStart')?.value || '02:00').slice(0,5);
   const end = ($('boardSleepEnd')?.value || '09:00').slice(0,5);
   try{
@@ -899,7 +903,7 @@ async function saveBoardSleepSettings(){
     });
     state.profile = updated;
     state.members = await loadMembers(state.team.id);
-    showSleepSaveMessage('睡眠時間を保存しました');
+    showSleepSaveMessage(switchedToMe ? '自分のタイムラインに戻して、睡眠時間を保存しました' : '睡眠時間を保存しました');
     renderBoard();
   }catch(e){
     console.error(e);
@@ -931,9 +935,15 @@ export function renderBoard(){
       let unavailable = false;
       try{ unavailable = isUnavailableForMember(state.scheduleDate, state.selectedMemberId); }catch(e){ console.warn('終日稼働不可の判定をスキップしました', e); }
       const mine = isEditable();
-      boardNoticeEl.textContent = unavailable
-        ? 'この日は終日稼働不可です。毎日タスクや分割タスクは表示されません。'
-        : (mine ? '自分の今日やることです。編集できます。' : '他メンバーの今日やることです。閲覧中心です。');
+      if(unavailable){
+        boardNoticeEl.textContent = 'この日は終日稼働不可です。毎日タスクや分割タスクは表示されません。';
+      }else if(mine){
+        boardNoticeEl.textContent = '自分の今日やることです。編集できます。';
+      }else{
+        boardNoticeEl.innerHTML = '他メンバーの今日やることです。閲覧中心です。 <button type="button" class="ghost miniInlineBtn" id="backToMyBoardBtn">自分の予定に戻る</button>';
+        const backBtn = $('backToMyBoardBtn');
+        if(backBtn) backBtn.onclick = ()=>{ state.selectedMemberId = state.user.id; renderBoard(); };
+      }
     }
 
     try{ renderActivitySummary(); }catch(e){ console.warn('activity summary skipped', e); }

@@ -611,3 +611,6 @@ h2 .infoDot,h3 .infoDot,summary .infoDot,small .infoDot{margin-left:6px}
 .sleepTool .compactActions{justify-content:flex-start;margin-top:8px}
 .sleepTool #saveBoardSleepBtn{min-width:220px;box-shadow:0 8px 18px rgba(38,48,68,.12)}
 @media(max-width:650px){.sleepTool #saveBoardSleepBtn{width:100%;min-width:0}}
+
+/* v53 */
+.miniInlineBtn{margin-left:8px;padding:5px 9px;font-size:12px;vertical-align:middle}

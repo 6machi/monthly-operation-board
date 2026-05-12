@@ -1,12 +1,12 @@
-import { isConfigured } from './supabase-client.js?v=52';
-import { getSession, signIn, signUp, signOut, ensureProfileAndTeam, loadMembers } from './auth.js?v=52';
-import { loadTasks } from './tasks.js?v=52';
-import { loadTree } from './setup.js?v=52';
-import { state } from './state.js?v=52';
-import { $, qsa, todayISO, nowTimeText, fmtDate } from './utils.js?v=52';
-import { initBoardEvents, renderBoard } from './board.js?v=52';
-import { initCalendarEvents, renderCalendar } from './calendar.js?v=52';
-import { initSetupEvents, renderSetup, renderProfilePage } from './setup-view.js?v=52';
+import { isConfigured } from './supabase-client.js?v=53';
+import { getSession, signIn, signUp, signOut, ensureProfileAndTeam, loadMembers } from './auth.js?v=53';
+import { loadTasks } from './tasks.js?v=53';
+import { loadTree } from './setup.js?v=53';
+import { state } from './state.js?v=53';
+import { $, qsa, todayISO, nowTimeText, fmtDate } from './utils.js?v=53';
+import { initBoardEvents, renderBoard } from './board.js?v=53';
+import { initCalendarEvents, renderCalendar } from './calendar.js?v=53';
+import { initSetupEvents, renderSetup, renderProfilePage } from './setup-view.js?v=53';
 
 function safeGet(id){ return document.getElementById(id); }
 function safeOn(id, event, fn){
@@ -42,6 +42,9 @@ function renderHero(){
   if(timeEl) timeEl.textContent = nowTimeText();
 }
 function renderMemberTabs(){
+  if(state.user && (!state.selectedMemberId || !state.members.some(m=>m.id===state.selectedMemberId))){
+    state.selectedMemberId = state.user.id;
+  }
   const html = state.members.map(m=>`<button class="memberTab ${m.id===state.selectedMemberId?'active':''}" data-member="${m.id}" style="--member-color:${m.color || '#5d9cec'}"><span>${m.emoji || '🌙'}</span>${m.name}</button>`).join('');
   const boardTabs = safeGet('memberTabs');
   const setupTabs = safeGet('setupMemberTabs');
@@ -69,7 +72,9 @@ async function bootAuthed(session){
   const result = await ensureProfileAndTeam(state.user);
   state.profile = result.profile; state.team = result.team;
   state.members = await loadMembers(state.team.id);
-  state.selectedMemberId = state.selectedMemberId || state.user.id;
+  // ログイン直後は必ず本人のタブに戻す。
+  // 前の操作で他メンバーを見ていた状態が残ると、自分の予定が消えたように見えるため。
+  state.selectedMemberId = state.user.id;
   const treeResult = await loadTree(state.team.id, state.user.id);
   state.treeRowId = treeResult.id; state.tree = treeResult.tree;
   state.tasks = await loadTasks(state.team.id);
