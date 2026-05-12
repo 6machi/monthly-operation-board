@@ -1,9 +1,9 @@
-import { $, esc, todayISO, addDays, fmtDate, diffDays, relativeFrom, taskOccursOnDate, occurrenceLabel, fullClock, minutesFromTime } from './utils.js?v=54';
-import { state } from './state.js?v=54';
-import { createTask, markCarryover, returnToSchedule, updateTask, deleteTask } from './tasks.js?v=54';
-import { refreshAll, showView } from './app.js?v=54';
-import { isUnavailableTask, isUnavailableForMember, unavailableBlocksForMember } from './calendar.js?v=54';
-import { updateMyProfile, loadMembers } from './auth.js?v=54';
+import { $, esc, todayISO, addDays, fmtDate, diffDays, relativeFrom, taskOccursOnDate, occurrenceLabel, fullClock, minutesFromTime } from './utils.js?v=55';
+import { state } from './state.js?v=55';
+import { createTask, markCarryover, returnToSchedule, updateTask, deleteTask } from './tasks.js?v=55';
+import { refreshAll, showView } from './app.js?v=55';
+import { isUnavailableTask, isUnavailableForMember, unavailableBlocksForMember } from './calendar.js?v=55';
+import { updateMyProfile, loadMembers } from './auth.js?v=55';
 
 const SLOT_MINUTES = 15;
 const PX_PER_MINUTE = 1.15; // 15分 = 約17px / 60分 = 約69px
@@ -181,10 +181,33 @@ function taskStartMinutes(t, index=0){
 function timeLabel(min){ return timeLabelWrap(snapMinutes(min)); }
 function isEditable(){ return !!state.user && state.selectedMemberId === state.user.id; }
 
+function sleepOverrideKey(date=state.scheduleDate){
+  const uid = state.selectedMemberId || state.user?.id || 'unknown';
+  return `task-kanri:sleep-override:${uid}:${date || todayISO()}`;
+}
+function getTodaySleepOverride(){
+  try{
+    if(!state.user || state.selectedMemberId !== state.user.id) return null;
+    const raw = localStorage.getItem(sleepOverrideKey(state.scheduleDate));
+    if(!raw) return null;
+    const parsed = JSON.parse(raw);
+    if(!parsed?.start || !parsed?.end) return null;
+    return { start:String(parsed.start).slice(0,5), end:String(parsed.end).slice(0,5) };
+  }catch(_e){ return null; }
+}
+function setTodaySleepOverride(start, end){
+  localStorage.setItem(sleepOverrideKey(state.scheduleDate), JSON.stringify({ start:String(start).slice(0,5), end:String(end).slice(0,5), updated_at:new Date().toISOString() }));
+}
+function clearTodaySleepOverride(){
+  try{ localStorage.removeItem(sleepOverrideKey(state.scheduleDate)); }catch(_e){}
+}
+
 function selectedMember(){
   return memberArray().find(m=>m.id===state.selectedMemberId) || state.profile || {};
 }
 function memberSleep(){
+  const override = getTodaySleepOverride();
+  if(override) return override;
   const member = selectedMember();
   const own = state.selectedMemberId === state.user?.id ? state.profile || {} : {};
   const start = String(member.sleepStart || own.sleep_start_time || '02:00').slice(0,5);
@@ -903,33 +926,14 @@ function renderActivitySummary(){
   const savedWorkStart = getWorkStartTime(state.scheduleDate);
   const currentBase = savedWorkStart ? minutesFromTime(savedWorkStart) : (new Date().getHours()*60 + new Date().getMinutes());
 
-  // 今日の自由作業時間は、現在時刻以降だけざっくり表示します。
-  // 仕事時間は「仕事カテゴリ専用枠」なので、自由時間とは別枠で見ます。
-  const freeTodayMin = state.scheduleDate === todayISO()
-    ? Math.max(0, freeDayMin - Math.min(freeDayMin, Math.max(0, currentBase - 0) * 0))
-    : freeDayMin;
-
-  const [,m] = String(state.scheduleDate || todayISO()).split('-').map(Number);
-  const remainingMonthDates = monthDatesFrom(state.scheduleDate).filter(d => d >= state.scheduleDate);
-  const monthFreeMin = remainingMonthDates.reduce((sum,d)=>{ try{ return sum+availableMinutesForDate(d, memberId); }catch(_e){ return sum; } },0);
-
-  let dayTasks = [];
-  try{ dayTasks = timelineTasks(); }catch(e){ console.warn('timeline task calculation failed', e); dayTasks = []; }
-  const workTaskMin = dayTasks.filter(t=>isWorkTask(t, memberId)).reduce((sum,t)=>sum+taskDuration(t),0);
-  const freeTaskMin = dayTasks.filter(t=>!isWorkTask(t, memberId)).reduce((sum,t)=>sum+taskDuration(t),0);
-  const freeRemainMin = Math.max(0, freeTodayMin - freeTaskMin);
-  const overtimeMin = Math.max(0, workTaskMin - workDayMin);
-  const workRemainMin = Math.max(0, workDayMin - workTaskMin);
-  const overtimeText = overtimeMin > 0 ? `残業 ${formatHours(overtimeMin)}必要` : `残業不要 / 余白 ${formatHours(workRemainMin)}`;
-  const dayWord = state.scheduleDate === todayISO() ? '今日' : fmtDate(state.scheduleDate);
+  const [y,m] = String(state.scheduleDate || todayISO()).split('-').map(Number);
+  const monthAllDates = Array.from({length:new Date(y, m, 0).getDate()}, (_,i)=>`${y}-${String(m).padStart(2,'0')}-${String(i+1).padStart(2,'0')}`);
+  const monthFreeMin = monthAllDates.reduce((sum,d)=>{ try{ return sum+availableMinutesForDate(d, memberId); }catch(_e){ return sum; } },0);
+  const dateLabel = fmtDate(state.scheduleDate);
 
   box.innerHTML = `
-    <div class="activityCard"><b>${formatHours(freeTodayMin)}</b><span>${dayWord}の自由作業時間</span></div>
-    <div class="activityCard"><b>${formatHours(monthFreeMin)}</b><span>${m}月の残り自由作業時間（残り${remainingMonthDates.length}日）</span></div>
-    <div class="activityCard work"><b>${formatHours(workDayMin)}</b><span>${dayWord}の仕事時間</span></div>
-    <div class="activityCard work"><b>${formatHours(workTaskMin)}</b><span>仕事タスク予定 / ${overtimeText}</span></div>
-    <div class="activityCard"><b>${formatHours(freeTaskMin)}</b><span>${dayWord}の自由タスク予定時間</span></div>
-    <div class="activityCard"><b>${formatHours(freeRemainMin)}</b><span>${dayWord}の自由余白時間</span></div>`;
+    <div class="activityCard"><b>${formatHours(freeDayMin)}</b><span>${dateLabel}の作業時間</span></div>
+    <div class="activityCard"><b>${formatHours(monthFreeMin)}</b><span>${m}月の作業時間</span></div>`;
 }
 
 function renderWorkStartStatus(){
@@ -963,35 +967,29 @@ function showSleepSaveMessage(text, error=false){
 }
 
 async function saveBoardSleepSettings(){
-  let switchedToMe = false;
   if(state.user && state.selectedMemberId !== state.user.id){
     state.selectedMemberId = state.user.id;
-    switchedToMe = true;
   }
   const start = ($('boardSleepStart')?.value || '02:00').slice(0,5);
   const end = ($('boardSleepEnd')?.value || '09:00').slice(0,5);
   try{
-    const updated = await updateMyProfile({
-      display_name: state.profile?.display_name || '自分',
-      display_emoji: state.profile?.display_emoji || '🌙',
-      display_color: state.profile?.display_color || '#5d9cec',
-      sleep_start_time: start,
-      sleep_end_time: end,
-      work_enabled: !!state.profile?.work_enabled,
-      work_start_time: state.profile?.work_start_time || '10:00',
-      work_end_time: state.profile?.work_end_time || '19:00',
-      work_days: Array.isArray(state.profile?.work_days) ? state.profile.work_days : [1,2,3,4,5],
-      work_category: state.profile?.work_category || '仕事'
-    });
-    state.profile = updated;
-    state.members = await loadMembers(state.team.id);
-    showSleepSaveMessage(switchedToMe ? '自分のタイムラインに戻して、睡眠時間を保存しました' : '睡眠時間を保存しました');
+    setTodaySleepOverride(start, end);
+    showSleepSaveMessage('今日の睡眠時間をタイムラインに反映しました');
     renderBoard();
   }catch(e){
-    console.error(e);
-    showSleepSaveMessage(e.message || '睡眠時間の保存に失敗しました', true);
+    showSleepSaveMessage(e.message || '今日の睡眠時間の反映に失敗しました', true);
   }
 }
+
+function resetBoardSleepSettings(){
+  if(state.user && state.selectedMemberId !== state.user.id){
+    state.selectedMemberId = state.user.id;
+  }
+  clearTodaySleepOverride();
+  showSleepSaveMessage('今日の睡眠時間をデフォルトに戻しました');
+  renderBoard();
+}
+
 
 export function renderBoard(){
   try{
@@ -1211,6 +1209,7 @@ export function initBoardEvents(){
     try{ await redistributeDailyTasksFromToday(); }catch(e){ console.error(e); showOrganizeMessage(e.message || '毎日タスクの分け直しに失敗しました', true); }
   });
   $('saveBoardSleepBtn')?.addEventListener('click', saveBoardSleepSettings);
+  $('resetBoardSleepBtn')?.addEventListener('click', resetBoardSleepSettings);
   $('quickCategory')?.addEventListener('change', renderQuickSelectors);
   $('quickProject')?.addEventListener('change', renderQuickSelectors);
   $('quickCandidate')?.addEventListener('change', ()=>{ const v=$('quickCandidate')?.value; if(v && v !== '候補から選ぶ') $('quickTitle').value = v; });

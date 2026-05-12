@@ -85,13 +85,14 @@
               </div>
             </details>
             <details class="panelDetails compactTool sleepTool" open>
-              <summary>睡眠時間 <button class="infoDot" type="button" data-info="寝る時間〜起きる時間は、タイムライン上で灰色のすいみん予定として表示されます。活動可能時間の計算にも使います。">i</button></summary>
+              <summary>今日の睡眠時間 <button class="infoDot" type="button" data-info="今日だけ寝る時間・起きる時間をデフォルトからずらしたいときに使います。タイムライン上では灰色のすいみん予定として表示されます。">i</button></summary>
               <div class="form two compactForm">
                 <label><small>寝る時間</small><input type="time" step="900" id="boardSleepStart" value="02:00"></label>
                 <label><small>起きる時間</small><input type="time" step="900" id="boardSleepEnd" value="09:00"></label>
               </div>
               <div class="actions compactActions">
-                <button class="primary" type="button" id="saveBoardSleepBtn">保存してタイムラインに反映</button>
+                <button class="primary" type="button" id="saveBoardSleepBtn">今日だけ反映</button>
+                <button class="ghost" type="button" id="resetBoardSleepBtn">デフォルトに戻す</button>
               </div>
               <div id="sleepSaveMsg" class="notice hidden"></div>
               <div id="planMsg" class="notice ok"></div>
@@ -177,14 +178,14 @@
             <label><small>自分の色</small><input id="profileColor" type="color" value="#5d9cec" aria-label="自分の色"></label>
           </div>
           <div class="sectionline sleepSettingsBlock">
-            <h3>すいみん時間 <button class="infoDot" type="button" data-info="デフォルトは 02:00〜09:00。タイムライン上では灰色の予定として表示します。">i</button></h3>
+            <h3>基本的な睡眠時間の設定 <button class="infoDot" type="button" data-info="デフォルトの睡眠時間を設定できます。タイムラインに自動でこの睡眠時間が反映されます。">i</button></h3>
             <div class="form two">
               <label><small>寝る時間</small><input id="profileSleepStart" type="time" step="900" value="02:00"></label>
               <label><small>起きる時間</small><input id="profileSleepEnd" type="time" step="900" value="09:00"></label>
             </div>
           </div>
           <div class="sectionline workSettingsBlock">
-            <h3>仕事時間 <button class="infoDot" type="button" data-info="仕事時間は自由作業時間から除外します。この時間には、指定した仕事カテゴリのタスクだけ入れられます。仕事時間がない人はOFFにできます。">i</button></h3>
+            <h3>基本的な仕事時間の設定 <button class="infoDot" type="button" data-info="デフォルトの仕事時間を設定できます。タイムラインに自動でこの勤務時間が反映されます。仕事時間がない人はOFFにできます。">i</button></h3>
             <label class="toggleLine"><input id="profileWorkEnabled" type="checkbox"> 仕事時間を使う</label>
             <div class="form three">
               <label><small>仕事開始</small><input id="profileWorkStart" type="time" step="900" value="10:00"></label>
@@ -279,6 +280,6 @@
   </template>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script type="module" src="js/app.js?v=54"></script>
+  <script type="module" src="js/app.js?v=55"></script>
 </body>
 </html>
