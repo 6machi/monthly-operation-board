@@ -1,12 +1,12 @@
-import { isConfigured } from './supabase-client.js?v=57';
-import { getSession, signIn, signUp, signOut, ensureProfileAndTeam, loadMembers } from './auth.js?v=57';
-import { loadTasks } from './tasks.js?v=57';
-import { loadTree } from './setup.js?v=57';
-import { state } from './state.js?v=57';
-import { $, qsa, todayISO, nowTimeText, fmtDate } from './utils.js?v=57';
-import { initBoardEvents, renderBoard } from './board.js?v=57';
-import { initCalendarEvents, renderCalendar } from './calendar.js?v=57';
-import { initSetupEvents, renderSetup, renderProfilePage } from './setup-view.js?v=57';
+import { isConfigured } from './supabase-client.js?v=58';
+import { getSession, signIn, signUp, signOut, ensureProfileAndTeam, loadMembers } from './auth.js?v=58';
+import { loadTasks } from './tasks.js?v=58';
+import { loadTree } from './setup.js?v=58';
+import { state } from './state.js?v=58';
+import { $, qsa, todayISO, nowTimeText, fmtDate } from './utils.js?v=58';
+import { initBoardEvents, renderBoard } from './board.js?v=58';
+import { initCalendarEvents, renderCalendar } from './calendar.js?v=58';
+import { initSetupEvents, renderSetup, renderProfilePage } from './setup-view.js?v=58';
 
 function safeGet(id){ return document.getElementById(id); }
 function safeOn(id, event, fn){
@@ -140,13 +140,8 @@ function bindCommonEvents(){
     e.preventDefault();
     e.stopPropagation();
   }, true);
-  document.addEventListener('click', (e)=>{
-    const input = e.target?.closest?.('input[type="date"], input[type="time"]');
-    if(!input || input.disabled) return;
-    if(typeof input.showPicker === 'function'){
-      try{ input.showPicker(); }catch(_e){}
-    }
-  }, true);
+  // 日付/時間入力は、クリックでネイティブUI、キーボードで直接入力の両方を使えるように、
+  // ここでは showPicker を強制しません。
   qsa('#mainNav button').forEach(btn=>btn.addEventListener('click',()=>showView(btn.dataset.view)));
 }
 function initFeatureEvents(){

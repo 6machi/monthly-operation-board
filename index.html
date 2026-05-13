@@ -75,10 +75,10 @@
               <div class="infoText hidden" id="workStartInfoText"><b id="workStartText">活動開始時間：未設定</b></div>
             </details>
             <details class="panelDetails compactTool organizeTool">
-              <summary>タスクを整理する <button class="infoDot" type="button" data-info="稼働不可・睡眠にかぶっている未完了タスクを、空いている時間へ並べ直します。">i</button></summary>
+              <summary>タスクを整理する <button class="infoDot" type="button" data-info="現在時刻以降の未完了タスクを、睡眠・仕事時間・稼働不可時間を避けて並べ直します。">i</button></summary>
               <div class="organizeBox">
                 <div class="organizeActions">
-                  <button class="ghost" type="button" id="reflowFromTodayBtn">表示日以降のタスクを並べ直す</button>
+                  <button class="ghost" type="button" id="reflowFromTodayBtn">現在時刻以降の未完了タスクを並べ直す</button>
                   <button class="ghost" type="button" id="reflowDailyTasksBtn">毎日タスクを今日から分け直す</button>
                 </div>
                 <div id="organizeMsg" class="notice hidden"></div>
@@ -101,18 +101,6 @@
           </section>
           <aside>
             <details class="panel sideDetails" open>
-              <summary>持ち越しタスク <button class="infoDot" type="button" data-info="タイムラインのタスクをここへドラッグすると、選択中の日付の持ち越しタスクになります。">i</button></summary>
-              <div class="carryNav simple">
-                <button class="carryMove" id="carryPrev" title="前の日へ">&lt;&lt;</button>
-                <span class="carryDateText" id="carryDateText">----/--/--</span>
-                <button class="carryMove" id="carryNext" title="次の日へ">&gt;&gt;</button>
-              </div>
-              <div class="dateHint" id="carryRelative">(明日)</div>
-              <div class="dropzone" id="carryDrop">
-                <div class="list" id="carryList"></div>
-              </div>
-            </details>
-            <details class="panel sideDetails" open>
               <summary>差し込みタスク <button class="infoDot" type="button" data-info="急に入った作業を、カテゴリ・プロジェクトを選んで今日のタスクとして追加できます。">i</button></summary>
               <div class="quickAddBox">
                 <div class="form two">
@@ -127,6 +115,18 @@
                 </div>
                 <label><small>メモ</small><textarea id="quickMemo" placeholder="確認先、注意点など"></textarea></label>
                 <button class="primary" id="quickAddBtn">今日に差し込む</button>
+              </div>
+            </details>
+            <details class="panel sideDetails" open>
+              <summary>持ち越しタスク <button class="infoDot" type="button" data-info="タイムラインのタスクをここへドラッグすると、選択中の日付の持ち越しタスクになります。">i</button></summary>
+              <div class="carryNav simple">
+                <button class="carryMove" id="carryPrev" title="前の日へ">&lt;&lt;</button>
+                <span class="carryDateText" id="carryDateText">----/--/--</span>
+                <button class="carryMove" id="carryNext" title="次の日へ">&gt;&gt;</button>
+              </div>
+              <div class="dateHint" id="carryRelative">(明日)</div>
+              <div class="dropzone" id="carryDrop">
+                <div class="list" id="carryList"></div>
               </div>
             </details>
           </aside>
@@ -280,6 +280,6 @@
   </template>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script type="module" src="js/app.js?v=57"></script>
+  <script type="module" src="js/app.js?v=58"></script>
 </body>
 </html>

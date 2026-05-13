@@ -1,9 +1,9 @@
-import { $, esc, todayISO, addDays, fmtDate, diffDays, relativeFrom, taskOccursOnDate, occurrenceLabel, fullClock, minutesFromTime } from './utils.js?v=57';
-import { state } from './state.js?v=57';
-import { createTask, markCarryover, returnToSchedule, updateTask, deleteTask } from './tasks.js?v=57';
-import { refreshAll, showView } from './app.js?v=57';
-import { isUnavailableTask, isUnavailableForMember, unavailableBlocksForMember } from './calendar.js?v=57';
-import { updateMyProfile, loadMembers } from './auth.js?v=57';
+import { $, esc, todayISO, addDays, fmtDate, diffDays, relativeFrom, taskOccursOnDate, occurrenceLabel, fullClock, minutesFromTime } from './utils.js?v=58';
+import { state } from './state.js?v=58';
+import { createTask, markCarryover, returnToSchedule, updateTask, deleteTask } from './tasks.js?v=58';
+import { refreshAll, showView } from './app.js?v=58';
+import { isUnavailableTask, isUnavailableForMember, unavailableBlocksForMember } from './calendar.js?v=58';
+import { updateMyProfile, loadMembers } from './auth.js?v=58';
 
 const SLOT_MINUTES = 15;
 const PX_PER_MINUTE = 1.15; // 15分 = 約17px / 60分 = 約69px
@@ -491,12 +491,19 @@ function showOrganizeMessage(text, error=false){
 }
 async function reflowTasksAvoidingUnavailable(){
   if(!isEditable()) return alert('自分のタスクだけ整理できます');
-  const startDate = state.scheduleDate || todayISO();
+  const now = new Date();
+  const startDate = todayISO();
+  const currentMin = snapMinutes(now.getHours()*60 + now.getMinutes());
   const endDate = monthEndIso(startDate);
   const ownerId = state.selectedMemberId || state.user.id;
   const movable = selectedTasks()
     .filter(t=>t && t.id && !isUnavailableTask(t) && (t.occurrence || 'single') === 'single')
     .filter(t=>diffDays(effectiveTaskDate(t), startDate) >= 0 && diffDays(effectiveTaskDate(t), endDate) <= 0)
+    .filter(t=>{
+      const d = effectiveTaskDate(t);
+      if(d !== startDate) return true;
+      return taskStartMinutes(t,0) + taskDuration(t) >= currentMin;
+    })
     .sort((a,b)=>{
       const da = effectiveTaskDate(a), db = effectiveTaskDate(b);
       if(da!==db) return da.localeCompare(db);
@@ -519,7 +526,7 @@ async function reflowTasksAvoidingUnavailable(){
     for(const date of dateRangeInclusive(searchStart, due)){
       if(isWholeDayBlocked(date, ownerId)) continue;
       const busy = busyFor(date);
-      const preferred = date===original ? taskStartMinutes(t,0) : minutesFromTime(memberSleep().end || '09:00');
+      const preferred = date===startDate ? Math.max(taskStartMinutes(t,0), currentMin) : (date===original ? taskStartMinutes(t,0) : minutesFromTime(memberSleep().end || '09:00'));
       const slot = findSlotWithBusy(preferred, duration, busy);
       if(slot !== null){
         placed = { date, start:slot };
@@ -535,7 +542,7 @@ async function reflowTasksAvoidingUnavailable(){
       moved++;
     }
   }
-  showOrganizeMessage(`${moved}件を稼働不可・睡眠を避けて並べ直しました。${skipped ? ` ${skipped}件は空き枠が見つかりませんでした。` : ''}`, !!skipped);
+  showOrganizeMessage(`${moved}件を現在時刻以降の空き時間へ並べ直しました。${skipped ? ` ${skipped}件は空き枠が見つかりませんでした。` : ''}`, !!skipped);
   await refreshAll();
 }
 async function redistributeDailyTasksFromToday(){
@@ -753,6 +760,7 @@ function makeEventElement(t, index, baseMin, instanceDate=state.scheduleDate, ab
     </div>
     <div class="eventMeta">${occurrenceLabel(t.occurrence)}</div>
     <div class="eventActions">
+      <button type="button" class="eventMoveBtn" title="つかんで移動">↕ 移動</button>
       <button type="button" class="eventCompleteBtn">✓ 完了</button>
       <button type="button" class="eventEditBtn">修正</button>
     </div>
@@ -868,9 +876,10 @@ function makeEventElement(t, index, baseMin, instanceDate=state.scheduleDate, ab
     renderBoard();
   };
 
-  el.addEventListener('pointerdown', e=>{
+  el.querySelector('.eventMoveBtn')?.addEventListener('pointerdown', e=>begin(e, false));
+  el.addEventListener('click', e=>{
     if(e.target.closest('button,.resizeHandle')) return;
-    begin(e, false);
+    openTaskEditor(t);
   });
   el.querySelector('.resizeHandle').addEventListener('pointerdown', e=>begin(e, true));
 
@@ -1167,7 +1176,7 @@ export function renderTimeline(){
   const dropHint = document.createElement('div');
   dropHint.className = 'timelineHint';
   dropHint.textContent = isEditable()
-    ? '15分刻みで移動・伸縮できます / カードクリックで修正 / 持ち越し欄へ放すと持ち越し'
+    ? '「↕ 移動」をつかんで移動 / 下端で伸縮 / カードクリックで修正'
     : '他メンバーのタイムラインは閲覧のみです。';
 
   box.appendChild(axis);

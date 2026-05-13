@@ -642,3 +642,12 @@ h2 .infoDot,h3 .infoDot,summary .infoDot,small .infoDot{margin-left:6px}
 .taskEvent.moving,.taskEvent.resizing{transition:none!important;will-change:top,height;z-index:20;}
 .taskEvent.moving{outline:2px solid rgba(245,166,35,.35);outline-offset:2px;}
 .taskEvent.resizing{outline:2px solid rgba(93,156,236,.35);outline-offset:2px;}
+
+
+/* v58: timeline operation and time input polish */
+.eventMoveBtn{cursor:grab;background:#f5f7fb;color:#4d596d;border:1px solid var(--line);box-shadow:none}
+.taskEvent.moving .eventMoveBtn{cursor:grabbing}
+.taskEvent{touch-action:auto}
+.taskEvent .eventMain{cursor:pointer}
+.taskEvent .resizeHandle{cursor:ns-resize}
+input[type="time"], input[type="date"]{min-height:42px}

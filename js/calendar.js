@@ -1,8 +1,8 @@
-import { $, esc, toISO, todayISO, diffDays, taskOccursOnDate, minutesFromTime, fullClock, fmtDate } from './utils.js?v=57';
-import { state } from './state.js?v=57';
-import { openDateOnBoard, openTaskEditor } from './board.js?v=57';
-import { createTask, deleteTask, updateTask } from './tasks.js?v=57';
-import { refreshAll } from './app.js?v=57';
+import { $, esc, toISO, todayISO, diffDays, taskOccursOnDate, minutesFromTime, fullClock, fmtDate } from './utils.js?v=58';
+import { state } from './state.js?v=58';
+import { openDateOnBoard, openTaskEditor } from './board.js?v=58';
+import { createTask, deleteTask, updateTask } from './tasks.js?v=58';
+import { refreshAll } from './app.js?v=58';
 
 const DAY_MINUTES = 24 * 60;
 let selectedCalendarDate = todayISO();
