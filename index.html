@@ -47,8 +47,7 @@
     <section id="appView" class="hidden">
       <section id="board" class="view active">
         <div class="todayHero">
-          <div class="date" id="heroDate">----</div>
-          <div class="time" id="heroTime">--:--:--</div>
+          <div class="date dateTime" id="heroDate">----</div>
         </div>
         <div class="tabs" id="memberTabs"></div>
         <div id="boardNotice" class="notice ok"></div>
@@ -60,25 +59,11 @@
               <span class="scheduleTitle" id="scheduleTitle">今日のスケジュール</span>
               <button class="scheduleMove" id="scheduleNext" title="次の日へ">&gt;&gt;</button>
             </div>
-            <details class="panelDetails compactTool workStartTool">
-              <summary>活動開始時間 <button class="infoDot" type="button" data-info="現在時刻はそのまま表示します。ここに時間を入れると、その時間以降へ未完了タスクを並べ直します。睡眠時間・稼働不可時間は避けます。">i</button></summary>
-              <div class="workStartBox slim" id="workStartBox">
-                <label class="workStartTimeField">
-                  <small>活動開始時間</small>
-                  <input id="workStartInput" type="time" step="900">
-                </label>
-                <div class="workStartActions slim">
-                  <button class="primary" type="button" id="setWorkStartBtn">反映</button>
-                  <button class="ghost" type="button" id="clearWorkStartBtn">解除</button>
-                </div>
-              </div>
-              <div class="infoText hidden" id="workStartInfoText"><b id="workStartText">活動開始時間：未設定</b></div>
-            </details>
             <details class="panelDetails compactTool organizeTool">
-              <summary>タスクを整理する <button class="infoDot" type="button" data-info="現在時刻以降の未完了タスクを、睡眠・仕事時間・稼働不可時間を避けて並べ直します。">i</button></summary>
+              <summary>タスクを振り直す <button class="infoDot" type="button" data-info="今から先の未完了タスクを、睡眠・仕事時間・稼働不可時間を避けて入れ直します。">i</button></summary>
               <div class="organizeBox">
                 <div class="organizeActions">
-                  <button class="ghost" type="button" id="reflowFromTodayBtn">現在時刻以降の未完了タスクを並べ直す</button>
+                  <button class="primary" type="button" id="reflowFromTodayBtn">現在時刻以降でタスクを振り直す</button>
                   <button class="ghost" type="button" id="reflowDailyTasksBtn">毎日タスクを今日から分け直す</button>
                 </div>
                 <div id="organizeMsg" class="notice hidden"></div>
@@ -280,6 +265,6 @@
   </template>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script type="module" src="js/app.js?v=58"></script>
+  <script type="module" src="js/app.js?v=61"></script>
 </body>
 </html>

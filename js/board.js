@@ -1,9 +1,9 @@
-import { $, esc, todayISO, addDays, fmtDate, diffDays, relativeFrom, taskOccursOnDate, occurrenceLabel, fullClock, minutesFromTime } from './utils.js?v=58';
-import { state } from './state.js?v=58';
-import { createTask, markCarryover, returnToSchedule, updateTask, deleteTask } from './tasks.js?v=58';
-import { refreshAll, showView } from './app.js?v=58';
-import { isUnavailableTask, isUnavailableForMember, unavailableBlocksForMember } from './calendar.js?v=58';
-import { updateMyProfile, loadMembers } from './auth.js?v=58';
+import { $, esc, todayISO, addDays, fmtDate, diffDays, relativeFrom, taskOccursOnDate, occurrenceLabel, fullClock, minutesFromTime } from './utils.js?v=60';
+import { state } from './state.js?v=60';
+import { createTask, markCarryover, returnToSchedule, updateTask, deleteTask } from './tasks.js?v=60';
+import { refreshAll, showView } from './app.js?v=60';
+import { isUnavailableTask, isUnavailableForMember, unavailableBlocksForMember } from './calendar.js?v=60';
+import { updateMyProfile, loadMembers } from './auth.js?v=60';
 
 const SLOT_MINUTES = 15;
 const PX_PER_MINUTE = 1.15; // 15分 = 約17px / 60分 = 約69px
@@ -80,17 +80,7 @@ function earliestUnfinishedTaskStartHour(dateIso=state.scheduleDate){
   }catch(_e){ return null; }
 }
 function timelineBaseMinutes(){
-  if(state.scheduleDate === todayISO()){
-    const saved = getWorkStartTime(state.scheduleDate);
-    if(saved) return Math.floor(minutesFromTime(saved) / 60) * 60;
-    const now = new Date();
-    const currentHour = now.getHours() * 60;
-    const earliest = earliestUnfinishedTaskStartHour(state.scheduleDate);
-    // 起きた時間を設定するまでは、未完了の過去タスクが画面の遥か下に流れないように、
-    // 現在時刻の時台と未完了タスクの最初の時台のうち早い方から表示します。
-    return earliest == null ? currentHour : Math.min(currentHour, earliest);
-  }
-  return 0;
+  return timelineRange().base;
 }
 function wrapMinutes(min){ return ((Math.round(min) % DAY_MINUTES) + DAY_MINUTES) % DAY_MINUTES; }
 function timeLabelWrap(min){ return fullClock(wrapMinutes(min)); }
@@ -123,6 +113,7 @@ function selectedTasks(){
 }
 function timelineTasks(){ if(isUnavailableForMember(state.scheduleDate, state.selectedMemberId)) return []; return selectedTasks().filter(t => taskOccursOnDate(t, state.scheduleDate)); }
 function timelineTaskEntries(baseMin=timelineBaseMinutes()){
+  const rangeEnd = timelineEndMinutes();
   const entries = [];
   if(!state.selectedMemberId) return entries;
   for(let offset=0; offset<=1; offset++){
@@ -134,7 +125,7 @@ function timelineTaskEntries(baseMin=timelineBaseMinutes()){
       const duration = taskDuration(t);
       const absStart = offset * DAY_MINUTES + start;
       const absEnd = absStart + duration;
-      if(absEnd <= baseMin || absStart >= baseMin + DAY_MINUTES) return;
+      if(absEnd <= baseMin || absStart >= rangeEnd) return;
       entries.push({ t, dateIso, offset, absStart, duration, idx });
     });
   }
@@ -235,6 +226,28 @@ function memberSleepIntervals(){
   const duration = sleepDurationMinutes(start, end);
   return splitInterval(startMin, duration).map(part=>({ ...part, kind:'sleep', label:'すいみん', meta:`${start} - ${end}` }));
 }
+
+function awakeWindowForTimeline(){
+  const { start, end } = memberSleep();
+  const wake = snapMinutes(minutesFromTime(end || '09:00'));
+  let sleepStart = snapMinutes(minutesFromTime(start || '02:00'));
+  while(sleepStart <= wake) sleepStart += DAY_MINUTES;
+  return { start:wake, end:sleepStart };
+}
+function timelineRange(){
+  const awake = awakeWindowForTimeline();
+  let base = awake.start;
+  if(state.scheduleDate === todayISO()){
+    const now = new Date();
+    const nowMin = now.getHours()*60 + now.getMinutes();
+    const nowHour = Math.floor(nowMin / 60) * 60;
+    if(nowHour >= awake.start && nowHour < awake.end) base = nowHour;
+  }
+  const end = Math.max(base + 60, awake.end);
+  return { base, end, duration:end-base, awakeStart:awake.start, awakeEnd:awake.end };
+}
+function timelineEndMinutes(){ return timelineRange().end; }
+function timelineDurationMinutes(){ return timelineRange().duration; }
 
 function memberById(id){ return memberArray().find(m=>m.id===id) || null; }
 function memberWorkSettings(memberId=state.selectedMemberId){
@@ -780,6 +793,7 @@ function makeEventElement(t, index, baseMin, instanceDate=state.scheduleDate, ab
   el.querySelector('.eventEditBtn')?.addEventListener('click', (e)=>{
     e.preventDefault();
     e.stopPropagation();
+    selectTaskForCopy(t, el);
     openTaskEditor(t);
   });
 
@@ -821,7 +835,7 @@ function makeEventElement(t, index, baseMin, instanceDate=state.scheduleDate, ab
     if(mode === 'move'){
       // ドラッグ中に15分刻みへ吸着させると、カードが元の場所へ戻ろうとするように見えるため、
       // 移動中は指/カーソルに素直についてきて、離した瞬間だけ15分単位に丸めます。
-      const rawTop = Math.max(0, Math.min(DAY_MINUTES * PX_PER_MINUTE - originalHeight, originalTop + dy));
+      const rawTop = Math.max(0, Math.min(timelineDurationMinutes() * PX_PER_MINUTE - originalHeight, originalTop + dy));
       el.style.top = `${rawTop}px`;
     }else{
       const rawHeight = Math.max(SLOT_MINUTES * PX_PER_MINUTE - 4, originalHeight + dy);
@@ -845,6 +859,7 @@ function makeEventElement(t, index, baseMin, instanceDate=state.scheduleDate, ab
     }
 
     if(!moved){
+      selectTaskForCopy(t, el);
       openTaskEditor(t);
       return;
     }
@@ -879,6 +894,7 @@ function makeEventElement(t, index, baseMin, instanceDate=state.scheduleDate, ab
   el.querySelector('.eventMoveBtn')?.addEventListener('pointerdown', e=>begin(e, false));
   el.addEventListener('click', e=>{
     if(e.target.closest('button,.resizeHandle')) return;
+    selectTaskForCopy(t, el);
     openTaskEditor(t);
   });
   el.querySelector('.resizeHandle').addEventListener('pointerdown', e=>begin(e, true));
@@ -895,7 +911,7 @@ function taskCard(t){
   art.style.setProperty('--c', colorFor(t));
   art.innerHTML = `<b>${esc(t.title)}</b><small>${esc(t.category || '')} / ${esc(t.project || '')} / ${Math.round(t.estimated_minutes||30)}分</small><div class="badges"><span class="badge">${esc(t.status || '')}</span><span class="badge">${occurrenceLabel(t.occurrence)}</span>${t.due_date?`<span class="badge">期限 ${esc(t.due_date)}</span>`:''}</div><div class="actions"><button data-act="return">この日のタイムラインへ戻す</button><button data-act="done">✓ 完了</button></div>`;
   art.addEventListener('dragstart', e=>{ state.draggingTaskId = t.id; e.dataTransfer.setData('text/plain', t.id); });
-  art.addEventListener('click', e=>{ if(e.target.closest('button')) return; if(isEditable()) openTaskEditor(t); });
+  art.addEventListener('click', e=>{ if(e.target.closest('button')) return; selectTaskForCopy(t, art); if(isEditable()) openTaskEditor(t); });
   art.querySelector('[data-act="return"]').addEventListener('click', async(e)=>{ e.stopPropagation(); await scheduleTaskOnDate(t.id, state.scheduleDate); await refreshAll(); });
   art.querySelector('[data-act="done"]').addEventListener('click', async(e)=>{ e.stopPropagation(); await updateTask(t.id, { done:true, status:'done' }); await refreshAll(); });
   return art;
@@ -982,6 +998,59 @@ function renderWorkStartStatus(){
   const saved = getWorkStartTime(state.scheduleDate);
   if(text) text.textContent = saved ? `活動開始時間：${saved.slice(0,5)}` : '活動開始時間：未設定';
   if(input) input.value = saved ? saved.slice(0,5) : '';
+}
+
+
+function selectTaskForCopy(t, el){
+  if(!t || !t.id) return;
+  state.selectedTaskIdForCopy = t.id;
+  document.querySelectorAll('.taskEvent.copySelected,.task.copySelected').forEach(x=>x.classList.remove('copySelected'));
+  if(el) el.classList.add('copySelected');
+}
+function taskCopyPayload(t){
+  return {
+    title:t.title || 'コピーしたタスク', category:t.category || '未分類', project:t.project || '未分類', task_type:'',
+    estimated_minutes:taskDuration(t), due_date:t.due_date || null, occurrence:'single', memo:t.memo || ''
+  };
+}
+function isTypingTarget(){
+  const el = document.activeElement;
+  if(!el) return false;
+  const tag = String(el.tagName || '').toUpperCase();
+  return ['INPUT','TEXTAREA','SELECT'].includes(tag) || el.isContentEditable;
+}
+function installBoardCopyPaste(){
+  if(state.boardCopyPasteInstalled) return;
+  state.boardCopyPasteInstalled = true;
+  document.addEventListener('keydown', async(e)=>{
+    if(isTypingTarget()) return;
+    const key = String(e.key || '').toLowerCase();
+    const mod = e.metaKey || e.ctrlKey;
+    if(!mod || !['c','v'].includes(key)) return;
+    if(key === 'c'){
+      const t = taskArray().find(x=>String(x.id)===String(state.selectedTaskIdForCopy));
+      if(!t) return;
+      state.copiedTaskPayload = taskCopyPayload(t);
+      try{ localStorage.setItem(`task-kanri-copied-task:${state.user?.id || 'anon'}`, JSON.stringify(state.copiedTaskPayload)); }catch(_e){}
+      const msg = $('planMsg'); if(msg) msg.textContent = `「${t.title || 'タスク'}」をコピーしました。貼り付けは Command/Ctrl + V です。`;
+      e.preventDefault();
+    }else if(key === 'v'){
+      if(!isEditable()) return;
+      let payload = state.copiedTaskPayload;
+      if(!payload){ try{ payload = JSON.parse(localStorage.getItem(`task-kanri-copied-task:${state.user?.id || 'anon'}`) || 'null'); }catch(_e){} }
+      if(!payload) return;
+      const duration = snapDuration(Number(payload.estimated_minutes || 30));
+      const preferred = timelineBaseMinutes();
+      const startMin = findAvailableStart(state.scheduleDate, duration, preferred, state.user.id, null, payload);
+      await createTask({
+        team_id:state.team.id, owner_id:state.user.id, created_by:state.user.id,
+        ...payload, estimated_minutes:duration, start_time:timeLabel(startMin), schedule_date:state.scheduleDate,
+        carryover_date:null, status:'scheduled', done:false, sort_order:Date.now()*-1
+      });
+      e.preventDefault();
+      await refreshAll();
+    }
+  });
 }
 
 function renderBoardSleepSettings(){
@@ -1083,12 +1152,12 @@ function renderTimelineFallback(error){
   const baseMin = timelineBaseMinutes();
   box.innerHTML = '';
   box.className = 'timeline timelineCalendar';
-  box.style.setProperty('--day-height', `${DAY_MINUTES * PX_PER_MINUTE}px`);
+  box.style.setProperty('--day-height', `${timelineDurationMinutes() * PX_PER_MINUTE}px`);
   const axis = document.createElement('div');
   axis.className = 'timeAxis';
   const grid = document.createElement('div');
   grid.className = 'calendarGrid';
-  for(let h=0; h<24; h++){
+  for(let h=0; h<=Math.ceil(timelineDurationMinutes()/60); h++){
     const label = document.createElement('div');
     label.className = 'timeMark';
     label.style.top = `${h*60*PX_PER_MINUTE}px`;
@@ -1115,11 +1184,11 @@ export function renderTimeline(){
   const baseMin = timelineBaseMinutes();
   box.innerHTML = '';
   box.className = 'timeline timelineCalendar';
-  box.style.setProperty('--day-height', `${DAY_MINUTES * PX_PER_MINUTE}px`);
+  box.style.setProperty('--day-height', `${timelineDurationMinutes() * PX_PER_MINUTE}px`);
 
   const axis = document.createElement('div');
   axis.className = 'timeAxis';
-  for(let h=0; h<24; h++){
+  for(let h=0; h<=Math.ceil(timelineDurationMinutes()/60); h++){
     const label = document.createElement('div');
     label.className = 'timeMark';
     label.style.top = `${h*60*PX_PER_MINUTE}px`;
@@ -1129,13 +1198,13 @@ export function renderTimeline(){
 
   const grid = document.createElement('div');
   grid.className = 'calendarGrid';
-  for(let h=0; h<=24; h++){
+  for(let h=0; h<=Math.ceil(timelineDurationMinutes()/60); h++){
     const line = document.createElement('div');
     line.className = 'hourLine';
     line.style.top = `${h*60*PX_PER_MINUTE}px`;
     grid.appendChild(line);
   }
-  for(let m=15; m<DAY_MINUTES; m+=15){
+  for(let m=15; m<timelineDurationMinutes(); m+=15){
     const line = document.createElement('div');
     line.className = m%60===0 ? 'quarterLine hourQuarter' : 'quarterLine';
     line.style.top = `${m*PX_PER_MINUTE}px`;
@@ -1151,7 +1220,7 @@ export function renderTimeline(){
       ([...(memberBlockedIntervals(dateIso, state.selectedMemberId) || []), ...(memberWorkIntervals(dateIso, state.selectedMemberId) || [])]).forEach(block=>{
         const absStart = offset * DAY_MINUTES + Number(block.start || 0);
         const absEnd = offset * DAY_MINUTES + Number(block.end || 0);
-        if(absEnd > baseMin && absStart < baseMin + DAY_MINUTES) blocks.push({ ...block, absStart, absEnd });
+        if(absEnd > baseMin && absStart < timelineEndMinutes()) blocks.push({ ...block, absStart, absEnd });
       });
     }
   }catch(e){ console.warn('block list skipped', e); blocks = []; }
@@ -1165,7 +1234,7 @@ export function renderTimeline(){
     const now = new Date();
     const nowMin = now.getHours()*60 + now.getMinutes();
     const nowTop = (nowMin - baseMin) * PX_PER_MINUTE;
-    if(nowTop >= 0 && nowTop <= DAY_MINUTES * PX_PER_MINUTE){
+    if(nowTop >= 0 && nowTop <= timelineDurationMinutes() * PX_PER_MINUTE){
       const line = document.createElement('div');
       line.className = 'nowLine calendarNowLine';
       line.style.top = `${nowTop}px`;
@@ -1186,15 +1255,8 @@ export function renderTimeline(){
 
   const totalMin = entries.reduce((a,e)=>a+(Number(e?.t?.estimated_minutes)||30),0);
   const planMsgEl = $('planMsg');
-  if(planMsgEl) planMsgEl.textContent = totalMin ? `この日の作業予定：${Math.round(totalMin/60*10)/10}時間` : 'この日のタスクはまだありません。時間軸だけ表示しています。';
+  if(planMsgEl) planMsgEl.textContent = totalMin ? `表示範囲の作業予定：${Math.round(totalMin/60*10)/10}時間` : 'この日のタスクはまだありません。時間軸だけ表示しています。';
 
-  requestAnimationFrame(()=>{
-    const container = $('timelineBox') || box.parentElement;
-    if(!container) return;
-    // 今日は読み込んだ時刻の「時台」を先頭にして、そこから24時間を表示します。
-    // 明日以降は00:00始まりです。
-    container.scrollTop = 0;
-  });
 }
 
 export function renderCarryList(){
@@ -1207,6 +1269,7 @@ export function renderCarryList(){
 }
 
 export function initBoardEvents(){
+  installBoardCopyPaste();
   $('schedulePrev').addEventListener('click',()=>{ if(diffDays(state.scheduleDate,todayISO())>0){state.scheduleDate=addDays(state.scheduleDate,-1); normalizeCarryDate(); renderBoard(); }});
   $('scheduleNext').addEventListener('click',()=>{ state.scheduleDate=addDays(state.scheduleDate,1); normalizeCarryDate(); renderBoard(); });
   $('carryPrev').addEventListener('click',()=>{ const min=addDays(state.scheduleDate,1); if(diffDays(state.carryDate,min)>0){ state.carryDate=addDays(state.carryDate,-1); renderBoard(); }});

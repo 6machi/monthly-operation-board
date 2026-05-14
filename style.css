@@ -651,3 +651,17 @@ h2 .infoDot,h3 .infoDot,summary .infoDot,small .infoDot{margin-left:6px}
 .taskEvent .eventMain{cursor:pointer}
 .taskEvent .resizeHandle{cursor:ns-resize}
 input[type="time"], input[type="date"]{min-height:42px}
+
+
+/* v60 timeline polish */
+.nowPill{display:inline-flex;align-items:center;gap:6px;margin-left:auto;border:1px solid var(--line);background:#fff;border-radius:999px;padding:7px 11px;font-size:12px;font-weight:950;color:var(--dark);box-shadow:0 4px 10px rgba(40,50,80,.05)}
+.taskEvent.copySelected,.task.copySelected{outline:3px solid color-mix(in srgb,var(--c) 45%,#ffffff);box-shadow:0 0 0 5px rgba(93,156,236,.12),0 8px 18px rgba(40,50,80,.10)}
+.timelineHint::after{content:' / タスクを選んで Command/Ctrl + C → V でコピーできます';}
+@media(max-width:650px){.nowPill{margin-left:0;width:100%;justify-content:center}.scheduleNav{flex-wrap:wrap}}
+
+
+/* v60: date and current time on one line */
+.todayHero{align-items:center;}
+.todayHero .dateTime{font-size:34px;font-weight:950;line-height:1.12;color:var(--dark);letter-spacing:.01em;}
+.nowPill{display:none!important;}
+@media(max-width:650px){.todayHero .dateTime{font-size:28px;}}

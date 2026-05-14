@@ -1,4 +1,4 @@
-import { todayISO, addDays } from './utils.js?v=58';
+import { todayISO, addDays } from './utils.js?v=60';
 export const state = {
   session:null,
   user:null,
