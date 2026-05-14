@@ -1,9 +1,9 @@
-import { $, esc, todayISO, addDays, fmtDate, diffDays, relativeFrom, taskOccursOnDate, occurrenceLabel, fullClock, minutesFromTime } from './utils.js?v=60';
-import { state } from './state.js?v=60';
-import { createTask, markCarryover, returnToSchedule, updateTask, deleteTask } from './tasks.js?v=60';
-import { refreshAll, showView } from './app.js?v=60';
-import { isUnavailableTask, isUnavailableForMember, unavailableBlocksForMember } from './calendar.js?v=60';
-import { updateMyProfile, loadMembers } from './auth.js?v=60';
+import { $, esc, todayISO, addDays, fmtDate, diffDays, relativeFrom, taskOccursOnDate, occurrenceLabel, fullClock, minutesFromTime } from './utils.js?v=62';
+import { state } from './state.js?v=62';
+import { createTask, markCarryover, returnToSchedule, updateTask, deleteTask } from './tasks.js?v=62';
+import { refreshAll, showView } from './app.js?v=62';
+import { isUnavailableTask, isUnavailableForMember, unavailableBlocksForMember } from './calendar.js?v=62';
+import { updateMyProfile, loadMembers } from './auth.js?v=62';
 
 const SLOT_MINUTES = 15;
 const PX_PER_MINUTE = 1.15; // 15分 = 約17px / 60分 = 約69px
@@ -1099,8 +1099,8 @@ function resetBoardSleepSettings(){
 export function renderBoard(){
   try{
     if(!state.user){ renderTimelineFallback(new Error('未ログインです')); return; }
-    if(!state.selectedMemberId){ state.selectedMemberId = state.user.id; }
     if(!Array.isArray(state.members)) state.members = [];
+    if(!state.selectedMemberId || !state.members.some(m=>m && m.id===state.selectedMemberId)){ state.selectedMemberId = state.user.id; }
     if(!Array.isArray(state.tasks)) state.tasks = [];
     normalizeCarryDate();
 

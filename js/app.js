@@ -1,12 +1,12 @@
-import { isConfigured } from './supabase-client.js?v=61';
-import { getSession, signIn, signUp, signOut, ensureProfileAndTeam, loadMembers } from './auth.js?v=61';
-import { loadTasks } from './tasks.js?v=61';
-import { loadTree } from './setup.js?v=61';
-import { state } from './state.js?v=61';
-import { $, qsa, todayISO, nowTimeText, fmtDate } from './utils.js?v=61';
-import { initBoardEvents, renderBoard } from './board.js?v=61';
-import { initCalendarEvents, renderCalendar } from './calendar.js?v=61';
-import { initSetupEvents, renderSetup, renderProfilePage } from './setup-view.js?v=61';
+import { isConfigured } from './supabase-client.js?v=62';
+import { getSession, signIn, signUp, signOut, ensureProfileAndTeam, loadMembers } from './auth.js?v=62';
+import { loadTasks } from './tasks.js?v=62';
+import { loadTree } from './setup.js?v=62';
+import { state } from './state.js?v=62';
+import { $, qsa, todayISO, nowTimeText, fmtDate } from './utils.js?v=62';
+import { initBoardEvents, renderBoard } from './board.js?v=62';
+import { initCalendarEvents, renderCalendar } from './calendar.js?v=62';
+import { initSetupEvents, renderSetup, renderProfilePage } from './setup-view.js?v=62';
 
 function safeGet(id){ return document.getElementById(id); }
 function safeOn(id, event, fn){
@@ -22,7 +22,40 @@ export function showView(view){
   qsa('#mainNav button').forEach(b=>b.classList.toggle('active', b.dataset.view===view));
   renderCurrent();
 }
+
+function normalizeCurrentMember(){
+  if(!state.user) return;
+  if(!Array.isArray(state.members)) state.members = [];
+  const userId = state.user.id;
+  const hasMe = state.members.some(m=>m && m.id===userId);
+  if(!hasMe){
+    state.members.unshift({
+      id:userId,
+      role:'owner',
+      name:state.profile?.display_name || '自分',
+      emoji:state.profile?.display_emoji || '🌙',
+      color:state.profile?.display_color || '#5d9cec',
+      sleepStart:String(state.profile?.sleep_start_time || '02:00').slice(0,5),
+      sleepEnd:String(state.profile?.sleep_end_time || '09:00').slice(0,5),
+      workEnabled:!!state.profile?.work_enabled,
+      workStart:String(state.profile?.work_start_time || '10:00').slice(0,5),
+      workEnd:String(state.profile?.work_end_time || '19:00').slice(0,5),
+      workDays:Array.isArray(state.profile?.work_days) ? state.profile.work_days : [1,2,3,4,5],
+      workCategory:state.profile?.work_category || '仕事'
+    });
+  }
+  state.members = state.members.filter(Boolean).sort((a,b)=>{
+    if(a.id===userId) return -1;
+    if(b.id===userId) return 1;
+    return String(a.name||'').localeCompare(String(b.name||''),'ja');
+  });
+  if(!state.selectedMemberId || !state.members.some(m=>m.id===state.selectedMemberId)){
+    state.selectedMemberId = userId;
+  }
+}
+
 function renderCurrent(){
+  normalizeCurrentMember();
   renderMemberTabs();
   renderHero();
   try{
@@ -40,10 +73,8 @@ function renderHero(){
   if(dateEl) dateEl.textContent = `${fmtDate(todayISO())}　${nowTimeText()}`;
 }
 function renderMemberTabs(){
-  if(state.user && (!state.selectedMemberId || !state.members.some(m=>m.id===state.selectedMemberId))){
-    state.selectedMemberId = state.user.id;
-  }
-  const html = state.members.map(m=>`<button class="memberTab ${m.id===state.selectedMemberId?'active':''}" data-member="${m.id}" style="--member-color:${m.color || '#5d9cec'}"><span>${m.emoji || '🌙'}</span>${m.name}</button>`).join('');
+  normalizeCurrentMember();
+  const html = state.members.map(m=>`<button class="memberTab ${m.id===state.selectedMemberId?'active':''}" data-member="${m.id}" style="--member-color:${m.color || '#5d9cec'}"><span>${m.emoji || '🌙'}</span>${m.id===state.user?.id ? (m.name || '自分') + '（自分）' : (m.name || 'メンバー')}</button>`).join('');
   const boardTabs = safeGet('memberTabs');
   const setupTabs = safeGet('setupMemberTabs');
   if(boardTabs) boardTabs.innerHTML = html;
@@ -70,6 +101,7 @@ async function bootAuthed(session){
   const result = await ensureProfileAndTeam(state.user);
   state.profile = result.profile; state.team = result.team;
   state.members = await loadMembers(state.team.id);
+  normalizeCurrentMember();
   // ログイン直後は必ず本人のタブに戻す。
   // 前の操作で他メンバーを見ていた状態が残ると、自分の予定が消えたように見えるため。
   state.selectedMemberId = state.user.id;
