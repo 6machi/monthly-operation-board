@@ -1,12 +1,12 @@
-import { $, esc, todayISO, addDays, fmtDate, diffDays, relativeFrom, taskOccursOnDate, occurrenceLabel, fullClock, minutesFromTime } from './utils.js?v=62';
-import { state } from './state.js?v=62';
-import { createTask, markCarryover, returnToSchedule, updateTask, deleteTask } from './tasks.js?v=62';
-import { refreshAll, showView } from './app.js?v=62';
-import { isUnavailableTask, isUnavailableForMember, unavailableBlocksForMember } from './calendar.js?v=62';
-import { updateMyProfile, loadMembers } from './auth.js?v=62';
+import { $, esc, todayISO, addDays, fmtDate, diffDays, relativeFrom, taskOccursOnDate, occurrenceLabel, fullClock, minutesFromTime } from './utils.js?v=64';
+import { state } from './state.js?v=64';
+import { createTask, markCarryover, returnToSchedule, updateTask, deleteTask } from './tasks.js?v=64';
+import { refreshAll, showView } from './app.js?v=64';
+import { isUnavailableTask, isUnavailableForMember, unavailableBlocksForMember } from './calendar.js?v=64';
+import { updateMyProfile, loadMembers } from './auth.js?v=64';
 
-const SLOT_MINUTES = 15;
-const PX_PER_MINUTE = 1.15; // 15分 = 約17px / 60分 = 約69px
+const SLOT_MINUTES = 10;
+const PX_PER_MINUTE = 1.15; // 10分刻み / 60分 = 約69px
 const DAY_MINUTES = 24 * 60;
 const DEFAULT_START_MINUTES = 9 * 60;
 function taskArray(){ return Array.isArray(state.tasks) ? state.tasks.filter(t=>t && typeof t === 'object') : []; }
@@ -509,11 +509,12 @@ async function reflowTasksAvoidingUnavailable(){
   const currentMin = snapMinutes(now.getHours()*60 + now.getMinutes());
   const endDate = monthEndIso(startDate);
   const ownerId = state.selectedMemberId || state.user.id;
-  const movable = selectedTasks()
-    .filter(t=>t && t.id && !isUnavailableTask(t) && (t.occurrence || 'single') === 'single')
-    .filter(t=>diffDays(effectiveTaskDate(t), startDate) >= 0 && diffDays(effectiveTaskDate(t), endDate) <= 0)
+  const movable = taskArray()
+    .filter(t=>t && t.id && t.owner_id===ownerId && !t.done && !isUnavailableTask(t) && (t.occurrence || 'single') === 'single')
+    .filter(t=>diffDays(effectiveTaskDate(t), endDate) <= 0)
     .filter(t=>{
       const d = effectiveTaskDate(t);
+      if(diffDays(d, startDate) < 0) return true;
       if(d !== startDate) return true;
       return taskStartMinutes(t,0) + taskDuration(t) >= currentMin;
     })
@@ -522,7 +523,7 @@ async function reflowTasksAvoidingUnavailable(){
       if(da!==db) return da.localeCompare(db);
       return taskStartMinutes(a,0)-taskStartMinutes(b,0);
     });
-  if(!movable.length){ showOrganizeMessage('並べ直せる単発タスクはありません。'); return; }
+  if(!movable.length){ showOrganizeMessage('現在時刻以降へ振り直せる未完了タスクはありません。'); return; }
   const excludeIds = movable.map(t=>t.id);
   const busyByDate = new Map();
   function busyFor(date){
@@ -534,12 +535,12 @@ async function reflowTasksAvoidingUnavailable(){
     const duration = taskDuration(t);
     const original = effectiveTaskDate(t);
     const due = t.due_date && diffDays(t.due_date, startDate)>=0 ? t.due_date : endDate;
-    const searchStart = diffDays(original, startDate)<0 ? startDate : original;
+    const searchStart = startDate;
     let placed = null;
     for(const date of dateRangeInclusive(searchStart, due)){
       if(isWholeDayBlocked(date, ownerId)) continue;
       const busy = busyFor(date);
-      const preferred = date===startDate ? Math.max(taskStartMinutes(t,0), currentMin) : (date===original ? taskStartMinutes(t,0) : minutesFromTime(memberSleep().end || '09:00'));
+      const preferred = date===startDate ? currentMin : (date===original && diffDays(original,startDate)>0 ? taskStartMinutes(t,0) : minutesFromTime(memberSleep().end || '09:00'));
       const slot = findSlotWithBusy(preferred, duration, busy);
       if(slot !== null){
         placed = { date, start:slot };
@@ -773,7 +774,6 @@ function makeEventElement(t, index, baseMin, instanceDate=state.scheduleDate, ab
     </div>
     <div class="eventMeta">${occurrenceLabel(t.occurrence)}</div>
     <div class="eventActions">
-      <button type="button" class="eventMoveBtn" title="つかんで移動">↕ 移動</button>
       <button type="button" class="eventCompleteBtn">✓ 完了</button>
       <button type="button" class="eventEditBtn">修正</button>
     </div>
@@ -803,6 +803,7 @@ function makeEventElement(t, index, baseMin, instanceDate=state.scheduleDate, ab
   let originalTop = 0;
   let originalHeight = 0;
   let moved = false;
+  let suppressNextClick = false;
 
   const cleanup = ()=>{
     document.removeEventListener('pointermove', onMove);
@@ -859,10 +860,10 @@ function makeEventElement(t, index, baseMin, instanceDate=state.scheduleDate, ab
     }
 
     if(!moved){
-      selectTaskForCopy(t, el);
-      openTaskEditor(t);
+      state.timelineDragging = false;
       return;
     }
+    suppressNextClick = true;
 
     if(currentMode === 'move'){
       const snappedTop = snapMinutes((parseFloat(el.style.top)||0) / PX_PER_MINUTE) * PX_PER_MINUTE;
@@ -891,9 +892,13 @@ function makeEventElement(t, index, baseMin, instanceDate=state.scheduleDate, ab
     renderBoard();
   };
 
-  el.querySelector('.eventMoveBtn')?.addEventListener('pointerdown', e=>begin(e, false));
+  el.addEventListener('pointerdown', e=>{
+    if(e.target.closest('button,.resizeHandle')) return;
+    begin(e, false);
+  });
   el.addEventListener('click', e=>{
     if(e.target.closest('button,.resizeHandle')) return;
+    if(state.timelineDragging || suppressNextClick){ suppressNextClick = false; return; }
     selectTaskForCopy(t, el);
     openTaskEditor(t);
   });
@@ -1079,10 +1084,10 @@ async function saveBoardSleepSettings(){
   const end = ($('boardSleepEnd')?.value || '09:00').slice(0,5);
   try{
     setTodaySleepOverride(start, end);
-    showSleepSaveMessage('今日の睡眠時間をタイムラインに反映しました');
+    showSleepSaveMessage('睡眠時間をタイムラインに反映しました');
     renderBoard();
   }catch(e){
-    showSleepSaveMessage(e.message || '今日の睡眠時間の反映に失敗しました', true);
+    showSleepSaveMessage(e.message || '睡眠時間の反映に失敗しました', true);
   }
 }
 
@@ -1091,7 +1096,7 @@ function resetBoardSleepSettings(){
     state.selectedMemberId = state.user.id;
   }
   clearTodaySleepOverride();
-  showSleepSaveMessage('今日の睡眠時間をデフォルトに戻しました');
+  showSleepSaveMessage('睡眠時間をデフォルトに戻しました');
   renderBoard();
 }
 
@@ -1121,11 +1126,14 @@ export function renderBoard(){
       try{ unavailable = isUnavailableForMember(state.scheduleDate, state.selectedMemberId); }catch(e){ console.warn('終日稼働不可の判定をスキップしました', e); }
       const mine = isEditable();
       if(unavailable){
-        boardNoticeEl.textContent = 'この日は終日稼働不可です。毎日タスクや分割タスクは表示されません。';
+        boardNoticeEl.classList.remove('hidden');
+        boardNoticeEl.textContent = 'この日は終日稼働不可です。';
       }else if(mine){
-        boardNoticeEl.textContent = '自分の今日やることです。編集できます。';
+        boardNoticeEl.textContent = '';
+        boardNoticeEl.classList.add('hidden');
       }else{
-        boardNoticeEl.innerHTML = '他メンバーの今日やることです。閲覧中心です。 <button type="button" class="ghost miniInlineBtn" id="backToMyBoardBtn">自分の予定に戻る</button>';
+        boardNoticeEl.classList.remove('hidden');
+        boardNoticeEl.innerHTML = '他メンバーの予定を表示中です。 <button type="button" class="ghost miniInlineBtn" id="backToMyBoardBtn">自分の予定に戻る</button>';
         const backBtn = $('backToMyBoardBtn');
         if(backBtn) backBtn.onclick = ()=>{ state.selectedMemberId = state.user.id; renderBoard(); };
       }
@@ -1244,18 +1252,17 @@ export function renderTimeline(){
 
   const dropHint = document.createElement('div');
   dropHint.className = 'timelineHint';
-  dropHint.textContent = isEditable()
-    ? '「↕ 移動」をつかんで移動 / 下端で伸縮 / カードクリックで修正'
-    : '他メンバーのタイムラインは閲覧のみです。';
+  dropHint.innerHTML = isEditable()
+    ? '<button class="infoDot" type="button" data-info="タスクカードをドラッグすると時間を移動できます。カード下端を引っぱると長さを変更できます。カードクリックで修正できます。">i</button>'
+    : '<button class="infoDot" type="button" data-info="他メンバーのタイムラインは閲覧のみです。">i</button>';
 
   box.appendChild(axis);
   box.appendChild(grid);
   box.appendChild(events);
   box.appendChild(dropHint);
 
-  const totalMin = entries.reduce((a,e)=>a+(Number(e?.t?.estimated_minutes)||30),0);
   const planMsgEl = $('planMsg');
-  if(planMsgEl) planMsgEl.textContent = totalMin ? `表示範囲の作業予定：${Math.round(totalMin/60*10)/10}時間` : 'この日のタスクはまだありません。時間軸だけ表示しています。';
+  if(planMsgEl){ planMsgEl.textContent = ''; planMsgEl.classList.add('hidden'); }
 
 }
 

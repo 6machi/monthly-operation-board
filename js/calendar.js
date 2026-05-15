@@ -1,8 +1,8 @@
-import { $, esc, toISO, todayISO, diffDays, taskOccursOnDate, minutesFromTime, fullClock, fmtDate } from './utils.js?v=62';
-import { state } from './state.js?v=62';
-import { openDateOnBoard, openTaskEditor } from './board.js?v=62';
-import { createTask, deleteTask, updateTask } from './tasks.js?v=62';
-import { refreshAll } from './app.js?v=62';
+import { $, esc, toISO, todayISO, diffDays, taskOccursOnDate, minutesFromTime, fullClock, fmtDate } from './utils.js?v=64';
+import { state } from './state.js?v=64';
+import { openDateOnBoard, openTaskEditor } from './board.js?v=64';
+import { createTask, deleteTask, updateTask } from './tasks.js?v=64';
+import { refreshAll } from './app.js?v=64';
 
 const DAY_MINUTES = 24 * 60;
 let selectedCalendarDate = todayISO();
@@ -210,8 +210,8 @@ function renderMonthGrid(){
   for(let day=1; day<=last.getDate(); day++){
     const iso = toISO(new Date(y,m-1,day));
     const isToday = iso===today;
-    const unavailableMembers = memberArray().filter(mem=>hasUnavailableForMember(iso, mem.id));
     const allDayMembers = memberArray().filter(mem=>isUnavailableForMember(iso, mem.id));
+    const unavailableMembers = allDayMembers;
     const membersWithTasks = memberArray().map(mem=>{
       const tasks = visibleTasksOnDate(iso, mem.id);
       return { mem, count: tasks.length, carry: tasks.filter(t=>t.carryover_date===iso).length };
@@ -247,8 +247,7 @@ function renderMonthGrid(){
           </span>`).join('')}</div>`
       : (unavailableMembers.length ? `<div class="dayRest">${unavailableMembers.map(m=>`${esc(m.emoji||'🌙')} ${esc(m.name)}`).join('・')} 稼働不可</div>` : '<div class="dayEmpty">のんびり</div>');
 
-    const partialText = unavailableMembers.length && !allDayMembers.length ? '稼働不可時間あり' : '稼働不可あり';
-    const footer = `<div class="dayMood">${unavailableMembers.length ? partialText : (carryovers ? `持ち越し ${carryovers}件` : '持ち越しなし')}</div>`;
+    const footer = `<div class="dayMood">${allDayMembers.length ? '稼働不可' : (carryovers ? `持ち越し ${carryovers}件` : '持ち越しなし')}</div>`;
     cell.innerHTML = header + chips + footer;
     cell.addEventListener('click',(ev)=>{
       ev.preventDefault();

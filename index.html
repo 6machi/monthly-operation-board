@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>タスクかんりシート</title>
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="style.css?v=64" />
 </head>
 <body>
   <header>
@@ -70,13 +70,13 @@
               </div>
             </details>
             <details class="panelDetails compactTool sleepTool" open>
-              <summary>今日の睡眠時間 <button class="infoDot" type="button" data-info="今日だけ寝る時間・起きる時間をデフォルトからずらしたいときに使います。タイムライン上では灰色のすいみん予定として表示されます。">i</button></summary>
+              <summary>睡眠時間 <button class="infoDot" type="button" data-info="寝る時間・起きる時間を一時的にずらしたいときに使います。タイムライン上では灰色のすいみん予定として表示されます。">i</button></summary>
               <div class="form two compactForm">
-                <label><small>寝る時間</small><input type="time" step="900" id="boardSleepStart" value="02:00"></label>
-                <label><small>起きる時間</small><input type="time" step="900" id="boardSleepEnd" value="09:00"></label>
+                <label><small>寝る時間</small><input type="time" step="600" id="boardSleepStart" value="02:00"></label>
+                <label><small>起きる時間</small><input type="time" step="600" id="boardSleepEnd" value="09:00"></label>
               </div>
               <div class="actions compactActions">
-                <button class="primary" type="button" id="saveBoardSleepBtn">今日だけ反映</button>
+                <button class="primary" type="button" id="saveBoardSleepBtn">反映</button>
                 <button class="ghost" type="button" id="resetBoardSleepBtn">デフォルトに戻す</button>
               </div>
               <div id="sleepSaveMsg" class="notice hidden"></div>
@@ -95,7 +95,7 @@
                 <label><small>タスク候補</small><select id="quickCandidate"></select></label>
                 <label><small>タスク名</small><input id="quickTitle" placeholder="急ぎの依頼・今日やるメモ"></label>
                 <div class="form two">
-                  <label><small>見積もり時間</small><input id="quickMinutes" type="number" min="5" step="5" placeholder="分"></label>
+                  <label><small>見積もり時間</small><input id="quickMinutes" type="number" min="10" step="10" placeholder="分"></label>
                   <label><small>期限</small><input id="quickDue" type="date"></label>
                 </div>
                 <label><small>メモ</small><textarea id="quickMemo" placeholder="確認先、注意点など"></textarea></label>
@@ -165,16 +165,16 @@
           <div class="sectionline sleepSettingsBlock">
             <h3>基本的な睡眠時間の設定 <button class="infoDot" type="button" data-info="デフォルトの睡眠時間を設定できます。タイムラインに自動でこの睡眠時間が反映されます。">i</button></h3>
             <div class="form two">
-              <label><small>寝る時間</small><input id="profileSleepStart" type="time" step="900" value="02:00"></label>
-              <label><small>起きる時間</small><input id="profileSleepEnd" type="time" step="900" value="09:00"></label>
+              <label><small>寝る時間</small><input id="profileSleepStart" type="time" step="600" value="02:00"></label>
+              <label><small>起きる時間</small><input id="profileSleepEnd" type="time" step="600" value="09:00"></label>
             </div>
           </div>
           <div class="sectionline workSettingsBlock">
             <h3>基本的な仕事時間の設定 <button class="infoDot" type="button" data-info="デフォルトの仕事時間を設定できます。タイムラインに自動でこの勤務時間が反映されます。仕事時間がない人はOFFにできます。">i</button></h3>
             <label class="toggleLine"><input id="profileWorkEnabled" type="checkbox"> 仕事時間を使う</label>
             <div class="form three">
-              <label><small>仕事開始</small><input id="profileWorkStart" type="time" step="900" value="10:00"></label>
-              <label><small>仕事終了</small><input id="profileWorkEnd" type="time" step="900" value="19:00"></label>
+              <label><small>仕事開始</small><input id="profileWorkStart" type="time" step="600" value="10:00"></label>
+              <label><small>仕事終了</small><input id="profileWorkEnd" type="time" step="600" value="19:00"></label>
               <label><small>仕事カテゴリ名</small><input id="profileWorkCategory" value="仕事" placeholder="例：仕事"></label>
             </div>
             <div class="workDayPicker">
@@ -194,8 +194,8 @@
           <summary>稼働できない日・時間 <button class="infoDot" type="button" data-info="外出・通院・予定など、作業できない日や時間を先に入れておくと、分割タスクや持ち越しタスクがその時間を避けます。">i</button></summary>
           <div class="form unavailableForm">
             <label><small>稼働不可の日</small><input type="date" id="unavailableDate"></label>
-            <label><small>開始時間</small><input type="time" id="unavailableStart" value="00:00" step="900"></label>
-            <label><small>終了時間</small><input type="time" id="unavailableEnd" value="23:59" step="900"></label>
+            <label><small>開始時間</small><input type="time" id="unavailableStart" value="00:00" step="600"></label>
+            <label><small>終了時間</small><input type="time" id="unavailableEnd" value="23:59" step="600"></label>
             <label><small>理由メモ</small><input id="unavailableMemo" placeholder="例：外出 / 通院 / 休み"></label>
           </div>
           <div class="mode unavailableMode">
@@ -220,9 +220,9 @@
             <label><small>プロジェクト</small><select id="newProject"></select></label>
             <label><small>タスク候補</small><select id="newCandidate"></select></label>
             <label><small>タスク名</small><input id="newTitle" placeholder="候補にない場合だけ入力"></label>
-            <label><small>見積もり時間</small><input id="newMinutes" type="number" min="5" step="5" placeholder="分"></label>
+            <label><small>見積もり時間</small><input id="newMinutes" type="number" min="10" step="10" placeholder="分"></label>
             <label><small>開始日</small><input id="newStart" type="date"></label>
-            <label><small>開始時間</small><input id="newStartTime" type="time" step="900" value="09:00"></label>
+            <label><small>開始時間</small><input id="newStartTime" type="time" step="600" value="09:00"></label>
             <label><small>期限</small><input id="newDue" type="date"></label>
           </div>
           <div class="mode">
@@ -265,6 +265,6 @@
   </template>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script type="module" src="js/app.js?v=62"></script>
+  <script type="module" src="js/app.js?v=64"></script>
 </body>
 </html>
