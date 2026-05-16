@@ -1,9 +1,9 @@
-import { $, esc, todayISO, addDays, fmtDate, diffDays, relativeFrom, taskOccursOnDate, occurrenceLabel, fullClock, minutesFromTime } from './utils.js?v=65';
-import { state } from './state.js?v=65';
-import { createTask, markCarryover, returnToSchedule, updateTask, deleteTask } from './tasks.js?v=65';
-import { refreshAll, showView } from './app.js?v=65';
-import { isUnavailableTask, isUnavailableForMember, unavailableBlocksForMember } from './calendar.js?v=65';
-import { updateMyProfile, loadMembers } from './auth.js?v=65';
+import { $, esc, todayISO, addDays, fmtDate, diffDays, relativeFrom, taskOccursOnDate, occurrenceLabel, fullClock, minutesFromTime } from './utils.js?v=67';
+import { state } from './state.js?v=67';
+import { createTask, markCarryover, returnToSchedule, updateTask, deleteTask } from './tasks.js?v=67';
+import { refreshAll, showView } from './app.js?v=67';
+import { isUnavailableTask, isUnavailableForMember, unavailableBlocksForMember } from './calendar.js?v=67';
+import { updateMyProfile, loadMembers } from './auth.js?v=67';
 
 const SLOT_MINUTES = 10;
 const PX_PER_MINUTE = 1.15; // 10分刻み / 60分 = 約69px
@@ -159,7 +159,7 @@ function snapDuration(min){
 }
 function taskDuration(t){ return snapDuration(Number(t?.estimated_minutes || 30)); }
 function fallbackStart(index){
-  if(state.scheduleDate === todayISO()){
+  if(diffDays(state.scheduleDate, todayISO()) === 0){
     const now = new Date();
     return snapMinutes(now.getHours()*60 + now.getMinutes() + index * 30);
   }
@@ -237,11 +237,12 @@ function awakeWindowForTimeline(){
 function timelineRange(){
   const awake = awakeWindowForTimeline();
   let base = awake.start;
-  if(state.scheduleDate === todayISO()){
+  if(diffDays(state.scheduleDate, todayISO()) === 0){
     const now = new Date();
     const nowMin = now.getHours()*60 + now.getMinutes();
-    const nowHour = Math.floor(nowMin / 60) * 60;
-    if(nowHour >= awake.start && nowHour < awake.end) base = nowHour;
+    // 今日だけは、睡眠/仕事設定よりも「現在時刻の時台」を優先する。
+    // 例：18:18なら18:00、08:12なら08:00。睡眠中でも赤ラインと睡眠ブロックが見えるようにする。
+    base = Math.floor(nowMin / 60) * 60;
   }
   const end = Math.max(base + 60, awake.end);
   return { base, end, duration:end-base, awakeStart:awake.start, awakeEnd:awake.end };
@@ -760,7 +761,7 @@ function makeEventElement(t, index, baseMin, instanceDate=state.scheduleDate, ab
   const absStart = Number.isFinite(Number(absStartOverride)) ? Number(absStartOverride) : dayOffset * DAY_MINUTES + start;
   const el = document.createElement('div');
   el.className = 'taskEvent';
-  if(state.scheduleDate === todayISO()){
+  if(diffDays(state.scheduleDate, todayISO()) === 0){
     const now = new Date();
     const nowMin = now.getHours()*60 + now.getMinutes();
     if(instanceDate === todayISO() && start + duration <= nowMin) el.classList.add('pastUnfinished');
