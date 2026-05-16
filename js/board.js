@@ -1,9 +1,9 @@
-import { $, esc, todayISO, addDays, fmtDate, diffDays, relativeFrom, taskOccursOnDate, occurrenceLabel, fullClock, minutesFromTime } from './utils.js?v=64';
-import { state } from './state.js?v=64';
-import { createTask, markCarryover, returnToSchedule, updateTask, deleteTask } from './tasks.js?v=64';
-import { refreshAll, showView } from './app.js?v=64';
-import { isUnavailableTask, isUnavailableForMember, unavailableBlocksForMember } from './calendar.js?v=64';
-import { updateMyProfile, loadMembers } from './auth.js?v=64';
+import { $, esc, todayISO, addDays, fmtDate, diffDays, relativeFrom, taskOccursOnDate, occurrenceLabel, fullClock, minutesFromTime } from './utils.js?v=65';
+import { state } from './state.js?v=65';
+import { createTask, markCarryover, returnToSchedule, updateTask, deleteTask } from './tasks.js?v=65';
+import { refreshAll, showView } from './app.js?v=65';
+import { isUnavailableTask, isUnavailableForMember, unavailableBlocksForMember } from './calendar.js?v=65';
+import { updateMyProfile, loadMembers } from './auth.js?v=65';
 
 const SLOT_MINUTES = 10;
 const PX_PER_MINUTE = 1.15; // 10分刻み / 60分 = 約69px
@@ -294,7 +294,14 @@ function makeBlockedElement(block, baseMin){
   const absEnd = Number.isFinite(Number(block.absEnd)) ? Number(block.absEnd) : Number(block.end || 0);
   el.style.top = `${timelineTopAbsolute(absStart, baseMin)}px`;
   el.style.height = `${Math.max(24, Math.max(15, absEnd - absStart) * PX_PER_MINUTE - 4)}px`;
-  el.innerHTML = `<b>${esc(block.label || '稼働不可')}</b><small>${esc(block.meta || `${timeLabelWrap(block.start)} - ${timeLabelWrap(block.end)}`)}</small>`;
+  const canEditUnavailable = block.kind === 'unavailable' && block.task && isEditable();
+  el.innerHTML = `<b>${esc(block.label || '稼働不可')}</b><small>${esc(block.meta || `${timeLabelWrap(block.start)} - ${timeLabelWrap(block.end)}`)}</small>${canEditUnavailable ? '<div class="eventActions"><button type="button" class="eventEditBtn">修正</button></div>' : ''}`;
+  if(canEditUnavailable){
+    el.classList.add('editableUnavailable');
+    const open = (e)=>{ e?.preventDefault?.(); e?.stopPropagation?.(); openTaskEditor(block.task); };
+    el.addEventListener('click', open);
+    el.querySelector('.eventEditBtn')?.addEventListener('click', open);
+  }
   return el;
 }
 function memberBlockedIntervals(dateIso=state.scheduleDate, memberId=state.selectedMemberId){
@@ -511,19 +518,14 @@ async function reflowTasksAvoidingUnavailable(){
   const ownerId = state.selectedMemberId || state.user.id;
   const movable = taskArray()
     .filter(t=>t && t.id && t.owner_id===ownerId && !t.done && !isUnavailableTask(t) && (t.occurrence || 'single') === 'single')
+    // 前日以前に置き去りになった未完了タスクも必ず回収する。
     .filter(t=>diffDays(effectiveTaskDate(t), endDate) <= 0)
-    .filter(t=>{
-      const d = effectiveTaskDate(t);
-      if(diffDays(d, startDate) < 0) return true;
-      if(d !== startDate) return true;
-      return taskStartMinutes(t,0) + taskDuration(t) >= currentMin;
-    })
     .sort((a,b)=>{
       const da = effectiveTaskDate(a), db = effectiveTaskDate(b);
       if(da!==db) return da.localeCompare(db);
       return taskStartMinutes(a,0)-taskStartMinutes(b,0);
     });
-  if(!movable.length){ showOrganizeMessage('現在時刻以降へ振り直せる未完了タスクはありません。'); return; }
+  if(!movable.length){ showOrganizeMessage('現在時刻以降へ振り直す未完了タスクはありません。'); return; }
   const excludeIds = movable.map(t=>t.id);
   const busyByDate = new Map();
   function busyFor(date){
@@ -630,7 +632,7 @@ function ensureTaskEditor(){
     <div class="taskEditBackdrop" data-close-editor></div>
     <section class="taskEditPanel" role="dialog" aria-modal="true" aria-label="タスクを修正">
       <div class="taskEditPanelHead">
-        <div><h2>タスクを修正</h2><p class="muted">タイムラインのカードから開いています。</p></div>
+        <div><h2>タスクを修正</h2></div>
         <button class="ghost" type="button" data-close-editor>閉じる</button>
       </div>
       <div class="form taskEditQuickForm">
@@ -648,7 +650,7 @@ function ensureTaskEditor(){
       </div>
       <div class="actions">
         <button class="primary" type="button" id="saveTaskFromTimeline">保存</button>
-        <button class="ghost" type="button" id="carryTaskFromTimeline">選択中の持ち越し日に移動</button>
+        <button class="ghost" type="button" id="carryTaskFromTimeline">持ち越しにする</button>
         <button class="ghost" type="button" id="makeUnavailableFromTimeline">稼働不可予定にする</button>
         <button class="danger" type="button" id="deleteTaskFromTimeline">削除</button>
       </div>
@@ -914,7 +916,7 @@ function taskCard(t){
   art.draggable = true;
   art.dataset.id = t.id;
   art.style.setProperty('--c', colorFor(t));
-  art.innerHTML = `<b>${esc(t.title)}</b><small>${esc(t.category || '')} / ${esc(t.project || '')} / ${Math.round(t.estimated_minutes||30)}分</small><div class="badges"><span class="badge">${esc(t.status || '')}</span><span class="badge">${occurrenceLabel(t.occurrence)}</span>${t.due_date?`<span class="badge">期限 ${esc(t.due_date)}</span>`:''}</div><div class="actions"><button data-act="return">この日のタイムラインへ戻す</button><button data-act="done">✓ 完了</button></div>`;
+  art.innerHTML = `<b>${esc(t.title)}</b><small>${esc(t.category || '')} / ${esc(t.project || '')} / ${Math.round(t.estimated_minutes||30)}分</small><div class="badges"><span class="badge">${esc(t.status || '')}</span><span class="badge">${occurrenceLabel(t.occurrence)}</span>${t.due_date?`<span class="badge">期限 ${esc(t.due_date)}</span>`:''}</div><div class="actions"><button data-act="return">この日の予定に入れる</button><button data-act="done">✓ 完了</button></div>`;
   art.addEventListener('dragstart', e=>{ state.draggingTaskId = t.id; e.dataTransfer.setData('text/plain', t.id); });
   art.addEventListener('click', e=>{ if(e.target.closest('button')) return; selectTaskForCopy(t, art); if(isEditable()) openTaskEditor(t); });
   art.querySelector('[data-act="return"]').addEventListener('click', async(e)=>{ e.stopPropagation(); await scheduleTaskOnDate(t.id, state.scheduleDate); await refreshAll(); });
@@ -1250,16 +1252,9 @@ export function renderTimeline(){
     }
   }
 
-  const dropHint = document.createElement('div');
-  dropHint.className = 'timelineHint';
-  dropHint.innerHTML = isEditable()
-    ? '<button class="infoDot" type="button" data-info="タスクカードをドラッグすると時間を移動できます。カード下端を引っぱると長さを変更できます。カードクリックで修正できます。">i</button>'
-    : '<button class="infoDot" type="button" data-info="他メンバーのタイムラインは閲覧のみです。">i</button>';
-
   box.appendChild(axis);
   box.appendChild(grid);
   box.appendChild(events);
-  box.appendChild(dropHint);
 
   const planMsgEl = $('planMsg');
   if(planMsgEl){ planMsgEl.textContent = ''; planMsgEl.classList.add('hidden'); }
