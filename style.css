@@ -700,3 +700,42 @@ input[type="time"], input[type="date"]{min-height:42px}
 .unavailableEvent.editableUnavailable:hover{box-shadow:0 0 0 3px rgba(239,90,90,.12),0 5px 14px rgba(40,50,80,.06)}
 .unavailableEvent .eventActions{margin-top:6px;display:flex;gap:6px}
 .unavailableEvent .eventEditBtn{padding:4px 8px;font-size:11px;box-shadow:none;border:1px solid var(--line);background:#fff}
+
+
+/* v70: organize option */
+.checkLine{display:flex;align-items:center;gap:8px;font-weight:850;color:var(--text);line-height:1.45}
+.checkLine input{width:18px;height:18px;flex:0 0 18px;accent-color:var(--dark)}
+.organizeOption{background:#fff;border:1px solid var(--line);border-radius:14px;padding:10px 12px;margin:0 0 10px;box-shadow:0 4px 10px rgba(40,50,80,.04)}
+
+
+/* v72: make reflow option visible */
+.quickToolPanel{background:#fff;border:1px solid var(--line);border-radius:18px;padding:12px;margin:0 0 12px;box-shadow:0 5px 14px rgba(40,50,80,.05)}
+.toolHeader{display:flex;align-items:center;gap:8px;margin:0 0 10px}
+.toolHeader h3{margin:0;font-size:16px;font-weight:950;color:var(--dark)}
+.quickToolPanel .organizeBox{gap:8px}
+.quickToolPanel .organizeOption{margin:0}
+.quickToolPanel #reflowFromTodayBtn{width:100%;justify-content:center;text-align:center}
+
+.organizeStatus{margin:-2px 0 8px;padding:8px 10px;border-radius:12px;background:#f7f8fc;border:1px solid var(--line);line-height:1.5}
+.organizeStatus.warn{background:#fff8e9;border-color:#f2c982;color:#8b5b00}
+
+.workRuleHelp{margin:6px 0 10px;line-height:1.6}
+.organizeOption input:disabled + span{opacity:.5}
+
+
+/* v76: make reflow rule clearly visible */
+.reflowRuleCard{background:#fff;border:1px solid var(--line);border-radius:16px;padding:12px;margin:0 0 10px;box-shadow:0 5px 14px rgba(40,50,80,.05)}
+.miniSectionTitle{font-size:12px;font-weight:950;color:var(--muted);margin:0 0 8px;letter-spacing:.02em}
+.organizeOption.alwaysVisible{margin:0;padding:0;border:0;background:transparent;box-shadow:none}
+.organizeOption.alwaysVisible input{width:22px;height:22px;flex:0 0 22px}
+.organizeOption.alwaysVisible span{font-size:14px;font-weight:950}
+.reflowRuleCard .organizeStatus{margin:10px 0 0}
+
+/* v76: reflow rule visibility */
+.organizeTool .toolHeader{align-items:center;}
+.organizeTool .reflowRuleCard{display:block!important;margin:8px 0 10px;padding:12px;border:1px solid color-mix(in srgb,var(--blue) 30%,var(--line));border-radius:16px;background:color-mix(in srgb,var(--blue) 7%,#fff);}
+.organizeTool .miniSectionTitle{font-weight:950;margin-bottom:8px;color:var(--dark);}
+.organizeTool .checkLine.alwaysVisible{display:flex!important;align-items:center;gap:9px;font-weight:950;line-height:1.45;}
+.organizeTool .checkLine.alwaysVisible input{width:20px;height:20px;flex:0 0 20px;}
+.organizeTool .wideAction{width:100%;margin-top:4px;}
+.organizeStatus{margin-top:8px;font-size:12px;line-height:1.55;}

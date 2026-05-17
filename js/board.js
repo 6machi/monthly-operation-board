@@ -1,9 +1,9 @@
-import { $, esc, todayISO, addDays, fmtDate, diffDays, relativeFrom, taskOccursOnDate, occurrenceLabel, fullClock, minutesFromTime } from './utils.js?v=67';
-import { state } from './state.js?v=67';
-import { createTask, markCarryover, returnToSchedule, updateTask, deleteTask } from './tasks.js?v=67';
-import { refreshAll, showView } from './app.js?v=67';
-import { isUnavailableTask, isUnavailableForMember, unavailableBlocksForMember } from './calendar.js?v=67';
-import { updateMyProfile, loadMembers } from './auth.js?v=67';
+import { $, esc, todayISO, addDays, fmtDate, diffDays, relativeFrom, taskOccursOnDate, occurrenceLabel, fullClock, minutesFromTime } from './utils.js?v=76';
+import { state } from './state.js?v=76';
+import { createTask, markCarryover, returnToSchedule, updateTask, deleteTask } from './tasks.js?v=76';
+import { refreshAll, showView } from './app.js?v=76';
+import { isUnavailableTask, isUnavailableForMember, unavailableBlocksForMember } from './calendar.js?v=76';
+import { updateMyProfile, loadMembers } from './auth.js?v=76';
 
 const SLOT_MINUTES = 10;
 const PX_PER_MINUTE = 1.15; // 10分刻み / 60分 = 約69px
@@ -491,18 +491,83 @@ function fixedBusyIntervals(dateIso, memberId, excludeIds){
     .map((t,i)=>({ start:taskStartMinutes(t,i), end:taskStartMinutes(t,i)+taskDuration(t) }));
   return mergeIntervals([...blocks, ...tasks]);
 }
-function findSlotWithBusy(preferred, duration, busy){
+function shouldAvoidWorkForNonWork(){
+  const el = $('avoidWorkForNonWork');
+  return el ? el.checked : true;
+}
+function fixedBusyIntervalsForTask(dateIso, memberId, excludeIds, taskForPlacement){
+  const base = fixedBusyIntervals(dateIso, memberId, excludeIds);
+  // チェックONの時だけ、仕事以外のタスクは仕事時間を避ける。
+  // OFFなら、空き枠として仕事時間にも入れられる。
+  if(shouldAvoidWorkForNonWork() && taskForPlacement && !isWorkTask(taskForPlacement, memberId)){
+    const workBlocks = memberWorkIntervals(dateIso, memberId).map(b=>({ start:b.start, end:b.end }));
+    return mergeIntervals([...base, ...workBlocks]);
+  }
+  return base;
+}
+function preferredStartForTask(dateIso, task, currentMin, startDate, originalDate, memberId){
+  if(dateIso === startDate) return currentMin;
+  if(dateIso === originalDate && diffDays(originalDate, startDate) > 0) return taskStartMinutes(task, 0);
+  if(isWorkTask(task, memberId)){
+    const work = memberWorkIntervals(dateIso, memberId);
+    if(work.length) return work[0].start;
+  }
+  return minutesFromTime(memberSleep().end || '09:00');
+}
+function findSlotWithBusy(preferred, duration, busy, options={}){
   duration = snapDuration(duration);
   const start = snapMinutes(preferred);
+  const noWrap = !!options.noWrap;
+  const windows = Array.isArray(options.windows) ? options.windows.filter(w=>Number.isFinite(w.start)&&Number.isFinite(w.end)&&w.end>w.start) : null;
   const candidates=[];
-  for(let m=start; m<=DAY_MINUTES-duration; m+=SLOT_MINUTES) candidates.push(m);
-  for(let m=0; m<start; m+=SLOT_MINUTES) candidates.push(m);
+  function pushRange(from, to){
+    const a = Math.max(0, snapMinutes(from));
+    const b = Math.min(DAY_MINUTES, snapMinutes(to));
+    for(let m=a; m<=b-duration; m+=SLOT_MINUTES) candidates.push(m);
+  }
+  if(windows && windows.length){
+    windows.forEach(w=>pushRange(Math.max(start, w.start), w.end));
+    if(!noWrap) windows.forEach(w=>{ if(w.start < start) pushRange(w.start, Math.min(start, w.end)); });
+  }else{
+    pushRange(start, DAY_MINUTES);
+    if(!noWrap) pushRange(0, start);
+  }
   return candidates.find(m=>!busy.some(b=>intervalsOverlap(m,m+duration,b.start,b.end))) ?? null;
+}
+function workWindowsForTask(dateIso, task, memberId){
+  if(!isWorkTask(task, memberId)) return null;
+  const work = memberWorkIntervals(dateIso, memberId).map(b=>({ start:b.start, end:b.end }));
+  return work.length ? work : null;
 }
 function getCategoryColorByName(name){
   const cat = (state.tree || []).find(c=>c.name===name);
   return cat?.color || '#9aa4b6';
 }
+
+function renderOrganizeWorkStatus(){
+  const el = $('organizeWorkStatus');
+  if(!el) return;
+  const checkbox = $('avoidWorkForNonWork');
+  const w = memberWorkSettings(state.selectedMemberId || state.user?.id);
+  const mine = isEditable();
+  const isOn = !!checkbox?.checked;
+  if(!mine){
+    if(checkbox) checkbox.disabled = true;
+    el.textContent = '他メンバー表示中のため、自分のタスク振り直し設定は使えません。';
+    el.className = 'organizeStatus muted warn';
+    return;
+  }
+  if(!w.enabled){
+    if(checkbox) checkbox.disabled = true;
+    el.textContent = '仕事時間ルールがOFFです。OFFの時は「仕事時間」という制限を使わないため、仕事以外のタスクも空いている時間に入ります。避けたい場合は、右上の自分の名前 → 基本的な仕事時間の設定でONにしてください。';
+    el.className = 'organizeStatus muted warn';
+    return;
+  }
+  if(checkbox) checkbox.disabled = false;
+  el.textContent = `仕事時間ルールON：${w.start}〜${w.end} / 仕事カテゴリ：${w.category} / ${isOn ? '仕事以外のタスクは仕事時間に振り分けません' : '仕事以外のタスクも空いていれば仕事時間に入ります'}`;
+  el.className = 'organizeStatus muted';
+}
+
 function showOrganizeMessage(text, error=false){
   const el = $('organizeMsg');
   if(!el) return;
@@ -518,22 +583,28 @@ async function reflowTasksAvoidingUnavailable(){
   const endDate = monthEndIso(startDate);
   const ownerId = state.selectedMemberId || state.user.id;
   const movable = taskArray()
-    .filter(t=>t && t.id && t.owner_id===ownerId && !t.done && !isUnavailableTask(t) && (t.occurrence || 'single') === 'single')
+    .filter(t=>t && t.id && t.owner_id===ownerId && !t.done && !isUnavailableTask(t) && ['single',''].includes(t.occurrence || 'single'))
     // 前日以前に置き去りになった未完了タスクも必ず回収する。
     .filter(t=>diffDays(effectiveTaskDate(t), endDate) <= 0)
     .sort((a,b)=>{
+      // 仕事カテゴリのタスクは、仕事時間へ優先的に入れたいので先に配置する。
+      const aw = isWorkTask(a, ownerId) ? 0 : 1;
+      const bw = isWorkTask(b, ownerId) ? 0 : 1;
+      if(aw !== bw) return aw - bw;
       const da = effectiveTaskDate(a), db = effectiveTaskDate(b);
       if(da!==db) return da.localeCompare(db);
       return taskStartMinutes(a,0)-taskStartMinutes(b,0);
     });
-  if(!movable.length){ showOrganizeMessage('現在時刻以降へ振り直す未完了タスクはありません。'); return; }
+  if(!movable.length){ showOrganizeMessage('今から入れ直す未完了タスクはありません。'); return; }
   const excludeIds = movable.map(t=>t.id);
   const busyByDate = new Map();
-  function busyFor(date){
-    if(!busyByDate.has(date)) busyByDate.set(date, fixedBusyIntervals(date, ownerId, excludeIds));
-    return busyByDate.get(date);
+  function busyFor(date, task){
+    const key = `${date}:${isWorkTask(task, ownerId) ? 'work' : 'free'}`;
+    if(!busyByDate.has(key)) busyByDate.set(key, fixedBusyIntervalsForTask(date, ownerId, excludeIds, task));
+    return busyByDate.get(key);
   }
   let moved=0, skipped=0;
+  let workMoved=0, freeMoved=0;
   for(const t of movable){
     const duration = taskDuration(t);
     const original = effectiveTaskDate(t);
@@ -542,9 +613,12 @@ async function reflowTasksAvoidingUnavailable(){
     let placed = null;
     for(const date of dateRangeInclusive(searchStart, due)){
       if(isWholeDayBlocked(date, ownerId)) continue;
-      const busy = busyFor(date);
-      const preferred = date===startDate ? currentMin : (date===original && diffDays(original,startDate)>0 ? taskStartMinutes(t,0) : minutesFromTime(memberSleep().end || '09:00'));
-      const slot = findSlotWithBusy(preferred, duration, busy);
+      const busy = busyFor(date, t);
+      const preferred = preferredStartForTask(date, t, currentMin, startDate, original, ownerId);
+      const slot = findSlotWithBusy(preferred, duration, busy, {
+        noWrap: date === startDate,
+        windows: workWindowsForTask(date, t, ownerId)
+      });
       if(slot !== null){
         placed = { date, start:slot };
         busy.push({ start:slot, end:slot+duration });
@@ -557,9 +631,11 @@ async function reflowTasksAvoidingUnavailable(){
     if(t.schedule_date!==patch.schedule_date || t.carryover_date || t.start_time!==patch.start_time){
       await updateTask(t.id, patch);
       moved++;
+      if(isWorkTask(t, ownerId)) workMoved++; else freeMoved++;
     }
   }
-  showOrganizeMessage(`${moved}件を現在時刻以降の空き時間へ並べ直しました。${skipped ? ` ${skipped}件は空き枠が見つかりませんでした。` : ''}`, !!skipped);
+  const detail = moved ? `（仕事 ${workMoved}件 / 自由 ${freeMoved}件${shouldAvoidWorkForNonWork() ? ' / 仕事以外は仕事時間に振り分けずに配置' : ' / 仕事時間も使用可'}）` : '';
+  showOrganizeMessage(`${moved}件を今から先の空き時間へ入れ直しました。${detail}${skipped ? ` ${skipped}件は空き枠が見つかりませんでした。` : ''}`, !!skipped);
   await refreshAll();
 }
 async function redistributeDailyTasksFromToday(){
@@ -1144,6 +1220,7 @@ export function renderBoard(){
 
     try{ renderActivitySummary(); }catch(e){ console.warn('activity summary skipped', e); }
     try{ renderWorkStartStatus(); }catch(e){ console.warn('work start status skipped', e); }
+    try{ renderOrganizeWorkStatus(); }catch(e){ console.warn('organize work status skipped', e); }
     try{ renderBoardSleepSettings(); }catch(e){ console.warn('sleep settings skipped', e); }
     try{ renderTimeline(); }catch(e){ console.error('timeline render failed', e); renderTimelineFallback(e); }
     try{ renderCarryList(); }catch(e){ console.warn('carry list skipped', e); }

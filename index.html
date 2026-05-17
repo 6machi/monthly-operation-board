@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>タスクかんりシート</title>
-  <link rel="stylesheet" href="style.css?v=67" />
+  <link rel="stylesheet" href="style.css?v=76" />
 </head>
 <body>
   <header>
@@ -59,16 +59,21 @@
               <span class="scheduleTitle" id="scheduleTitle">今日のスケジュール</span>
               <button class="scheduleMove" id="scheduleNext" title="次の日へ">&gt;&gt;</button>
             </div>
-            <details class="panelDetails compactTool organizeTool">
-              <summary>タスクを振り直す <button class="infoDot" type="button" data-info="今から先の未完了タスクを、睡眠・仕事時間・稼働不可時間を避けて入れ直します。">i</button></summary>
+            <section class="quickToolPanel organizeTool">
+              <div class="toolHeader">
+                <h3>タスクを振り直す</h3>
+                <button class="infoDot" type="button" data-info="対象は、単発・持ち越し・分割タスク・過去に残った未完了タスクです。毎日/毎週/毎月の繰り返しタスク、睡眠、稼働不可、仕事時間は入れ直し対象にしません。">i</button>
+              </div>
               <div class="organizeBox">
-                <div class="organizeActions">
-                  <button class="primary" type="button" id="reflowFromTodayBtn">現在時刻以降でタスクを振り直す</button>
-                  <button class="ghost" type="button" id="reflowDailyTasksBtn">毎日タスクを今日から分け直す</button>
+                <div class="reflowRuleCard">
+                  <div class="miniSectionTitle">振り直しルール</div>
+                  <label class="checkLine organizeOption alwaysVisible"><input type="checkbox" id="avoidWorkForNonWork" checked><span>仕事以外のタスクを仕事時間に振り分けない</span></label>
+                  <div id="organizeWorkStatus" class="organizeStatus muted"></div>
                 </div>
+                <button class="primary wideAction" type="button" id="reflowFromTodayBtn">未完了タスクを今から入れ直す</button>
                 <div id="organizeMsg" class="notice hidden"></div>
               </div>
-            </details>
+            </section>
             <details class="panelDetails compactTool sleepTool" open>
               <summary>睡眠時間 <button class="infoDot" type="button" data-info="寝る時間・起きる時間を一時的にずらしたいときに使います。タイムライン上では灰色のすいみん予定として表示されます。">i</button></summary>
               <div class="form two compactForm">
@@ -171,7 +176,8 @@
           </div>
           <div class="sectionline workSettingsBlock">
             <h3>基本的な仕事時間の設定 <button class="infoDot" type="button" data-info="デフォルトの仕事時間を設定できます。タイムラインに自動でこの勤務時間が反映されます。仕事時間がない人はOFFにできます。">i</button></h3>
-            <label class="toggleLine"><input id="profileWorkEnabled" type="checkbox"> 仕事時間を使う</label>
+            <label class="toggleLine"><input id="profileWorkEnabled" type="checkbox"> 仕事時間ルールを使う</label>
+            <div class="muted workRuleHelp">ONにすると、この時間は「仕事カテゴリ」だけを入れる時間として扱います。OFFの時は仕事時間の制限は使いません。</div>
             <div class="form three">
               <label><small>仕事開始</small><input id="profileWorkStart" type="time" step="600" value="10:00"></label>
               <label><small>仕事終了</small><input id="profileWorkEnd" type="time" step="600" value="19:00"></label>
@@ -265,6 +271,6 @@
   </template>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script type="module" src="js/app.js?v=67"></script>
+  <script type="module" src="js/app.js?v=76"></script>
 </body>
 </html>
