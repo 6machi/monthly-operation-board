@@ -1,9 +1,9 @@
-import { $, esc, todayISO, addDays, fmtDate, diffDays, relativeFrom, taskOccursOnDate, occurrenceLabel, fullClock, minutesFromTime } from './utils.js?v=76';
-import { state } from './state.js?v=76';
-import { createTask, markCarryover, returnToSchedule, updateTask, deleteTask } from './tasks.js?v=76';
-import { refreshAll, showView } from './app.js?v=76';
-import { isUnavailableTask, isUnavailableForMember, unavailableBlocksForMember } from './calendar.js?v=76';
-import { updateMyProfile, loadMembers } from './auth.js?v=76';
+import { $, esc, todayISO, addDays, fmtDate, diffDays, relativeFrom, taskOccursOnDate, occurrenceLabel, fullClock, minutesFromTime } from './utils.js?v=77';
+import { state } from './state.js?v=77';
+import { createTask, markCarryover, returnToSchedule, updateTask, deleteTask } from './tasks.js?v=77';
+import { refreshAll, showView } from './app.js?v=77';
+import { isUnavailableTask, isUnavailableForMember, unavailableBlocksForMember } from './calendar.js?v=77';
+import { updateMyProfile, loadMembers } from './auth.js?v=77';
 
 const SLOT_MINUTES = 10;
 const PX_PER_MINUTE = 1.15; // 10分刻み / 60分 = 約69px
@@ -575,6 +575,60 @@ function showOrganizeMessage(text, error=false){
   el.className = `notice ${error ? 'error' : 'ok'}`;
   el.classList.remove('hidden');
 }
+
+function splitTaskInfo(t){
+  const title = String(t?.title || '').trim();
+  const m = title.match(/^(.*?)[\s　]*[\(（](\d+)\s*\/\s*(\d+)[\)）]\s*$/);
+  if(!m) return null;
+  const base = m[1].trim() || title;
+  return { base, index:Number(m[2]), total:Number(m[3]), key:`${String(t?.category||'')}::${String(t?.project||'')}::${base}` };
+}
+function isSplitTask(t){ return !!splitTaskInfo(t); }
+function taskDueKey(t){
+  const d = t?.due_date || t?.schedule_date || t?.carryover_date || monthEndIso(todayISO());
+  return String(d || '9999-12-31');
+}
+function reflowPrioritySort(a,b, ownerId){
+  // 締切が近いものを最優先。次に仕事カテゴリ、元の日付、開始時間。
+  const da = taskDueKey(a), db = taskDueKey(b);
+  if(da !== db) return da.localeCompare(db);
+  const aw = isWorkTask(a, ownerId) ? 0 : 1;
+  const bw = isWorkTask(b, ownerId) ? 0 : 1;
+  if(aw !== bw) return aw - bw;
+  const ea = effectiveTaskDate(a), eb = effectiveTaskDate(b);
+  if(ea !== eb) return ea.localeCompare(eb);
+  return taskStartMinutes(a,0)-taskStartMinutes(b,0);
+}
+function buildSplitDistribution(tasks, startDate, ownerId){
+  // 「表紙制作 (1/44)」のような分割タスクは、振り直し時に今日へ全部集約しない。
+  // 同じ親タスクごとに、締切までの稼働可能日へ均等に散らすための目標日を作る。
+  const groups = new Map();
+  tasks.forEach(t=>{
+    const info = splitTaskInfo(t);
+    if(!info) return;
+    if(!groups.has(info.key)) groups.set(info.key, []);
+    groups.get(info.key).push(t);
+  });
+  const targetById = new Map();
+  groups.forEach(arr=>{
+    arr.sort((a,b)=>{
+      const ia = splitTaskInfo(a)?.index || 0;
+      const ib = splitTaskInfo(b)?.index || 0;
+      if(ia !== ib) return ia-ib;
+      return reflowPrioritySort(a,b,ownerId);
+    });
+    const due = arr.map(t=>t.due_date).filter(Boolean).sort()[0] || monthEndIso(startDate);
+    const rawDates = dateRangeInclusive(startDate, due).filter(d=>!isWholeDayBlocked(d, ownerId));
+    const dates = rawDates.length ? rawDates : [startDate];
+    const perDay = Math.max(1, Math.ceil(arr.length / dates.length));
+    arr.forEach((t,i)=>{
+      const idx = Math.min(dates.length-1, Math.floor(i / perDay));
+      targetById.set(String(t.id), dates[idx]);
+    });
+  });
+  return targetById;
+}
+
 async function reflowTasksAvoidingUnavailable(){
   if(!isEditable()) return alert('自分のタスクだけ整理できます');
   const now = new Date();
@@ -583,38 +637,45 @@ async function reflowTasksAvoidingUnavailable(){
   const endDate = monthEndIso(startDate);
   const ownerId = state.selectedMemberId || state.user.id;
   const movable = taskArray()
-    .filter(t=>t && t.id && t.owner_id===ownerId && !t.done && !isUnavailableTask(t) && ['single',''].includes(t.occurrence || 'single'))
-    // 前日以前に置き去りになった未完了タスクも必ず回収する。
+    .filter(t=>t && t.id && t.owner_id===ownerId && !t.done && !isUnavailableTask(t))
+    // 毎日/毎週/毎月は「ルール」扱い。今日へ集約しない。
+    .filter(t=>['single',''].includes(t.occurrence || 'single'))
+    // 前日以前に置き去りになった未完了タスクも回収。未来分も締切順で再配置する。
     .filter(t=>diffDays(effectiveTaskDate(t), endDate) <= 0)
-    .sort((a,b)=>{
-      // 仕事カテゴリのタスクは、仕事時間へ優先的に入れたいので先に配置する。
-      const aw = isWorkTask(a, ownerId) ? 0 : 1;
-      const bw = isWorkTask(b, ownerId) ? 0 : 1;
-      if(aw !== bw) return aw - bw;
-      const da = effectiveTaskDate(a), db = effectiveTaskDate(b);
-      if(da!==db) return da.localeCompare(db);
-      return taskStartMinutes(a,0)-taskStartMinutes(b,0);
-    });
+    .sort((a,b)=>reflowPrioritySort(a,b,ownerId));
   if(!movable.length){ showOrganizeMessage('今から入れ直す未完了タスクはありません。'); return; }
+
+  const splitTargets = buildSplitDistribution(movable.filter(isSplitTask), startDate, ownerId);
   const excludeIds = movable.map(t=>t.id);
   const busyByDate = new Map();
   function busyFor(date, task){
-    const key = `${date}:${isWorkTask(task, ownerId) ? 'work' : 'free'}`;
+    const key = `${date}:${isWorkTask(task, ownerId) ? 'work' : 'free'}:${shouldAvoidWorkForNonWork() ? 'avoid' : 'allow'}`;
     if(!busyByDate.has(key)) busyByDate.set(key, fixedBusyIntervalsForTask(date, ownerId, excludeIds, task));
     return busyByDate.get(key);
   }
   let moved=0, skipped=0;
-  let workMoved=0, freeMoved=0;
+  let workMoved=0, freeMoved=0, splitMoved=0;
+
   for(const t of movable){
     const duration = taskDuration(t);
     const original = effectiveTaskDate(t);
     const due = t.due_date && diffDays(t.due_date, startDate)>=0 ? t.due_date : endDate;
-    const searchStart = startDate;
+    const splitTarget = splitTargets.get(String(t.id));
+    // 分割タスクは、残り日数で散らした目標日から探す。通常タスクは締切順で今から探す。
+    const searchStart = splitTarget || startDate;
+    let dates = dateRangeInclusive(searchStart, due);
+    if(splitTarget && !dates.includes(splitTarget)) dates = [splitTarget, ...dates];
+    // 分割タスクは目標日を先頭にしつつ、入りきらなければ締切まで探す。
+    if(splitTarget){
+      dates = [splitTarget, ...dates.filter(d=>d!==splitTarget)];
+    }
     let placed = null;
-    for(const date of dateRangeInclusive(searchStart, due)){
+    for(const date of dates){
       if(isWholeDayBlocked(date, ownerId)) continue;
       const busy = busyFor(date, t);
-      const preferred = preferredStartForTask(date, t, currentMin, startDate, original, ownerId);
+      const preferred = splitTarget && date === splitTarget
+        ? preferredStartForTask(date, t, currentMin, date, original, ownerId)
+        : preferredStartForTask(date, t, currentMin, startDate, original, ownerId);
       const slot = findSlotWithBusy(preferred, duration, busy, {
         noWrap: date === startDate,
         windows: workWindowsForTask(date, t, ownerId)
@@ -632,10 +693,11 @@ async function reflowTasksAvoidingUnavailable(){
       await updateTask(t.id, patch);
       moved++;
       if(isWorkTask(t, ownerId)) workMoved++; else freeMoved++;
+      if(isSplitTask(t)) splitMoved++;
     }
   }
-  const detail = moved ? `（仕事 ${workMoved}件 / 自由 ${freeMoved}件${shouldAvoidWorkForNonWork() ? ' / 仕事以外は仕事時間に振り分けずに配置' : ' / 仕事時間も使用可'}）` : '';
-  showOrganizeMessage(`${moved}件を今から先の空き時間へ入れ直しました。${detail}${skipped ? ` ${skipped}件は空き枠が見つかりませんでした。` : ''}`, !!skipped);
+  const detail = moved ? `（仕事 ${workMoved}件 / 自由 ${freeMoved}件${splitMoved ? ` / 分割 ${splitMoved}件は残り日数へ再配分` : ''}${shouldAvoidWorkForNonWork() ? ' / 仕事以外は仕事時間に振り分けずに配置' : ' / 仕事時間も使用可'}）` : '';
+  showOrganizeMessage(`${moved}件を締切が近い順に、今から先の空き時間へ入れ直しました。${detail}${skipped ? ` ${skipped}件は空き枠が見つかりませんでした。` : ''}`, !!skipped);
   await refreshAll();
 }
 async function redistributeDailyTasksFromToday(){
