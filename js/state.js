@@ -1,4 +1,4 @@
-import { todayISO, addDays } from './utils.js?v=78';
+import { todayISO, addDays } from './utils.js?v=79';
 export const state = {
   session:null,
   user:null,
@@ -10,7 +10,7 @@ export const state = {
   tree:[],
   treeRowId:null,
   selectedCategoryIndex:0,
-  view:'board',
+  view:'calendar',
   scheduleDate:todayISO(),
   carryDate:addDays(todayISO(),1),
   calendarMonth:todayISO().slice(0,7),

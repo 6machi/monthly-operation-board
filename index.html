@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>タスクかんりシート</title>
-  <link rel="stylesheet" href="style.css?v=78" />
+  <link rel="stylesheet" href="style.css?v=79" />
 </head>
 <body>
   <header>
@@ -19,8 +19,8 @@
         </div>
       </div>
       <nav id="mainNav" class="hidden">
-        <button class="active" data-view="board">今日やること</button>
-        <button data-view="calendar">今月のよてい</button>
+        <button class="active" data-view="calendar">ガンチャ</button>
+        <button data-view="board">今日やること</button>
         <button data-view="setup">タスクのついか</button>
       </nav>
     </div>
@@ -45,7 +45,7 @@
     </section>
 
     <section id="appView" class="hidden">
-      <section id="board" class="view active">
+      <section id="board" class="view">
         <div class="todayHero">
           <div class="date dateTime" id="heroDate">----</div>
         </div>
@@ -123,7 +123,7 @@
         </div>
       </section>
 
-      <section id="calendar" class="view">
+      <section id="calendar" class="view active">
         <section class="panel">
           <div class="calendarTop">
             <label><small>表示月</small><input type="month" id="calendarMonth"></label>
@@ -132,7 +132,7 @@
         </section>
         <section class="panel ganttPanel" id="ganttPanel">
           <div class="ganttHead">
-            <h2>ガンチャ <button class="infoDot" type="button" data-info="今月のタスクをカテゴリ・プロジェクト別に横長で確認します。大枠はここで見て、細かい時間調整はタイムラインで行います。">i</button></h2>
+            <h2>ガンチャ <button class="infoDot" type="button" data-info="大枠はここで管理します。カテゴリごとに、タスク単位で期間を確認できます。細かい時間調整は今日やることのタイムラインで行います。">i</button></h2>
             <div class="actions ganttActions">
               <button class="primary" id="ganttAssignTodayBtn" type="button">今日のタイムラインに自動配置</button>
               <button class="ghost" id="ganttOpenTodayBtn" type="button">今日のタイムラインを見る</button>
@@ -282,6 +282,6 @@
   </template>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script type="module" src="js/app.js?v=78"></script>
+  <script type="module" src="js/app.js?v=79"></script>
 </body>
 </html>

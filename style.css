@@ -771,3 +771,19 @@ input[type="time"], input[type="date"]{min-height:42px}
 .ganttBarTitle{overflow:hidden;text-overflow:ellipsis;min-width:0}
 .ganttBarMeta{font-size:11px;color:var(--muted);margin-left:auto;flex:0 0 auto}
 @media(max-width:700px){.ganttHeader,.ganttGroup{grid-template-columns:160px max-content}.ganttCorner,.ganttGroupHead{width:160px}.ganttDate,.ganttDayCell{width:36px;min-width:36px}.ganttDates,.ganttLine{grid-template-columns:repeat(var(--days),36px)}}
+
+/* v79: top gantt by task rows */
+.ganttScroll.taskGantt{max-height:72vh}
+.ganttCategoryBlock{border-bottom:1px solid #e7edf6;background:#fff}
+.ganttCategoryTitle{position:sticky;left:0;z-index:3;background:linear-gradient(90deg,color-mix(in srgb,var(--cat-color) 12%,#fff),#fff);border-left:8px solid var(--cat-color);border-right:1px solid var(--line);padding:10px 12px;display:flex;align-items:center;gap:10px;font-weight:950;color:var(--dark)}
+.ganttCategoryTitle small{color:var(--muted);font-size:12px;font-weight:900}
+.ganttTaskRow{display:grid;grid-template-columns:220px max-content;min-height:52px;border-top:1px solid #f0f3f8}
+.ganttTaskLabel{position:sticky;left:0;z-index:2;background:#fff;border-radius:0;box-shadow:none;border:0;border-right:1px solid var(--line);border-left:8px solid color-mix(in srgb,var(--cat-color) 75%,#fff);padding:9px 10px;text-align:left;display:grid;gap:2px;align-content:center;color:var(--dark)}
+.ganttTaskLabel:hover{background:color-mix(in srgb,var(--cat-color) 8%,#fff)}
+.ganttTaskTitle{font-size:13px;font-weight:950;line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ganttTaskLabel small{font-size:11px;color:var(--muted);font-weight:850;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.taskGantt .ganttLine{min-height:52px;grid-auto-rows:minmax(52px,auto)}
+.taskGantt .ganttDayCell{min-height:52px}
+.taskGantt .ganttBar{min-height:30px;margin:10px 3px;align-self:center}
+.taskGantt .ganttGroup,.taskGantt .ganttGroupHead{display:contents}
+@media(max-width:700px){.ganttTaskRow{grid-template-columns:160px max-content}.ganttTaskLabel{width:160px}.ganttTaskTitle{font-size:12px}.ganttCategoryTitle{width:160px}}

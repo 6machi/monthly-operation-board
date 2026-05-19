@@ -1,8 +1,8 @@
-import { $, esc, toISO, todayISO, diffDays, taskOccursOnDate, minutesFromTime, fullClock, fmtDate } from './utils.js?v=78';
-import { state } from './state.js?v=78';
-import { openDateOnBoard, openTaskEditor } from './board.js?v=78';
-import { createTask, deleteTask, updateTask } from './tasks.js?v=78';
-import { refreshAll } from './app.js?v=78';
+import { $, esc, toISO, todayISO, diffDays, taskOccursOnDate, minutesFromTime, fullClock, fmtDate } from './utils.js?v=79';
+import { state } from './state.js?v=79';
+import { openDateOnBoard, openTaskEditor } from './board.js?v=79';
+import { createTask, deleteTask, updateTask } from './tasks.js?v=79';
+import { refreshAll } from './app.js?v=79';
 
 const DAY_MINUTES = 24 * 60;
 let selectedCalendarDate = todayISO();
@@ -285,10 +285,10 @@ function ganttTasks(){
     .sort((a,b)=>{
       const ad = a.task.due_date || a.span.end;
       const bd = b.task.due_date || b.span.end;
-      return String(a.task.category||'').localeCompare(String(b.task.category||''))
-        || String(a.task.project||'').localeCompare(String(b.task.project||''))
+      return String(a.task.category||'未分類').localeCompare(String(b.task.category||'未分類'),'ja')
         || ad.localeCompare(bd)
-        || String(a.task.title||'').localeCompare(String(b.task.title||''));
+        || String(a.task.title||'').localeCompare(String(b.task.title||''),'ja')
+        || String(a.task.project||'').localeCompare(String(b.task.project||''),'ja');
     });
 }
 function renderGanttBoard(){
@@ -300,7 +300,7 @@ function renderGanttBoard(){
   const items = ganttTasks();
   const groups = new Map();
   items.forEach(item=>{
-    const key = `${item.task.category || '未分類'}||${item.task.project || '未分類'}`;
+    const key = item.task.category || '未分類';
     if(!groups.has(key)) groups.set(key, []);
     groups.get(key).push(item);
   });
@@ -310,33 +310,38 @@ function renderGanttBoard(){
   }
   const today = todayISO();
   board.innerHTML = `
-    <div class="ganttScroll">
+    <div class="ganttScroll taskGantt">
       <div class="ganttHeader" style="--days:${last}">
-        <div class="ganttCorner">カテゴリ / プロジェクト</div>
+        <div class="ganttCorner">タスク</div>
         <div class="ganttDates">${days.map(d=>{
           const iso = `${state.calendarMonth}-${String(d).padStart(2,'0')}`;
           return `<button type="button" class="ganttDate ${iso===today?'today':''}" data-gantt-date="${iso}">${d}</button>`;
         }).join('')}</div>
       </div>
       <div class="ganttRows">
-        ${Array.from(groups.entries()).map(([key,arr])=>{
-          const [category,project] = key.split('||');
+        ${Array.from(groups.entries()).map(([category,arr])=>{
           const color = categoryColor(category);
-          return `<section class="ganttGroup" style="--cat-color:${esc(color)};--days:${last}">
-            <div class="ganttGroupHead"><b>${esc(category)}</b><span>${esc(project)}</span><small>${arr.length}件</small></div>
-            <div class="ganttLine">
-              ${days.map(d=>`<button type="button" class="ganttDayCell" data-gantt-date="${state.calendarMonth}-${String(d).padStart(2,'0')}"></button>`).join('')}
-              ${arr.map(({task:t,span})=>{
-                const mem = taskOwner(t);
-                const pct = t.done ? 100 : 0;
-                const dueSoon = t.due_date && diffDays(t.due_date, today) <= 3 && !t.done;
-                return `<button type="button" class="ganttBar ${t.done?'done':''} ${dueSoon?'dueSoon':''}" data-gantt-task-id="${esc(t.id)}" style="grid-column:${span.startDay} / span ${span.span};--member-color:${esc(mem.color || '#5d9cec')};--cat-color:${esc(color)}" title="${esc(t.title || '無題のタスク')}">
-                  <span class="ganttBarOwner">${esc(mem.emoji || '🌙')}</span>
-                  <span class="ganttBarTitle">${esc(t.title || '無題のタスク')}</span>
-                  <span class="ganttBarMeta">${esc(t.due_date ? `〆${t.due_date.slice(5)}` : '')}${t.done?' 完了':''}</span>
-                </button>`;
-              }).join('')}
-            </div>
+          return `<section class="ganttCategoryBlock" style="--cat-color:${esc(color)};--days:${last}">
+            <div class="ganttCategoryTitle"><b>${esc(category)}</b><small>${arr.length}件</small></div>
+            ${arr.map(({task:t,span})=>{
+              const mem = taskOwner(t);
+              const dueSoon = t.due_date && diffDays(t.due_date, today) <= 3 && !t.done;
+              const project = t.project || '';
+              return `<div class="ganttTaskRow" style="--days:${last};--cat-color:${esc(color)}">
+                <button type="button" class="ganttTaskLabel" data-gantt-task-id="${esc(t.id)}">
+                  <span class="ganttTaskTitle">${esc(t.title || '無題のタスク')}</span>
+                  <small>${project ? esc(project) : 'プロジェクト未設定'}${t.due_date ? ` / 〆${esc(t.due_date.slice(5))}` : ''}</small>
+                </button>
+                <div class="ganttLine">
+                  ${days.map(d=>`<button type="button" class="ganttDayCell" data-gantt-date="${state.calendarMonth}-${String(d).padStart(2,'0')}"></button>`).join('')}
+                  <button type="button" class="ganttBar ${t.done?'done':''} ${dueSoon?'dueSoon':''}" data-gantt-task-id="${esc(t.id)}" style="grid-column:${span.startDay} / span ${span.span};--member-color:${esc(mem.color || '#5d9cec')};--cat-color:${esc(color)}" title="${esc(t.title || '無題のタスク')}">
+                    <span class="ganttBarOwner">${esc(mem.emoji || '🌙')}</span>
+                    <span class="ganttBarTitle">${esc(t.title || '無題のタスク')}</span>
+                    <span class="ganttBarMeta">${esc(t.due_date ? `〆${t.due_date.slice(5)}` : '')}${t.done?' 完了':''}</span>
+                  </button>
+                </div>
+              </div>`;
+            }).join('')}
           </section>`;
         }).join('')}
       </div>
@@ -836,7 +841,7 @@ export function initCalendarEvents(){
   $('icsSelectAllBtn')?.addEventListener('click',()=>document.querySelectorAll('[data-ics-index]').forEach(c=>c.checked=true));
   $('icsClearAllBtn')?.addEventListener('click',()=>document.querySelectorAll('[data-ics-index]').forEach(c=>c.checked=false));
   $('icsImportBtn')?.addEventListener('click', importSelectedIcs);
-  $('openProfileFromCalendar')?.addEventListener('click',()=>{ import('./app.js?v=78').then(m=>m.showView('profile')); });
+  $('openProfileFromCalendar')?.addEventListener('click',()=>{ import('./app.js?v=79').then(m=>m.showView('profile')); });
   $('unavailableAllDay')?.addEventListener('change',()=>{
     const allDay = $('unavailableAllDay').checked;
     $('unavailableStart').disabled = allDay;
