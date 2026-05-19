@@ -787,3 +787,9 @@ input[type="time"], input[type="date"]{min-height:42px}
 .taskGantt .ganttBar{min-height:30px;margin:10px 3px;align-self:center}
 .taskGantt .ganttGroup,.taskGantt .ganttGroupHead{display:contents}
 @media(max-width:700px){.ganttTaskRow{grid-template-columns:160px max-content}.ganttTaskLabel{width:160px}.ganttTaskTitle{font-size:12px}.ganttCategoryTitle{width:160px}}
+
+
+/* v80: grouped split tasks in gantt */
+.ganttTaskRow.grouped .ganttTaskLabel{background:color-mix(in srgb,var(--cat-color) 9%,#fff)}
+.ganttBar.grouped{background:linear-gradient(90deg,color-mix(in srgb,var(--cat-color) 28%,#fff),color-mix(in srgb,var(--member-color) 18%,#fff));border-style:solid}
+.ganttBar.grouped .ganttBarMeta{font-weight:950;background:rgba(255,255,255,.72);border-radius:999px;padding:2px 7px}

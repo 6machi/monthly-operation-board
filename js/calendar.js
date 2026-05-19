@@ -1,8 +1,8 @@
-import { $, esc, toISO, todayISO, diffDays, taskOccursOnDate, minutesFromTime, fullClock, fmtDate } from './utils.js?v=79';
-import { state } from './state.js?v=79';
-import { openDateOnBoard, openTaskEditor } from './board.js?v=79';
-import { createTask, deleteTask, updateTask } from './tasks.js?v=79';
-import { refreshAll } from './app.js?v=79';
+import { $, esc, toISO, todayISO, diffDays, taskOccursOnDate, minutesFromTime, fullClock, fmtDate } from './utils.js?v=80';
+import { state } from './state.js?v=80';
+import { openDateOnBoard, openTaskEditor } from './board.js?v=80';
+import { createTask, deleteTask, updateTask } from './tasks.js?v=80';
+import { refreshAll } from './app.js?v=80';
 
 const DAY_MINUTES = 24 * 60;
 let selectedCalendarDate = todayISO();
@@ -276,20 +276,68 @@ function taskSpanInMonth(t, month){
 function taskOwner(t){
   return memberArray().find(m=>m.id===t.owner_id) || { name:'不明', emoji:'?', color:'#9aa4b6' };
 }
+function splitTaskBaseTitle(title){
+  const raw = String(title || '無題のタスク').trim();
+  const m = raw.match(/^(.*?)[\s　]*[（(]\s*\d+\s*\/\s*\d+\s*[）)]\s*$/);
+  return (m ? m[1] : raw).trim() || raw;
+}
+function isSplitLikeTask(t){
+  return /[（(]\s*\d+\s*\/\s*\d+\s*[）)]\s*$/.test(String(t?.title || ''));
+}
 function ganttTasks(){
   const month = state.calendarMonth;
-  return taskArray()
+  const rawItems = taskArray()
     .filter(t=>t && t.id && !isUnavailableTask(t))
     .map(t=>({ task:t, span:taskSpanInMonth(t, month) }))
-    .filter(x=>x.span)
-    .sort((a,b)=>{
-      const ad = a.task.due_date || a.span.end;
-      const bd = b.task.due_date || b.span.end;
-      return String(a.task.category||'未分類').localeCompare(String(b.task.category||'未分類'),'ja')
-        || ad.localeCompare(bd)
-        || String(a.task.title||'').localeCompare(String(b.task.title||''),'ja')
-        || String(a.task.project||'').localeCompare(String(b.task.project||''),'ja');
+    .filter(x=>x.span);
+
+  const groups = new Map();
+  rawItems.forEach(({task, span})=>{
+    const baseTitle = splitTaskBaseTitle(task.title);
+    const shouldGroup = isSplitLikeTask(task);
+    const key = shouldGroup
+      ? [task.owner_id || '', task.category || '未分類', task.project || '', baseTitle].join('::')
+      : `single::${task.id}`;
+    if(!groups.has(key)) groups.set(key, {
+      key,
+      baseTitle,
+      category: task.category || '未分類',
+      project: task.project || '',
+      owner_id: task.owner_id,
+      tasks: [],
+      spans: [],
+      isGroup: shouldGroup
     });
+    const g = groups.get(key);
+    g.tasks.push(task);
+    g.spans.push(span);
+  });
+
+  return Array.from(groups.values()).map(g=>{
+    const startDay = Math.min(...g.spans.map(s=>s.startDay));
+    const endDay = Math.max(...g.spans.map(s=>s.endDay));
+    const dates = g.tasks.map(t=>t.due_date || t.schedule_date || t.carryover_date || '').filter(Boolean).sort();
+    const due = dates[0] || '';
+    const doneCount = g.tasks.filter(t=>t.done).length;
+    const totalCount = g.tasks.length;
+    const representative = g.tasks.find(t=>!t.done) || g.tasks[0];
+    return {
+      ...g,
+      task: representative,
+      span: { startDay, endDay, span: Math.max(1, endDay - startDay + 1) },
+      due_date: due,
+      doneCount,
+      totalCount,
+      done: totalCount > 0 && doneCount === totalCount
+    };
+  }).sort((a,b)=>{
+    const ad = a.due_date || a.spans?.[0]?.end || '';
+    const bd = b.due_date || b.spans?.[0]?.end || '';
+    return String(a.category||'未分類').localeCompare(String(b.category||'未分類'),'ja')
+      || String(ad).localeCompare(String(bd))
+      || String(a.baseTitle||'').localeCompare(String(b.baseTitle||''),'ja')
+      || String(a.project||'').localeCompare(String(b.project||''),'ja');
+  });
 }
 function renderGanttBoard(){
   const board = $('ganttBoard');
@@ -300,7 +348,7 @@ function renderGanttBoard(){
   const items = ganttTasks();
   const groups = new Map();
   items.forEach(item=>{
-    const key = item.task.category || '未分類';
+    const key = item.category || '未分類';
     if(!groups.has(key)) groups.set(key, []);
     groups.get(key).push(item);
   });
@@ -323,21 +371,25 @@ function renderGanttBoard(){
           const color = categoryColor(category);
           return `<section class="ganttCategoryBlock" style="--cat-color:${esc(color)};--days:${last}">
             <div class="ganttCategoryTitle"><b>${esc(category)}</b><small>${arr.length}件</small></div>
-            ${arr.map(({task:t,span})=>{
+            ${arr.map(item=>{
+              const t = item.task;
               const mem = taskOwner(t);
-              const dueSoon = t.due_date && diffDays(t.due_date, today) <= 3 && !t.done;
-              const project = t.project || '';
-              return `<div class="ganttTaskRow" style="--days:${last};--cat-color:${esc(color)}">
-                <button type="button" class="ganttTaskLabel" data-gantt-task-id="${esc(t.id)}">
-                  <span class="ganttTaskTitle">${esc(t.title || '無題のタスク')}</span>
-                  <small>${project ? esc(project) : 'プロジェクト未設定'}${t.due_date ? ` / 〆${esc(t.due_date.slice(5))}` : ''}</small>
+              const dueSoon = item.due_date && diffDays(item.due_date, today) <= 3 && !item.done;
+              const project = item.project || '';
+              const progress = item.totalCount > 1 ? `${item.doneCount}/${item.totalCount}` : (t.done ? '完了' : '');
+              const title = item.baseTitle || t.title || '無題のタスク';
+              const labelMeta = [project || 'プロジェクト未設定', item.due_date ? `〆${item.due_date.slice(5)}` : '', item.totalCount > 1 ? `${item.doneCount}/${item.totalCount}` : ''].filter(Boolean).join(' / ');
+              return `<div class="ganttTaskRow ${item.isGroup?'grouped':''}" style="--days:${last};--cat-color:${esc(color)}">
+                <button type="button" class="ganttTaskLabel" data-gantt-task-id="${esc(t.id)}" title="${esc(title)}">
+                  <span class="ganttTaskTitle">${esc(title)}</span>
+                  <small>${esc(labelMeta)}</small>
                 </button>
                 <div class="ganttLine">
                   ${days.map(d=>`<button type="button" class="ganttDayCell" data-gantt-date="${state.calendarMonth}-${String(d).padStart(2,'0')}"></button>`).join('')}
-                  <button type="button" class="ganttBar ${t.done?'done':''} ${dueSoon?'dueSoon':''}" data-gantt-task-id="${esc(t.id)}" style="grid-column:${span.startDay} / span ${span.span};--member-color:${esc(mem.color || '#5d9cec')};--cat-color:${esc(color)}" title="${esc(t.title || '無題のタスク')}">
+                  <button type="button" class="ganttBar ${item.done?'done':''} ${dueSoon?'dueSoon':''} ${item.isGroup?'grouped':''}" data-gantt-task-id="${esc(t.id)}" style="grid-column:${item.span.startDay} / span ${item.span.span};--member-color:${esc(mem.color || '#5d9cec')};--cat-color:${esc(color)}" title="${esc(title)}">
                     <span class="ganttBarOwner">${esc(mem.emoji || '🌙')}</span>
-                    <span class="ganttBarTitle">${esc(t.title || '無題のタスク')}</span>
-                    <span class="ganttBarMeta">${esc(t.due_date ? `〆${t.due_date.slice(5)}` : '')}${t.done?' 完了':''}</span>
+                    <span class="ganttBarTitle">${esc(title)}</span>
+                    <span class="ganttBarMeta">${esc(progress || (item.due_date ? `〆${item.due_date.slice(5)}` : ''))}</span>
                   </button>
                 </div>
               </div>`;
@@ -841,7 +893,7 @@ export function initCalendarEvents(){
   $('icsSelectAllBtn')?.addEventListener('click',()=>document.querySelectorAll('[data-ics-index]').forEach(c=>c.checked=true));
   $('icsClearAllBtn')?.addEventListener('click',()=>document.querySelectorAll('[data-ics-index]').forEach(c=>c.checked=false));
   $('icsImportBtn')?.addEventListener('click', importSelectedIcs);
-  $('openProfileFromCalendar')?.addEventListener('click',()=>{ import('./app.js?v=79').then(m=>m.showView('profile')); });
+  $('openProfileFromCalendar')?.addEventListener('click',()=>{ import('./app.js?v=80').then(m=>m.showView('profile')); });
   $('unavailableAllDay')?.addEventListener('change',()=>{
     const allDay = $('unavailableAllDay').checked;
     $('unavailableStart').disabled = allDay;
