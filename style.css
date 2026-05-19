@@ -739,3 +739,35 @@ input[type="time"], input[type="date"]{min-height:42px}
 .organizeTool .checkLine.alwaysVisible input{width:20px;height:20px;flex:0 0 20px;}
 .organizeTool .wideAction{width:100%;margin-top:4px;}
 .organizeStatus{margin-top:8px;font-size:12px;line-height:1.55;}
+
+/* v78 gantt */
+.ganttPanel{overflow:hidden}
+.ganttHead{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+.ganttHead h2{margin:0;display:flex;gap:6px;align-items:center}
+.ganttActions{margin:0}
+.ganttBoard{margin-top:8px}
+.ganttScroll{overflow:auto;border:1px solid var(--line);border-radius:18px;background:rgba(255,255,255,.7);max-height:620px}
+.ganttHeader{display:grid;grid-template-columns:220px max-content;position:sticky;top:0;z-index:3;background:#fff;border-bottom:1px solid var(--line)}
+.ganttCorner{position:sticky;left:0;z-index:4;background:#fff;padding:10px 12px;font-weight:950;color:var(--dark);border-right:1px solid var(--line)}
+.ganttDates{display:grid;grid-template-columns:repeat(var(--days),42px)}
+.ganttDate,.ganttDayCell{width:42px;min-width:42px;border-radius:0;box-shadow:none;border:0;border-right:1px solid #eef1f6;background:transparent;padding:0;text-align:center}
+.ganttDate{height:42px;font-size:12px;font-weight:950;color:var(--muted)}
+.ganttDate.today{background:#fff4dc;color:#9b6500}
+.ganttRows{display:grid}
+.ganttGroup{display:grid;grid-template-columns:220px max-content;min-height:58px;border-bottom:1px solid #eef1f6}
+.ganttGroupHead{position:sticky;left:0;z-index:2;background:#fff;border-right:1px solid var(--line);border-left:7px solid var(--cat-color);padding:10px 10px;display:grid;gap:3px;align-content:center}
+.ganttGroupHead b{font-size:13px;line-height:1.2}
+.ganttGroupHead span{font-size:12px;color:var(--muted);font-weight:850;line-height:1.2}
+.ganttGroupHead small{font-size:11px;color:var(--muted);font-weight:850}
+.ganttLine{display:grid;grid-template-columns:repeat(var(--days),42px);grid-auto-rows:minmax(58px,auto);position:relative;min-height:58px;background:linear-gradient(90deg,transparent 41px,#eef1f6 42px)}
+.ganttDayCell{height:100%;min-height:58px;cursor:pointer}
+.ganttDayCell:hover{background:rgba(93,156,236,.08)}
+.ganttBar{align-self:center;min-height:34px;margin:4px 3px;border-radius:999px;border:1px solid color-mix(in srgb,var(--cat-color) 45%,var(--line));background:linear-gradient(90deg,color-mix(in srgb,var(--cat-color) 18%,#fff),#fff);box-shadow:0 5px 12px rgba(40,50,80,.08);display:flex;align-items:center;gap:6px;padding:6px 9px;overflow:hidden;white-space:nowrap;color:var(--dark);font-size:12px;font-weight:900;text-align:left;position:relative;z-index:1}
+.ganttBar::before{content:'';width:8px;align-self:stretch;border-radius:999px;background:var(--cat-color);flex:0 0 8px}
+.ganttBar:hover{transform:translateY(-1px);box-shadow:0 8px 16px rgba(40,50,80,.12)}
+.ganttBar.done{opacity:.45;text-decoration:line-through}
+.ganttBar.dueSoon{border-color:#ef5a5a;background:linear-gradient(90deg,#fff0f0,#fff)}
+.ganttBarOwner{font-size:14px;flex:0 0 auto}
+.ganttBarTitle{overflow:hidden;text-overflow:ellipsis;min-width:0}
+.ganttBarMeta{font-size:11px;color:var(--muted);margin-left:auto;flex:0 0 auto}
+@media(max-width:700px){.ganttHeader,.ganttGroup{grid-template-columns:160px max-content}.ganttCorner,.ganttGroupHead{width:160px}.ganttDate,.ganttDayCell{width:36px;min-width:36px}.ganttDates,.ganttLine{grid-template-columns:repeat(var(--days),36px)}}

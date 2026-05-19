@@ -1,8 +1,8 @@
-import { $, esc, toISO, todayISO, diffDays, taskOccursOnDate, minutesFromTime, fullClock, fmtDate } from './utils.js?v=77';
-import { state } from './state.js?v=77';
-import { openDateOnBoard, openTaskEditor } from './board.js?v=77';
-import { createTask, deleteTask, updateTask } from './tasks.js?v=77';
-import { refreshAll } from './app.js?v=77';
+import { $, esc, toISO, todayISO, diffDays, taskOccursOnDate, minutesFromTime, fullClock, fmtDate } from './utils.js?v=78';
+import { state } from './state.js?v=78';
+import { openDateOnBoard, openTaskEditor } from './board.js?v=78';
+import { createTask, deleteTask, updateTask } from './tasks.js?v=78';
+import { refreshAll } from './app.js?v=78';
 
 const DAY_MINUTES = 24 * 60;
 let selectedCalendarDate = todayISO();
@@ -35,6 +35,7 @@ export function renderCalendar(){
   $('calendarMonth').value = state.calendarMonth;
   renderUnavailableList();
   ensureSelectedCalendarDate();
+  renderGanttBoard();
   renderMonthGrid();
   renderSelectedDayTasks();
   renderMemberSummary();
@@ -255,6 +256,128 @@ function renderMonthGrid(){
       selectCalendarDate(iso, true);
     });
     grid.appendChild(cell);
+  }
+}
+
+
+function taskSpanInMonth(t, month){
+  const [y,m] = month.split('-').map(Number);
+  const monthStart = `${y}-${pad2(m)}-01`;
+  const monthEnd = toISO(new Date(y, m, 0));
+  const rawStart = t.schedule_date || t.carryover_date || t.due_date || monthStart;
+  const rawEnd = t.due_date || t.schedule_date || t.carryover_date || rawStart;
+  const start = rawStart < monthStart ? monthStart : rawStart;
+  const end = rawEnd > monthEnd ? monthEnd : rawEnd;
+  if(end < monthStart || start > monthEnd) return null;
+  const startDay = Number(start.slice(8,10));
+  const endDay = Number(end.slice(8,10));
+  return { start, end, startDay, endDay, span: Math.max(1, endDay - startDay + 1) };
+}
+function taskOwner(t){
+  return memberArray().find(m=>m.id===t.owner_id) || { name:'不明', emoji:'?', color:'#9aa4b6' };
+}
+function ganttTasks(){
+  const month = state.calendarMonth;
+  return taskArray()
+    .filter(t=>t && t.id && !isUnavailableTask(t))
+    .map(t=>({ task:t, span:taskSpanInMonth(t, month) }))
+    .filter(x=>x.span)
+    .sort((a,b)=>{
+      const ad = a.task.due_date || a.span.end;
+      const bd = b.task.due_date || b.span.end;
+      return String(a.task.category||'').localeCompare(String(b.task.category||''))
+        || String(a.task.project||'').localeCompare(String(b.task.project||''))
+        || ad.localeCompare(bd)
+        || String(a.task.title||'').localeCompare(String(b.task.title||''));
+    });
+}
+function renderGanttBoard(){
+  const board = $('ganttBoard');
+  if(!board) return;
+  const [y,m] = state.calendarMonth.split('-').map(Number);
+  const last = new Date(y,m,0).getDate();
+  const days = Array.from({length:last},(_,i)=>i+1);
+  const items = ganttTasks();
+  const groups = new Map();
+  items.forEach(item=>{
+    const key = `${item.task.category || '未分類'}||${item.task.project || '未分類'}`;
+    if(!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(item);
+  });
+  if(!items.length){
+    board.innerHTML = '<div class="empty">この月のガンチャに表示するタスクはありません。</div>';
+    return;
+  }
+  const today = todayISO();
+  board.innerHTML = `
+    <div class="ganttScroll">
+      <div class="ganttHeader" style="--days:${last}">
+        <div class="ganttCorner">カテゴリ / プロジェクト</div>
+        <div class="ganttDates">${days.map(d=>{
+          const iso = `${state.calendarMonth}-${String(d).padStart(2,'0')}`;
+          return `<button type="button" class="ganttDate ${iso===today?'today':''}" data-gantt-date="${iso}">${d}</button>`;
+        }).join('')}</div>
+      </div>
+      <div class="ganttRows">
+        ${Array.from(groups.entries()).map(([key,arr])=>{
+          const [category,project] = key.split('||');
+          const color = categoryColor(category);
+          return `<section class="ganttGroup" style="--cat-color:${esc(color)};--days:${last}">
+            <div class="ganttGroupHead"><b>${esc(category)}</b><span>${esc(project)}</span><small>${arr.length}件</small></div>
+            <div class="ganttLine">
+              ${days.map(d=>`<button type="button" class="ganttDayCell" data-gantt-date="${state.calendarMonth}-${String(d).padStart(2,'0')}"></button>`).join('')}
+              ${arr.map(({task:t,span})=>{
+                const mem = taskOwner(t);
+                const pct = t.done ? 100 : 0;
+                const dueSoon = t.due_date && diffDays(t.due_date, today) <= 3 && !t.done;
+                return `<button type="button" class="ganttBar ${t.done?'done':''} ${dueSoon?'dueSoon':''}" data-gantt-task-id="${esc(t.id)}" style="grid-column:${span.startDay} / span ${span.span};--member-color:${esc(mem.color || '#5d9cec')};--cat-color:${esc(color)}" title="${esc(t.title || '無題のタスク')}">
+                  <span class="ganttBarOwner">${esc(mem.emoji || '🌙')}</span>
+                  <span class="ganttBarTitle">${esc(t.title || '無題のタスク')}</span>
+                  <span class="ganttBarMeta">${esc(t.due_date ? `〆${t.due_date.slice(5)}` : '')}${t.done?' 完了':''}</span>
+                </button>`;
+              }).join('')}
+            </div>
+          </section>`;
+        }).join('')}
+      </div>
+    </div>`;
+
+  board.querySelectorAll('[data-gantt-date]').forEach(btn=>btn.addEventListener('click', e=>{
+    e.preventDefault();
+    e.stopPropagation();
+    const date = btn.dataset.ganttDate;
+    if(date) selectCalendarDate(date, true);
+  }));
+  board.querySelectorAll('[data-gantt-task-id]').forEach(btn=>btn.addEventListener('click', e=>{
+    e.preventDefault();
+    e.stopPropagation();
+    const t = taskArray().find(x=>String(x.id)===String(btn.dataset.ganttTaskId));
+    if(!t) return;
+    if(t.owner_id !== state.user?.id){
+      alert('他メンバーの予定は閲覧のみです。');
+      return;
+    }
+    openTaskEditor(t);
+  }));
+}
+function showGanttMsg(text, error=false){
+  const el = $('ganttMsg');
+  if(!el) return;
+  el.textContent = text;
+  el.className = `notice ${error?'error':'ok'}`;
+  el.classList.remove('hidden');
+}
+function assignGanttToToday(){
+  try{
+    openDateOnBoard(todayISO());
+    showGanttMsg('今日やることへ移動して、未完了タスクを今から入れ直します。');
+    setTimeout(()=>{
+      const btn = $('reflowFromTodayBtn');
+      if(btn) btn.click();
+    }, 180);
+  }catch(e){
+    console.error(e);
+    showGanttMsg(e.message || '今日のタイムラインへの自動配置に失敗しました', true);
   }
 }
 
@@ -706,12 +829,14 @@ async function importSelectedIcs(){
 export function initCalendarEvents(){
   $('calendarMonth').addEventListener('change',()=>{ state.calendarMonth = $('calendarMonth').value; renderCalendar(); });
   $('calendarThisMonth').addEventListener('click',()=>{ state.calendarMonth = new Date().toISOString().slice(0,7); renderCalendar(); });
+  $('ganttAssignTodayBtn')?.addEventListener('click', assignGanttToToday);
+  $('ganttOpenTodayBtn')?.addEventListener('click',()=>openDateOnBoard(todayISO()));
   $('icsParseBtn')?.addEventListener('click', loadIcsFile);
   $('icsFileInput')?.addEventListener('change', loadIcsFile);
   $('icsSelectAllBtn')?.addEventListener('click',()=>document.querySelectorAll('[data-ics-index]').forEach(c=>c.checked=true));
   $('icsClearAllBtn')?.addEventListener('click',()=>document.querySelectorAll('[data-ics-index]').forEach(c=>c.checked=false));
   $('icsImportBtn')?.addEventListener('click', importSelectedIcs);
-  $('openProfileFromCalendar')?.addEventListener('click',()=>{ import('./app.js?v=77').then(m=>m.showView('profile')); });
+  $('openProfileFromCalendar')?.addEventListener('click',()=>{ import('./app.js?v=78').then(m=>m.showView('profile')); });
   $('unavailableAllDay')?.addEventListener('change',()=>{
     const allDay = $('unavailableAllDay').checked;
     $('unavailableStart').disabled = allDay;

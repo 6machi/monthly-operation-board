@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>タスクかんりシート</title>
-  <link rel="stylesheet" href="style.css?v=77" />
+  <link rel="stylesheet" href="style.css?v=78" />
 </head>
 <body>
   <header>
@@ -129,6 +129,17 @@
             <label><small>表示月</small><input type="month" id="calendarMonth"></label>
             <button class="ghost" id="calendarThisMonth">今月</button>
           </div>
+        </section>
+        <section class="panel ganttPanel" id="ganttPanel">
+          <div class="ganttHead">
+            <h2>ガンチャ <button class="infoDot" type="button" data-info="今月のタスクをカテゴリ・プロジェクト別に横長で確認します。大枠はここで見て、細かい時間調整はタイムラインで行います。">i</button></h2>
+            <div class="actions ganttActions">
+              <button class="primary" id="ganttAssignTodayBtn" type="button">今日のタイムラインに自動配置</button>
+              <button class="ghost" id="ganttOpenTodayBtn" type="button">今日のタイムラインを見る</button>
+            </div>
+          </div>
+          <div id="ganttMsg" class="notice hidden"></div>
+          <div id="ganttBoard" class="ganttBoard"></div>
         </section>
         <details class="panel sideDetails" id="icsImportPanel">
           <summary>Googleカレンダーを読み込む <button class="infoDot" type="button" data-info="Googleカレンダーから書き出した .ics ファイルを読み込んで、予定を稼働不可時間として取り込めます。zipで出た場合は、先に解凍して中の .ics を選んでください。">i</button></summary>
@@ -271,6 +282,6 @@
   </template>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script type="module" src="js/app.js?v=77"></script>
+  <script type="module" src="js/app.js?v=78"></script>
 </body>
 </html>
