@@ -1,10 +1,10 @@
-import { $, esc, occurrenceLabel, addDays, diffDays, fmtDate, minutesFromTime, fullClock } from './utils.js?v=82';
-import { state } from './state.js?v=82';
-import { saveTree } from './setup.js?v=82';
-import { updateMyProfile, loadMembers } from './auth.js?v=82';
-import { createTask, updateTask, deleteTask } from './tasks.js?v=82';
-import { refreshAll, showView } from './app.js?v=82';
-import { renderUnavailableList, isUnavailableTask } from './calendar.js?v=82';
+import { $, esc, occurrenceLabel, addDays, diffDays, fmtDate, minutesFromTime, fullClock } from './utils.js?v=83';
+import { state } from './state.js?v=83';
+import { saveTree } from './setup.js?v=83';
+import { updateMyProfile, loadMembers } from './auth.js?v=83';
+import { createTask, updateTask, deleteTask } from './tasks.js?v=83';
+import { refreshAll, showView } from './app.js?v=83';
+import { renderUnavailableList, isUnavailableTask } from './calendar.js?v=83';
 
 let draggingCategoryIndex = null;
 const ACHIEVEMENT_EXCLUDE = '[[achievement_excluded]]';
@@ -451,7 +451,7 @@ function getReversePlan(){
   const actualTotal = daily * days;
   const skipText = skipped.length ? `（稼働不可 ${skipped.length}日を避けます）` : '';
   return { ok:true, title, total, start, due, days, daily, actualTotal, dates, skipped, totalDays,
-    message:`${fmtDate(start)}〜${fmtDate(due)}のうち、稼働できる${days}日で、1日 ${daily}分（約${Math.round(daily/60*10)/10}時間）ずつやればOK。${skipText}` };
+    message:`${fmtDate(start)}〜${fmtDate(due)}を1本のガンチャ予定として作ります。タイムラインでは稼働できる日に1日 ${daily}分（約${Math.round(daily/60*10)/10}時間）ずつ自動配置できます。${skipText}` };
 }
 function renderReversePreview(){
   const el = $('reversePlanPreview');
@@ -464,34 +464,30 @@ async function addReversePlanTasks(){
   if(!editable()) return alert('他メンバーの棚卸しは編集できません');
   const plan = getReversePlan();
   if(!plan.ok) return alert(plan.message);
-  if(plan.days > 45 && !confirm(`${plan.days}日分のタスクを作ります。数が多いですが大丈夫ですか？`)) return;
   const memoBase = $('newMemo').value || '';
   const preferredStart = $('newStartTime')?.value || '09:00';
-  for(let i=0;i<plan.days;i++){
-    const date = plan.dates[i];
-    const startTime = fullClock(findAvailableStartForMe(date, plan.daily, preferredStart));
-    await createTask({
-      team_id:state.team.id,
-      owner_id:state.user.id,
-      created_by:state.user.id,
-      title:`${plan.title}（${i+1}/${plan.days}）`,
-      category:$('newCategory').value,
-      project:$('newProject').value,
-      task_type:'',
-      estimated_minutes:plan.daily,
-      start_time:startTime,
-      schedule_date:date,
-      due_date:plan.due,
-      occurrence:'single',
-      status:'scheduled',
-      memo:`${memoBase}${memoBase ? '\n' : ''}納期から逆算：総見積もり${plan.total}分 / 稼働${plan.days}日（期間${plan.totalDays}日・稼働不可${plan.skipped.length}日を除外） / 1日${plan.daily}分`,
-      sort_order:(Date.now()*-1)-i
-    });
-  }
+  await createTask({
+    team_id:state.team.id,
+    owner_id:state.user.id,
+    created_by:state.user.id,
+    title:plan.title,
+    category:$('newCategory').value,
+    project:$('newProject').value,
+    task_type:'gantt_span',
+    estimated_minutes:plan.daily,
+    start_time:preferredStart,
+    schedule_date:plan.start,
+    due_date:plan.due,
+    occurrence:'single',
+    status:'scheduled',
+    memo:`${memoBase}${memoBase ? '\n' : ''}#gantt-span\n納期から逆算：総見積もり${plan.total}分 / 稼働${plan.days}日（期間${plan.totalDays}日・稼働不可${plan.skipped.length}日を除外） / 1日${plan.daily}分`,
+    sort_order:Date.now()*-1
+  });
   $('newTitle').value=''; $('newMinutes').value=''; $('newMemo').value='';
-  alert(`${plan.days}日分に分けて追加しました。`);
+  alert('ガンチャ予定を1件追加しました。対象期間の各日でタイムラインへ自動配置できます。');
   await refreshAll();
 }
+
 
 export function initSetupEvents(){
   $('backToBoardBtn')?.addEventListener('click', ()=>showView('board'));
@@ -527,7 +523,10 @@ export function initSetupEvents(){
     const start = $('newStart').value || new Date().toISOString().slice(0,10);
     const minutes = snap15(Number($('newMinutes').value||30));
     const startTime = fullClock(findAvailableStartForMe(start, minutes, $('newStartTime')?.value||'09:00'));
-    await createTask({ team_id:state.team.id, owner_id:state.user.id, created_by:state.user.id, title, category:$('newCategory').value, project:$('newProject').value, task_type:'', estimated_minutes:minutes, start_time:startTime, schedule_date:start, due_date:$('newDue').value||null, occurrence, status:'scheduled', memo:$('newMemo').value||'', sort_order:Date.now()*-1 });
+    const due = $('newDue').value || null;
+    const isSpan = occurrence === 'single' && due && diffDays(due, start) > 0;
+    const memo = $('newMemo').value || '';
+    await createTask({ team_id:state.team.id, owner_id:state.user.id, created_by:state.user.id, title, category:$('newCategory').value, project:$('newProject').value, task_type:isSpan?'gantt_span':'', estimated_minutes:minutes, start_time:startTime, schedule_date:start, due_date:due, occurrence, status:'scheduled', memo:isSpan && !memo.includes('#gantt-span') ? `${memo}${memo?'\n':''}#gantt-span` : memo, sort_order:Date.now()*-1 });
     $('newTitle').value=''; $('newMinutes').value=''; $('newMemo').value=''; await refreshAll();
   });
 }

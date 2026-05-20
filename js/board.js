@@ -1,9 +1,9 @@
-import { $, esc, todayISO, addDays, fmtDate, diffDays, relativeFrom, taskOccursOnDate, occurrenceLabel, fullClock, minutesFromTime } from './utils.js?v=82';
-import { state } from './state.js?v=82';
-import { createTask, markCarryover, returnToSchedule, updateTask, deleteTask } from './tasks.js?v=82';
-import { refreshAll, showView } from './app.js?v=82';
-import { isUnavailableTask, isUnavailableForMember, unavailableBlocksForMember } from './calendar.js?v=82';
-import { updateMyProfile, loadMembers } from './auth.js?v=82';
+import { $, esc, todayISO, addDays, fmtDate, diffDays, relativeFrom, taskOccursOnDate, occurrenceLabel, fullClock, minutesFromTime } from './utils.js?v=83';
+import { state } from './state.js?v=83';
+import { createTask, markCarryover, returnToSchedule, updateTask, deleteTask } from './tasks.js?v=83';
+import { refreshAll, showView } from './app.js?v=83';
+import { isUnavailableTask, isUnavailableForMember, unavailableBlocksForMember } from './calendar.js?v=83';
+import { updateMyProfile, loadMembers } from './auth.js?v=83';
 
 const SLOT_MINUTES = 10;
 const PX_PER_MINUTE = 1.15; // 10分刻み / 60分 = 約69px
@@ -584,6 +584,7 @@ function splitTaskInfo(t){
   return { base, index:Number(m[2]), total:Number(m[3]), key:`${String(t?.category||'')}::${String(t?.project||'')}::${base}` };
 }
 function isSplitTask(t){ return !!splitTaskInfo(t); }
+function isGanttSpanTask(t){ return t?.task_type === 'gantt_span' || String(t?.memo || '').includes('#gantt-span'); }
 function taskDueKey(t){
   const d = t?.due_date || t?.schedule_date || t?.carryover_date || monthEndIso(todayISO());
   return String(d || '9999-12-31');
@@ -738,8 +739,10 @@ export async function arrangeTasksOnDate(dateIso = state.scheduleDate || todayIS
     if(slot === null){ skipped++; continue; }
     busy.push({ start:slot, end:slot+duration });
     busy.sort((a,b)=>a.start-b.start);
-    const patch = { schedule_date:dateIso, carryover_date:null, status:'scheduled', start_time:timeLabel(slot) };
-    if(t.schedule_date !== patch.schedule_date || t.carryover_date || t.start_time !== patch.start_time){
+    const patch = isGanttSpanTask(t)
+      ? { carryover_date:null, status:'scheduled', start_time:timeLabel(slot) }
+      : { schedule_date:dateIso, carryover_date:null, status:'scheduled', start_time:timeLabel(slot) };
+    if((!isGanttSpanTask(t) && t.schedule_date !== dateIso) || t.carryover_date || t.start_time !== patch.start_time){
       await updateTask(t.id, patch);
       moved++;
     }
@@ -890,7 +893,7 @@ export function openTaskEditor(t){
       title: $('editTaskTitle').value.trim() || '無題タスク',
       category: $('editTaskCategory').value || '未分類',
       project: $('editTaskProject').value || '未分類',
-      task_type:'',
+      task_type:($('editTaskOccurrence').value || 'single') === 'single' && $('editTaskDue').value && schedule && diffDays($('editTaskDue').value, schedule) > 0 ? 'gantt_span' : '',
       estimated_minutes: minutes,
       schedule_date: schedule,
       carryover_date: carry,

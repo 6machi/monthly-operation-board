@@ -27,6 +27,8 @@ export function taskOccursOnDate(task, dateIso){
   const start = task.schedule_date;
   const end = task.due_date || null;
   const occurrence = task.occurrence || 'single';
+  const isGanttSpan = task.task_type === 'gantt_span' || String(task.memo || '').includes('#gantt-span');
+  if(occurrence === 'single' && isGanttSpan && start && end) return isBetweenDates(dateIso, start, end);
   if(occurrence === 'daily') return isBetweenDates(dateIso, start, end);
   if(occurrence === 'weekly'){
     if(!isBetweenDates(dateIso, start, end)) return false;
