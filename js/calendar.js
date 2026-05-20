@@ -1,8 +1,8 @@
-import { $, esc, toISO, todayISO, diffDays, taskOccursOnDate, minutesFromTime, fullClock, fmtDate } from './utils.js?v=83';
-import { state } from './state.js?v=83';
-import { openDateOnBoard, openTaskEditor, arrangeTasksOnDate } from './board.js?v=83';
-import { createTask, deleteTask, updateTask } from './tasks.js?v=83';
-import { refreshAll } from './app.js?v=83';
+import { $, esc, toISO, todayISO, diffDays, taskOccursOnDate, minutesFromTime, fullClock, fmtDate } from './utils.js?v=85';
+import { state } from './state.js?v=85';
+import { openDateOnBoard, openTaskEditor, arrangeTasksOnDate } from './board.js?v=85';
+import { createTask, deleteTask, updateTask } from './tasks.js?v=85';
+import { refreshAll } from './app.js?v=85';
 
 const DAY_MINUTES = 24 * 60;
 let selectedCalendarDate = todayISO();
@@ -293,17 +293,34 @@ function projectSortIndex(category, project){
   const idx = (cat?.projects || []).findIndex(p=>p?.name===project);
   return idx < 0 ? 9999 : idx;
 }
-function ganttRowName(t){
+function ganttGroupName(t){
   const project = String(t?.project || '').trim();
-  if(project && project !== '未分類') return project;
-  return splitTaskBaseTitle(t?.title || '未分類');
+  return project && project !== '未分類' ? project : '未分類グループ';
 }
-function detailedGanttTitle(t){
-  const base = splitTaskBaseTitle(t?.title || '無題のタスク');
-  return base || '無題のタスク';
+function ganttTaskName(t){
+  return splitTaskBaseTitle(t?.title || '未分類タスク');
+}
+function ganttDetailTitle(t){
+  const title = splitTaskBaseTitle(t?.title || '無題のタスク');
+  const memoLine = String(t?.memo || '')
+    .split('\n')
+    .map(x=>x.trim())
+    .find(x=>x && !x.startsWith('#') && !x.startsWith('納期から逆算：'));
+  return memoLine || title || '無題のタスク';
 }
 function isGanttSpanTask(t){
   return t?.task_type === 'gantt_span' || String(t?.memo || '').includes('#gantt-span');
+}
+function visibleGanttDays(y,m){
+  // ガンチャはスプレッドシートのように「今見るべき列」から始める。
+  // 今月は必ず今日を左端にする。未来月は1日から、過去月は表示しない。
+  const today = todayISO();
+  const currentMonth = today.slice(0,7);
+  const targetMonth = `${y}-${String(m).padStart(2,'0')}`;
+  const last = new Date(y,m,0).getDate();
+  if(targetMonth < currentMonth) return [];
+  const startDay = targetMonth === currentMonth ? Number(today.slice(8,10)) : 1;
+  return Array.from({length:Math.max(0,last - startDay + 1)},(_,i)=>startDay+i);
 }
 function ganttTaskGroups(){
   const month = state.calendarMonth;
@@ -315,16 +332,19 @@ function ganttTaskGroups(){
   const barGroups = new Map();
   rawItems.forEach(({task, span})=>{
     const category = task.category || '未分類';
-    const rowName = ganttRowName(task);
-    const detailTitle = detailedGanttTitle(task);
+    const groupName = ganttGroupName(task);
+    const taskName = ganttTaskName(task);
+    const detailTitle = ganttDetailTitle(task);
     const splitLike = isSplitLikeTask(task);
     const key = splitLike
-      ? [task.owner_id || '', category, rowName, detailTitle].join('::')
+      ? [task.owner_id || '', category, groupName, taskName, detailTitle].join('::')
       : `single::${task.id}`;
     if(!barGroups.has(key)) barGroups.set(key, {
       key,
       category,
-      rowName,
+      groupName,
+      taskName,
+      rowName: taskName,
       detailTitle,
       owner_id: task.owner_id,
       project: task.project || '',
@@ -360,11 +380,13 @@ function ganttTaskGroups(){
 
   const rows = new Map();
   bars.forEach(bar=>{
-    const rowKey = [bar.category, bar.rowName, bar.owner_id || ''].join('::');
+    const rowKey = [bar.category, bar.groupName || '未分類グループ', bar.taskName || bar.rowName, bar.owner_id || ''].join('::');
     if(!rows.has(rowKey)) rows.set(rowKey, {
       key: rowKey,
       category: bar.category,
-      rowName: bar.rowName,
+      groupName: bar.groupName || '未分類グループ',
+      taskName: bar.taskName || bar.rowName,
+      rowName: bar.taskName || bar.rowName,
       owner_id: bar.owner_id,
       bars: []
     });
@@ -382,8 +404,9 @@ function ganttTaskGroups(){
   }).sort((a,b)=>
     categorySortIndex(a.category)-categorySortIndex(b.category)
     || String(a.category||'未分類').localeCompare(String(b.category||'未分類'),'ja')
-    || projectSortIndex(a.category, a.rowName)-projectSortIndex(b.category, b.rowName)
-    || String(a.rowName||'').localeCompare(String(b.rowName||''),'ja')
+    || projectSortIndex(a.category, a.groupName)-projectSortIndex(b.category, b.groupName)
+    || String(a.groupName||'').localeCompare(String(b.groupName||''),'ja')
+    || String(a.taskName||'').localeCompare(String(b.taskName||''),'ja')
   );
 }
 function dayLabel(y,m,d){
@@ -414,8 +437,21 @@ function renderGanttBoard(){
   if(!board) return;
   const [y,m] = state.calendarMonth.split('-').map(Number);
   const last = new Date(y,m,0).getDate();
-  const days = Array.from({length:last},(_,i)=>i+1);
-  const rows = ganttTaskGroups();
+  const days = visibleGanttDays(y,m);
+  const visibleFirstDay = days[0] || 1;
+  const today = todayISO();
+  const currentMonth = today.slice(0,7);
+  const rangeLabel = state.calendarMonth === currentMonth
+    ? `${Number(today.slice(5,7))}/${Number(today.slice(8,10))} 今日から`
+    : `${m}/1 から`;
+  if(!days.length){
+    board.innerHTML = '<div class="empty">今日以降のガンチャ予定はありません。</div>';
+    return;
+  }
+  const rows = ganttTaskGroups().map(row=>({
+    ...row,
+    bars:(row.bars || []).filter(bar=>bar.span.endDay >= visibleFirstDay && bar.span.startDay <= last)
+  })).filter(row=>row.bars.length);
   const groups = new Map();
   rows.forEach(row=>{
     const key = row.category || '未分類';
@@ -423,35 +459,36 @@ function renderGanttBoard(){
     groups.get(key).push(row);
   });
   if(!rows.length){
-    board.innerHTML = '<div class="empty">この月のガンチャに表示するタスクはありません。</div>';
+    board.innerHTML = '<div class="empty">今日以降のガンチャ予定はありません。</div>';
     return;
   }
-  const today = todayISO();
   board.innerHTML = `
     <div class="sheetGanttScroll detailGanttScroll">
-      <div class="sheetHeader" style="--days:${last}">
-        <div class="sheetTaskHead">タスク名</div>
+      <div class="sheetHeader" style="--days:${days.length}">
+        <div class="sheetTaskHead"><span>カテゴリ / グループ / タスク名称</span><small>${esc(rangeLabel)}</small></div>
         <div class="sheetDates">${days.map(d=>{
           const iso = `${state.calendarMonth}-${String(d).padStart(2,'0')}`;
           const w = dayLabel(y,m,d);
           const cls = `${iso===today?'today':''} ${w==='土'?'sat':''} ${w==='日'?'sun':''}`;
-          return `<button type="button" class="sheetDate ${cls}" data-gantt-date="${iso}"><b>${d}</b><span>${w}</span></button>`;
+          const todayText = iso===today ? '今日' : w;
+          return `<button type="button" class="sheetDate ${cls}" data-gantt-date="${iso}"><b>${d}</b><span>${todayText}</span></button>`;
         }).join('')}</div>
       </div>
       <div class="sheetRows">
         ${Array.from(groups.entries()).map(([category,arr])=>{
           const color = categoryColor(category);
           const catTotal = arr.reduce((sum,row)=>sum + row.bars.length, 0);
-          return `<section class="sheetCategory" style="--cat-color:${esc(color)};--days:${last}">
+          return `<section class="sheetCategory" style="--cat-color:${esc(color)};--days:${days.length}">
             <div class="sheetCategoryTitle"><b>${esc(category)}</b><small>${catTotal}件</small></div>
             ${arr.map(row=>{
               const mem = taskOwner(row.bars[0]?.task || {});
               const laneCount = Math.max(1, row.bars.length);
               const dueSoon = row.bars.some(bar=>bar.due_date && diffDays(bar.due_date, today) <= 3 && !bar.done);
-              return `<div class="sheetTaskRow detailGanttRow ${dueSoon?'dueSoon':''}" style="--days:${last};--cat-color:${esc(color)};--lanes:${laneCount}">
-                <button type="button" class="sheetTaskLabel rowOnlyLabel" data-gantt-row-date="${esc(today)}" title="${esc(row.rowName)}">
+              return `<div class="sheetTaskRow detailGanttRow ${dueSoon?'dueSoon':''}" style="--days:${days.length};--cat-color:${esc(color)};--lanes:${laneCount}">
+                <button type="button" class="sheetTaskLabel rowOnlyLabel ganttTreeLabel" data-gantt-row-date="${esc(today)}" title="${esc(row.groupName)} / ${esc(row.taskName)}">
                   <span class="sheetOwner">${esc(mem.emoji || '🌙')}</span>
-                  <span class="sheetTaskTitle">${esc(row.rowName)}</span>
+                  <span class="ganttGroupName">┗ ${esc(row.groupName || '未分類グループ')}</span>
+                  <span class="sheetTaskTitle ganttTaskName">　┗ ${esc(row.taskName || row.rowName)}</span>
                   <small>${esc(row.bars.length)}件の予定</small>
                 </button>
                 <div class="sheetCells detailGanttCells">
@@ -461,14 +498,16 @@ function renderGanttBoard(){
                     const cls = `${iso===today?'today':''} ${w==='土'?'sat':''} ${w==='日'?'sun':''}`;
                     return `<div class="sheetCell detailGanttDay ${cls}" data-gantt-date="${iso}"></div>`;
                   }).join('')}
-                  <div class="ganttBarLayer" style="--days:${last};--lanes:${laneCount}">
+                  <div class="ganttBarLayer" style="--days:${days.length};--lanes:${laneCount}">
                     ${row.bars.map((bar,idx)=>{
                       const t = bar.task;
                       const title = bar.detailTitle || t.title || '無題のタスク';
                       const meta = bar.due_date ? `〆${bar.due_date.slice(5)}` : '';
                       const progress = bar.totalCount > 1 ? `${bar.doneCount}/${bar.totalCount}` : '';
                       const cls = `${bar.done?'done':''} ${bar.isSpan?'span':''} ${bar.splitLike?'grouped':''}`;
-                      return `<button type="button" class="detailGanttBar ${cls}" data-gantt-task-id="${esc(t.id)}" title="${esc(title)}" style="grid-column:${bar.span.startDay} / ${bar.span.endDay + 1};grid-row:${idx + 1}">
+                      const startCol = Math.max(bar.span.startDay, visibleFirstDay) - visibleFirstDay + 1;
+                      const endCol = Math.min(bar.span.endDay, last) - visibleFirstDay + 2;
+                      return `<button type="button" class="detailGanttBar ${cls}" data-gantt-task-id="${esc(t.id)}" title="${esc(title)}" style="grid-column:${startCol} / ${endCol};grid-row:${idx + 1}">
                         <span class="detailGanttBarTitle">${esc(title)}</span>
                         ${meta || progress ? `<span class="detailGanttBarMeta">${esc([progress, meta].filter(Boolean).join(' / '))}</span>` : ''}
                       </button>`;
@@ -481,6 +520,11 @@ function renderGanttBoard(){
         }).join('')}
       </div>
     </div>`;
+
+  requestAnimationFrame(()=>{
+    const scroller = board.querySelector('.sheetGanttScroll');
+    if(scroller) scroller.scrollLeft = 0;
+  });
 
   board.querySelectorAll('[data-gantt-date]').forEach(btn=>btn.addEventListener('click', e=>{
     if(e.target.closest('[data-gantt-task-id]')) return;
@@ -978,7 +1022,7 @@ export function initCalendarEvents(){
   $('icsSelectAllBtn')?.addEventListener('click',()=>document.querySelectorAll('[data-ics-index]').forEach(c=>c.checked=true));
   $('icsClearAllBtn')?.addEventListener('click',()=>document.querySelectorAll('[data-ics-index]').forEach(c=>c.checked=false));
   $('icsImportBtn')?.addEventListener('click', importSelectedIcs);
-  $('openProfileFromCalendar')?.addEventListener('click',()=>{ import('./app.js?v=83').then(m=>m.showView('profile')); });
+  $('openProfileFromCalendar')?.addEventListener('click',()=>{ import('./app.js?v=85').then(m=>m.showView('profile')); });
   $('unavailableAllDay')?.addEventListener('change',()=>{
     const allDay = $('unavailableAllDay').checked;
     $('unavailableStart').disabled = allDay;

@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>タスクかんりシート</title>
-  <link rel="stylesheet" href="style.css?v=83" />
+  <link rel="stylesheet" href="style.css?v=85" />
 </head>
 <body>
   <header>
@@ -21,7 +21,7 @@
       <nav id="mainNav" class="hidden">
         <button class="active" data-view="calendar">ガンチャ</button>
         <button data-view="board">今日やること</button>
-        <button data-view="setup">タスクのついか</button>
+        <button data-view="setup">棚・ガンチャ入力</button>
       </nav>
     </div>
   </header>
@@ -91,13 +91,13 @@
           </section>
           <aside>
             <details class="panel sideDetails" open>
-              <summary>差し込みタスク <button class="infoDot" type="button" data-info="急に入った作業を、カテゴリ・プロジェクトを選んで今日のタスクとして追加できます。">i</button></summary>
+              <summary>差し込みタスク <button class="infoDot" type="button" data-info="急に入った作業を、カテゴリ・グループを選んで今日のタスクとして追加できます。">i</button></summary>
               <div class="quickAddBox">
                 <div class="form two">
                   <label><small>カテゴリ</small><select id="quickCategory"></select></label>
-                  <label><small>プロジェクト</small><select id="quickProject"></select></label>
+                  <label><small>グループ</small><select id="quickProject"></select></label>
                 </div>
-                <label><small>タスク候補</small><select id="quickCandidate"></select></label>
+                <label><small>タスク名称候補</small><select id="quickCandidate"></select></label>
                 <label><small>タスク名</small><input id="quickTitle" placeholder="急ぎの依頼・今日やるメモ"></label>
                 <div class="form two">
                   <label><small>見積もり時間</small><input id="quickMinutes" type="number" min="10" step="10" placeholder="分"></label>
@@ -132,7 +132,7 @@
         </section>
         <section class="panel ganttPanel" id="ganttPanel">
           <div class="ganttHead">
-            <h2>ガンチャ <button class="infoDot" type="button" data-info="大枠はここで管理します。カテゴリごとに、タスク単位で期間を確認できます。細かい時間調整は今日やることのタイムラインで行います。">i</button></h2>
+            <h2>ガンチャ <button class="infoDot" type="button" data-info="今日以降の予定だけを表示します。左はカテゴリ・グループ・タスク名称、右のバーがガンチャで管理する詳細予定です。">i</button></h2>
             <div class="actions ganttActions">
               <button class="primary" id="ganttAssignTodayBtn" type="button">今日のタイムラインに自動配置</button>
               <button class="ghost" id="ganttOpenTodayBtn" type="button">今日のタイムラインを見る</button>
@@ -161,7 +161,7 @@
           <summary>稼働できない日・時間 <button class="infoDot" type="button" data-info="稼働不可の追加・解除は、右上の自分の名前から開く「自分のページ」で管理できます。">i</button></summary>
           <button class="ghost" type="button" id="openProfileFromCalendar">自分のページで管理する</button>
         </details>
-        <details class="panel sideDetails" open><summary>メンバー別・今月のタスク <button class="infoDot" type="button" data-info="メンバーごとの今月のタスク数と進行度をカテゴリ/プロジェクト単位で確認できます。">i</button></summary><div class="memberSummary" id="memberSummary"></div></details>
+        <details class="panel sideDetails" open><summary>メンバー別・今月のタスク <button class="infoDot" type="button" data-info="メンバーごとの今月のタスク数と進行度をカテゴリ/グループ単位で確認できます。">i</button></summary><div class="memberSummary" id="memberSummary"></div></details>
       </section>
 
       <section id="profile" class="view">
@@ -231,12 +231,12 @@
         <div class="tabs" id="setupMemberTabs"></div>
         <div id="setupNotice" class="notice ok"></div>
         <section class="panel">
-          <h2>今月タスクを追加 <button class="infoDot" type="button" data-info="カテゴリ・プロジェクト・タスク候補を選んで、今月のタスクを追加します。納期から逆算して分割することもできます。">i</button></h2>
+          <h2>今月タスクを追加 <button class="infoDot" type="button" data-info="カテゴリ・グループ・タスク名称候補を選んで、今月のガンチャ予定を追加します。納期から逆算する場合も分割タスクは増やさず、1本の予定として管理します。">i</button></h2>
           <div class="form">
             <label><small>カテゴリ</small><select id="newCategory"></select></label>
-            <label><small>プロジェクト</small><select id="newProject"></select></label>
-            <label><small>タスク候補</small><select id="newCandidate"></select></label>
-            <label><small>タスク名</small><input id="newTitle" placeholder="候補にない場合だけ入力"></label>
+            <label><small>グループ</small><select id="newProject"></select></label>
+            <label><small>タスク名称候補</small><select id="newCandidate"></select></label>
+            <label><small>タスク名称</small><input id="newTitle" placeholder="例：ネーム／シナリオ／トーン"></label>
             <label><small>見積もり時間</small><input id="newMinutes" type="number" min="10" step="10" placeholder="分"></label>
             <label><small>開始日</small><input id="newStart" type="date"></label>
             <label><small>開始時間</small><input id="newStartTime" type="time" step="600" value="09:00"></label>
@@ -248,24 +248,25 @@
             <label><input type="radio" name="occurrence" value="weekly">毎週</label>
             <label><input type="radio" name="occurrence" value="monthly">毎月</label>
           </div>
-          <label><small>メモ</small><textarea id="newMemo" placeholder="補足・確認先・注意点"></textarea></label>
+          <label><small>ガンチャ上の詳細</small><textarea id="newMemo" placeholder="例：25話初稿／初稿〆切／26話ご案内
+補足・確認先・注意点もここに書けます"></textarea></label>
           <div class="reversePlannerBox">
             <div class="reversePlannerText">
               <b>納期から逆算</b>
               <span id="reversePlanPreview">見積もり時間と期限を入れると、毎日どれくらいやればいいか計算します。</span>
             </div>
             <button class="ghost" id="calcReversePlanBtn" type="button">逆算する</button>
-            <button class="primary" id="addReversePlanBtn" type="button">毎日のタスクに分けて追加</button>
+            <button class="primary" id="addReversePlanBtn" type="button">ガンチャ予定として追加</button>
           </div>
           <button class="primary" id="addMonthlyTaskBtn">追加する</button>
         </section>
         <details class="panel sideDetails"><summary>カテゴリ管理 <button class="infoDot" type="button" data-info="カテゴリカードを選ぶと、そのカテゴリの中身を編集できます。ドラッグで並び替えもできます。">i</button></summary><div class="catgrid" id="categoryGrid"></div></details>
         <details class="panel sideDetails" id="categoryEditorPanel">
-          <summary>カテゴリ編集 <button class="infoDot" type="button" data-info="カテゴリ名、色、プロジェクト、タスク候補、一緒に頑張る人などを編集できます。">i</button></summary>
+          <summary>カテゴリ・グループ・タスク名称の編集 <button class="infoDot" type="button" data-info="カテゴリ名、色、グループ、タスク名称候補、一緒に頑張る人などを編集できます。">i</button></summary>
           <div id="categoryEditor" class="empty">カテゴリカードをクリックすると編集できます。</div>
         </details>
         <details class="panel sideDetails">
-          <summary>登録済みタスクの修正 <button class="infoDot" type="button" data-info="追加済みのタスク名・カテゴリ・プロジェクト・日付・期限などをあとから直せます。まとめて削除もできます。">i</button></summary>
+          <summary>旧タスク管理・登録済みデータの修正 <button class="infoDot" type="button" data-info="基本はガンチャで管理します。既存データの修正や削除が必要な時だけ開いてください。">i</button></summary>
           <div class="bulkTaskActions">
             <button class="ghost" type="button" id="selectAllRegisteredTasks">表示中を選択</button>
             <button class="ghost" type="button" id="clearRegisteredTaskSelection">選択解除</button>
@@ -282,6 +283,6 @@
   </template>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script type="module" src="js/app.js?v=83"></script>
+  <script type="module" src="js/app.js?v=85"></script>
 </body>
 </html>

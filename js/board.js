@@ -1,9 +1,9 @@
-import { $, esc, todayISO, addDays, fmtDate, diffDays, relativeFrom, taskOccursOnDate, occurrenceLabel, fullClock, minutesFromTime } from './utils.js?v=83';
-import { state } from './state.js?v=83';
-import { createTask, markCarryover, returnToSchedule, updateTask, deleteTask } from './tasks.js?v=83';
-import { refreshAll, showView } from './app.js?v=83';
-import { isUnavailableTask, isUnavailableForMember, unavailableBlocksForMember } from './calendar.js?v=83';
-import { updateMyProfile, loadMembers } from './auth.js?v=83';
+import { $, esc, todayISO, addDays, fmtDate, diffDays, relativeFrom, taskOccursOnDate, occurrenceLabel, fullClock, minutesFromTime } from './utils.js?v=85';
+import { state } from './state.js?v=85';
+import { createTask, markCarryover, returnToSchedule, updateTask, deleteTask } from './tasks.js?v=85';
+import { refreshAll, showView } from './app.js?v=85';
+import { isUnavailableTask, isUnavailableForMember, unavailableBlocksForMember } from './calendar.js?v=85';
+import { updateMyProfile, loadMembers } from './auth.js?v=85';
 
 const SLOT_MINUTES = 10;
 const PX_PER_MINUTE = 1.15; // 10分刻み / 60分 = 約69px
@@ -829,7 +829,7 @@ function ensureTaskEditor(){
       <div class="form taskEditQuickForm">
         <label><small>タスク名</small><input id="editTaskTitle"></label>
         <label><small>カテゴリ</small><select id="editTaskCategory"></select></label>
-        <label><small>プロジェクト</small><select id="editTaskProject"></select></label>
+        <label><small>グループ</small><select id="editTaskProject"></select></label>
         <label><small>見積もり時間 分</small><input id="editTaskMinutes" type="number" min="15" step="15"></label>
         <label><small>予定日</small><input id="editTaskScheduleDate" type="date"></label>
         <label><small>開始時間</small><input id="editTaskStartTime" type="time" step="900"></label>

@@ -1,10 +1,10 @@
-import { $, esc, occurrenceLabel, addDays, diffDays, fmtDate, minutesFromTime, fullClock } from './utils.js?v=83';
-import { state } from './state.js?v=83';
-import { saveTree } from './setup.js?v=83';
-import { updateMyProfile, loadMembers } from './auth.js?v=83';
-import { createTask, updateTask, deleteTask } from './tasks.js?v=83';
-import { refreshAll, showView } from './app.js?v=83';
-import { renderUnavailableList, isUnavailableTask } from './calendar.js?v=83';
+import { $, esc, occurrenceLabel, addDays, diffDays, fmtDate, minutesFromTime, fullClock } from './utils.js?v=85';
+import { state } from './state.js?v=85';
+import { saveTree } from './setup.js?v=85';
+import { updateMyProfile, loadMembers } from './auth.js?v=85';
+import { createTask, updateTask, deleteTask } from './tasks.js?v=85';
+import { refreshAll, showView } from './app.js?v=85';
+import { renderUnavailableList, isUnavailableTask } from './calendar.js?v=85';
 
 let draggingCategoryIndex = null;
 const ACHIEVEMENT_EXCLUDE = '[[achievement_excluded]]';
@@ -38,7 +38,7 @@ function normalizeCategory(c){
   if(!normalizedProjects.length && categoryLevelCandidates.length){
     normalizedProjects.push({ name:'未分類', candidates:categoryLevelCandidates });
   }else if(categoryLevelCandidates.length){
-    // v16以前の「カテゴリ直下の候補」は、最初のプロジェクトへ退避させます。
+    // v16以前の「カテゴリ直下の候補」は、最初のグループへ退避させます。
     normalizedProjects[0].candidates = uniq([...(normalizedProjects[0].candidates||[]), ...categoryLevelCandidates]);
   }
 
@@ -179,7 +179,7 @@ function renderCategories(){
     card.innerHTML=`
       <div class="catCardMain">
         <h3>${esc(c.name)}</h3>
-        <p>${esc(c.memo||'')}<br>プロジェクト ${c.projects?.length||0} / タスク候補 ${projectCandidateCount(c)}</p>
+        <p>${esc(c.memo||'')}<br>グループ ${c.projects?.length||0} / タスク名称候補 ${projectCandidateCount(c)}</p>
         <div class="catShareList">${categoryShareLabel(c)}</div>
       </div>
       <div class="dragHint">ドラッグで並び替え</div>`;
@@ -237,23 +237,23 @@ function renderProjectCandidateBoxes(c){
       ${projects.length ? projects.map((p,pi)=>`
         <section class="projectCandidateBox" data-project-box="${pi}">
           <div class="projectCandidateHead">
-            <div><b>${esc(p.name)}</b><span>タスク候補 ${p.candidates?.length||0}件</span></div>
-            <div class="boxItemActions"><button type="button" class="ghost tiny" data-edit-project="${pi}">プロジェクト名を修正</button><button type="button" class="danger tiny" data-delete-project="${pi}">×</button></div>
+            <div><b>${esc(p.name)}</b><span>タスク名称候補 ${p.candidates?.length||0}件</span></div>
+            <div class="boxItemActions"><button type="button" class="ghost tiny" data-edit-project="${pi}">グループ名を修正</button><button type="button" class="danger tiny" data-delete-project="${pi}">×</button></div>
           </div>
-          <p class="muted">このプロジェクトで使うタスク候補です。</p>
+          <p class="muted">このグループで使うタスク名称候補です。</p>
           <div class="candidateChips bigCandidates">
             ${(p.candidates||[]).length ? p.candidates.map((name,ci)=>`
               <span class="candidateChip editableCandidate">${esc(name)}
                 <button type="button" class="chipEdit" data-edit-cand="${pi}:${ci}" title="修正">修正</button>
                 <button type="button" class="chipDelete" data-del-cand="${pi}:${ci}" title="削除">×</button>
               </span>
-            `).join('') : '<span class="muted">タスク候補はまだありません。</span>'}
+            `).join('') : '<span class="muted">タスク名称候補はまだありません。</span>'}
           </div>
           <div class="minirow candidateAddRow">
-            <input data-candidate-input="${pi}" placeholder="このプロジェクトに候補を追加">
+            <input data-candidate-input="${pi}" placeholder="このグループに候補を追加">
             <button type="button" class="ghost" data-add-cand-to-project="${pi}">追加</button>
           </div>
-        </section>`).join('') : '<div class="empty">プロジェクトを追加すると、その中にタスク候補を入れられます。</div>'}
+        </section>`).join('') : '<div class="empty">グループを追加すると、その中にタスク名称候補を入れられます。</div>'}
     </div>`;
 }
 
@@ -273,7 +273,7 @@ function renderCategoryEditor(){
     <section class="sharePickerBox"><div class="sharePickerHead"><b>一緒に頑張るひとを選択</b><span>選ばない場合は、ひとりでやるカテゴリです。</span></div>${renderSharePicker(c)}</section>
     <div class="actions mainActions"><button id="saveCatBtn" class="primary">カテゴリを保存</button></div>
     <details class="softDetails" open><summary>登録されている棚</summary>${renderProjectCandidateBoxes(c)}</details>
-    <details class="softDetails adminDetails"><summary>棚の追加・削除など</summary><div class="actions"><button id="addCategoryBtn" class="ghost">カテゴリ追加</button><button id="addProjectBtn" class="ghost">プロジェクト追加</button><button id="deleteCategoryBtn" class="danger">カテゴリ削除</button></div></details>`;
+    <details class="softDetails adminDetails"><summary>棚の追加・削除など</summary><div class="actions"><button id="addCategoryBtn" class="ghost">カテゴリ追加</button><button id="addProjectBtn" class="ghost">グループ追加</button><button id="deleteCategoryBtn" class="danger">カテゴリ削除</button></div></details>`;
 
   $('saveCatBtn').onclick = async()=>{
     c.name=$('editCatName').value.trim()||c.name; c.color=$('editCatColor').value; c.memo=$('editCatMemo').value;
@@ -282,11 +282,11 @@ function renderCategoryEditor(){
   box.querySelectorAll('.shareMemberCheck').forEach(input=>input.addEventListener('change', async()=>{ c.sharedWith=[...box.querySelectorAll('.shareMemberCheck:checked')].map(input=>input.value); await saveTree(state.treeRowId,state.tree); renderCategories(); }));
   $('addCategoryBtn').onclick = async()=>{ const name=prompt('追加するカテゴリ名'); if(!name)return; state.tree.push({name, memo:'', color:'#9aa4b6', projects:[], sharedWith:[]}); state.selectedCategoryIndex=state.tree.length-1; await persist(); };
   $('deleteCategoryBtn').onclick = async()=>{ if(!confirm(`カテゴリ「${c.name}」を削除しますか？\n登録済みタスク自体は消えません。`))return; state.tree.splice(state.selectedCategoryIndex,1); state.selectedCategoryIndex=Math.max(0,state.selectedCategoryIndex-1); await persist(); };
-  $('addProjectBtn').onclick = async()=>{ const name=prompt('追加するプロジェクト名'); if(!name)return; c.projects=c.projects||[]; c.projects.push({name:name.trim(), candidates:[]}); await persist(); };
-  box.querySelectorAll('[data-edit-project]').forEach(btn=>btn.onclick=async()=>{ const pi=Number(btn.dataset.editProject); const p=c.projects?.[pi]; if(!p)return; const name=prompt('プロジェクト名を修正', p.name); if(!name)return; p.name=name.trim()||p.name; await persist(); });
-  box.querySelectorAll('[data-delete-project]').forEach(btn=>btn.onclick=async()=>{ const pi=Number(btn.dataset.deleteProject); const p=c.projects?.[pi]; if(!p)return; if(!confirm(`プロジェクト「${p.name}」を削除しますか？\n登録済みタスク自体は消えません。`))return; c.projects.splice(pi,1); await persist(); });
-  box.querySelectorAll('[data-add-cand-to-project]').forEach(btn=>btn.onclick=async()=>{ const pi=Number(btn.dataset.addCandToProject); const p=c.projects?.[pi]; if(!p)return; const input=box.querySelector(`[data-candidate-input="${pi}"]`); const name=input?.value?.trim(); if(!name)return alert('追加するタスク候補を入力してください'); p.candidates=uniq([...(p.candidates||[]), name]); input.value=''; await persist(); });
-  box.querySelectorAll('[data-edit-cand]').forEach(btn=>btn.onclick=async()=>{ const [pi,ci]=String(btn.dataset.editCand).split(':').map(Number); const p=c.projects?.[pi]; const old=p?.candidates?.[ci]; if(!old)return; const name=prompt('タスク候補を修正', old); if(!name)return; p.candidates[ci]=name.trim()||old; p.candidates=uniq(p.candidates); await persist(); });
+  $('addProjectBtn').onclick = async()=>{ const name=prompt('追加するグループ名'); if(!name)return; c.projects=c.projects||[]; c.projects.push({name:name.trim(), candidates:[]}); await persist(); };
+  box.querySelectorAll('[data-edit-project]').forEach(btn=>btn.onclick=async()=>{ const pi=Number(btn.dataset.editProject); const p=c.projects?.[pi]; if(!p)return; const name=prompt('グループ名を修正', p.name); if(!name)return; p.name=name.trim()||p.name; await persist(); });
+  box.querySelectorAll('[data-delete-project]').forEach(btn=>btn.onclick=async()=>{ const pi=Number(btn.dataset.deleteProject); const p=c.projects?.[pi]; if(!p)return; if(!confirm(`グループ「${p.name}」を削除しますか？\n登録済みタスク自体は消えません。`))return; c.projects.splice(pi,1); await persist(); });
+  box.querySelectorAll('[data-add-cand-to-project]').forEach(btn=>btn.onclick=async()=>{ const pi=Number(btn.dataset.addCandToProject); const p=c.projects?.[pi]; if(!p)return; const input=box.querySelector(`[data-candidate-input="${pi}"]`); const name=input?.value?.trim(); if(!name)return alert('追加するタスク名称候補を入力してください'); p.candidates=uniq([...(p.candidates||[]), name]); input.value=''; await persist(); });
+  box.querySelectorAll('[data-edit-cand]').forEach(btn=>btn.onclick=async()=>{ const [pi,ci]=String(btn.dataset.editCand).split(':').map(Number); const p=c.projects?.[pi]; const old=p?.candidates?.[ci]; if(!old)return; const name=prompt('タスク名称候補を修正', old); if(!name)return; p.candidates[ci]=name.trim()||old; p.candidates=uniq(p.candidates); await persist(); });
   box.querySelectorAll('[data-del-cand]').forEach(btn=>btn.onclick=async()=>{ const [pi,ci]=String(btn.dataset.delCand).split(':').map(Number); const p=c.projects?.[pi]; const name=p?.candidates?.[ci]; if(!name)return; if(!confirm(`「${name}」を候補から削除しますか？`)) return; p.candidates.splice(ci,1); await persist(); });
 }
 
@@ -327,7 +327,7 @@ function renderRegisteredTasks(){
             <div class="form taskEditForm">
               <label><small>タスク名</small><input data-field="title" value="${esc(t.title||'')}"></label>
               <label><small>カテゴリ</small><input data-field="category" value="${esc(t.category||'')}"></label>
-              <label><small>プロジェクト</small><input data-field="project" value="${esc(t.project||'')}"></label>
+              <label><small>グループ</small><input data-field="project" value="${esc(t.project||'')}"></label>
               <label><small>見積もり時間 分</small><input data-field="estimated_minutes" type="number" min="15" step="15" value="${esc(t.estimated_minutes||30)}"></label>
               <label><small>開始時間</small><input data-field="start_time" type="time" step="900" value="${esc(t.start_time||'09:00')}"></label>
               <label><small>予定日</small><input data-field="schedule_date" type="date" value="${esc(t.schedule_date||'')}"></label>
@@ -484,7 +484,7 @@ async function addReversePlanTasks(){
     sort_order:Date.now()*-1
   });
   $('newTitle').value=''; $('newMinutes').value=''; $('newMemo').value='';
-  alert('ガンチャ予定を1件追加しました。対象期間の各日でタイムラインへ自動配置できます。');
+  alert('ガンチャ予定を1件追加しました。今日以降のガンチャに表示され、対象期間の各日でタイムラインへ自動配置できます。');
   await refreshAll();
 }
 
