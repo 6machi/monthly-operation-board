@@ -1,8 +1,8 @@
-import { $, esc, toISO, todayISO, diffDays, taskOccursOnDate, minutesFromTime, fullClock, fmtDate } from './utils.js?v=81';
-import { state } from './state.js?v=81';
-import { openDateOnBoard, openTaskEditor } from './board.js?v=81';
-import { createTask, deleteTask, updateTask } from './tasks.js?v=81';
-import { refreshAll } from './app.js?v=81';
+import { $, esc, toISO, todayISO, diffDays, taskOccursOnDate, minutesFromTime, fullClock, fmtDate } from './utils.js?v=82';
+import { state } from './state.js?v=82';
+import { openDateOnBoard, openTaskEditor, arrangeTasksOnDate } from './board.js?v=82';
+import { createTask, deleteTask, updateTask } from './tasks.js?v=82';
+import { refreshAll } from './app.js?v=82';
 
 const DAY_MINUTES = 24 * 60;
 let selectedCalendarDate = todayISO();
@@ -350,12 +350,16 @@ function tasksForSheetCell(item, iso){
     try{ return taskOccursOnDate(t, iso); }catch(e){ return false; }
   }).sort((a,b)=>String(a.start_time||'').localeCompare(String(b.start_time||'')) || String(a.title||'').localeCompare(String(b.title||''),'ja'));
 }
-function cellTaskLabel(t, baseTitle){
+function cellTaskLabel(t, baseTitle, grouped=false){
   const title = String(t?.title || baseTitle || '無題のタスク').trim();
-  if(baseTitle && title.startsWith(baseTitle)){
+  const memo = String(t?.memo || '').trim().split('\n').find(Boolean) || '';
+  if(grouped && baseTitle && title.startsWith(baseTitle)){
     const rest = title.slice(String(baseTitle).length).trim();
-    return rest ? `${baseTitle}${rest}` : baseTitle;
+    if(rest) return rest;
+    if(memo) return memo;
+    return '作業';
   }
+  if(memo && memo.length <= 28 && memo !== title) return memo;
   return title;
 }
 function renderGanttBoard(){
@@ -412,7 +416,7 @@ function renderGanttBoard(){
                     const cellTasks = tasksForSheetCell(item, iso);
                     const cls = `${iso===today?'today':''} ${w==='土'?'sat':''} ${w==='日'?'sun':''} ${cellTasks.length?'hasTasks':''}`;
                     return `<div class="sheetCell ${cls}" data-gantt-date="${iso}">
-                      ${cellTasks.slice(0,5).map(ct=>`<button type="button" class="sheetCellTask ${ct.done?'done':''}" data-gantt-task-id="${esc(ct.id)}" title="${esc(ct.title || title)}">・${esc(cellTaskLabel(ct, title))}</button>`).join('')}
+                      ${cellTasks.slice(0,5).map(ct=>`<button type="button" class="sheetCellTask ${ct.done?'done':''}" data-gantt-task-id="${esc(ct.id)}" title="${esc(ct.title || title)}">・${esc(cellTaskLabel(ct, title, item.isGroup))}</button>`).join('')}
                       ${cellTasks.length>5 ? `<button type="button" class="sheetMore" data-gantt-date="${iso}">+${cellTasks.length-5}</button>` : ''}
                     </div>`;
                   }).join('')}
@@ -509,7 +513,7 @@ function renderSelectedDayTasks(){
     return;
   }
 
-  box.innerHTML = `<div class="selectedDayTop"><button class="primary" type="button" id="openSelectedDayTimeline">タイムラインで調整</button></div>
+  box.innerHTML = `<div class="selectedDayTop"><button class="primary" type="button" id="autoArrangeSelectedDay">タイムラインへ自動配置</button><button class="ghost" type="button" id="openSelectedDayTimeline">タイムラインで調整</button></div>
     <div class="selectedDayGroups">${groups.map(({mem,items})=>`
       <section class="selectedDayGroup" style="--member-color:${esc(mem.color || '#5d9cec')}">
         <h3><span class="memberEmojiMini">${esc(mem.emoji || '🌙')}</span>${esc(mem.name)}<small>${items.length}件</small></h3>
@@ -524,6 +528,7 @@ function renderSelectedDayTasks(){
             </article>`).join('')}
         </div>
       </section>`).join('')}</div>`;
+  $('autoArrangeSelectedDay')?.addEventListener('click', async()=>{ await arrangeTasksOnDate(dateIso); openDateOnBoard(dateIso); });
   $('openSelectedDayTimeline')?.addEventListener('click',()=>openDateOnBoard(dateIso));
   box.querySelectorAll('[data-selected-done-id]').forEach(btn=>{
     btn.addEventListener('click', async(e)=>{
@@ -919,7 +924,7 @@ export function initCalendarEvents(){
   $('icsSelectAllBtn')?.addEventListener('click',()=>document.querySelectorAll('[data-ics-index]').forEach(c=>c.checked=true));
   $('icsClearAllBtn')?.addEventListener('click',()=>document.querySelectorAll('[data-ics-index]').forEach(c=>c.checked=false));
   $('icsImportBtn')?.addEventListener('click', importSelectedIcs);
-  $('openProfileFromCalendar')?.addEventListener('click',()=>{ import('./app.js?v=81').then(m=>m.showView('profile')); });
+  $('openProfileFromCalendar')?.addEventListener('click',()=>{ import('./app.js?v=82').then(m=>m.showView('profile')); });
   $('unavailableAllDay')?.addEventListener('change',()=>{
     const allDay = $('unavailableAllDay').checked;
     $('unavailableStart').disabled = allDay;

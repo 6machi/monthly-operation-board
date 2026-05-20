@@ -1,9 +1,9 @@
-import { $, esc, todayISO, addDays, fmtDate, diffDays, relativeFrom, taskOccursOnDate, occurrenceLabel, fullClock, minutesFromTime } from './utils.js?v=81';
-import { state } from './state.js?v=81';
-import { createTask, markCarryover, returnToSchedule, updateTask, deleteTask } from './tasks.js?v=81';
-import { refreshAll, showView } from './app.js?v=81';
-import { isUnavailableTask, isUnavailableForMember, unavailableBlocksForMember } from './calendar.js?v=81';
-import { updateMyProfile, loadMembers } from './auth.js?v=81';
+import { $, esc, todayISO, addDays, fmtDate, diffDays, relativeFrom, taskOccursOnDate, occurrenceLabel, fullClock, minutesFromTime } from './utils.js?v=82';
+import { state } from './state.js?v=82';
+import { createTask, markCarryover, returnToSchedule, updateTask, deleteTask } from './tasks.js?v=82';
+import { refreshAll, showView } from './app.js?v=82';
+import { isUnavailableTask, isUnavailableForMember, unavailableBlocksForMember } from './calendar.js?v=82';
+import { updateMyProfile, loadMembers } from './auth.js?v=82';
 
 const SLOT_MINUTES = 10;
 const PX_PER_MINUTE = 1.15; // 10分刻み / 60分 = 約69px
@@ -629,7 +629,7 @@ function buildSplitDistribution(tasks, startDate, ownerId){
   return targetById;
 }
 
-async function reflowTasksAvoidingUnavailable(){
+export async function reflowTasksAvoidingUnavailable(){
   if(!isEditable()) return alert('自分のタスクだけ整理できます');
   const now = new Date();
   const startDate = todayISO();
@@ -700,6 +700,55 @@ async function reflowTasksAvoidingUnavailable(){
   showOrganizeMessage(`${moved}件を締切が近い順に、今から先の空き時間へ入れ直しました。${detail}${skipped ? ` ${skipped}件は空き枠が見つかりませんでした。` : ''}`, !!skipped);
   await refreshAll();
 }
+
+export async function arrangeTasksOnDate(dateIso = state.scheduleDate || todayISO()){
+  if(!state.user) return alert('ログイン後に使えます');
+  const ownerId = state.user.id;
+  if(state.selectedMemberId && state.selectedMemberId !== ownerId) return alert('自分のタスクだけ自動配置できます');
+  if(isWholeDayBlocked(dateIso, ownerId)) return alert('この日は終日稼働不可です');
+  const tasks = taskArray()
+    .filter(t=>t && t.id && t.owner_id===ownerId && !t.done && !isUnavailableTask(t))
+    .filter(t=>['single',''].includes(t.occurrence || 'single'))
+    .filter(t=>taskOccursOnDate(t, dateIso))
+    .sort((a,b)=>reflowPrioritySort(a,b,ownerId));
+  if(!tasks.length){ alert('この日に自動配置できる単発タスクはありません'); return; }
+  const now = new Date();
+  const currentMin = snapMinutes(now.getHours()*60 + now.getMinutes());
+  const excludeIds = tasks.map(t=>t.id);
+  const busyByKey = new Map();
+  function busyFor(task){
+    const key = `${isWorkTask(task, ownerId) ? 'work' : 'free'}:${shouldAvoidWorkForNonWork() ? 'avoid' : 'allow'}`;
+    if(!busyByKey.has(key)) busyByKey.set(key, fixedBusyIntervalsForTask(dateIso, ownerId, excludeIds, task));
+    return busyByKey.get(key);
+  }
+  let moved = 0;
+  let skipped = 0;
+  for(const t of tasks){
+    const duration = taskDuration(t);
+    const busy = busyFor(t);
+    const preferred = dateIso === todayISO()
+      ? currentMin
+      : (isWorkTask(t, ownerId)
+        ? (memberWorkIntervals(dateIso, ownerId)[0]?.start ?? minutesFromTime(memberSleep().end || '09:00'))
+        : (t.start_time ? minutesFromTime(t.start_time) : minutesFromTime(memberSleep().end || '09:00')));
+    const slot = findSlotWithBusy(preferred, duration, busy, {
+      noWrap: dateIso === todayISO(),
+      windows: workWindowsForTask(dateIso, t, ownerId)
+    });
+    if(slot === null){ skipped++; continue; }
+    busy.push({ start:slot, end:slot+duration });
+    busy.sort((a,b)=>a.start-b.start);
+    const patch = { schedule_date:dateIso, carryover_date:null, status:'scheduled', start_time:timeLabel(slot) };
+    if(t.schedule_date !== patch.schedule_date || t.carryover_date || t.start_time !== patch.start_time){
+      await updateTask(t.id, patch);
+      moved++;
+    }
+  }
+  await refreshAll();
+  if(skipped) alert(`${moved}件をタイムラインに自動配置しました。${skipped}件は空き枠が見つかりませんでした。`);
+  else alert(`${moved}件をタイムラインに自動配置しました。`);
+}
+
 async function redistributeDailyTasksFromToday(){
   if(!isEditable()) return alert('自分のタスクだけ整理できます');
   const ownerId = state.selectedMemberId || state.user.id;
