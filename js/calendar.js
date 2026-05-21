@@ -1,8 +1,8 @@
-import { $, esc, toISO, todayISO, diffDays, taskOccursOnDate, minutesFromTime, fullClock, fmtDate } from './utils.js?v=85';
-import { state } from './state.js?v=85';
-import { openDateOnBoard, openTaskEditor, arrangeTasksOnDate } from './board.js?v=85';
-import { createTask, deleteTask, updateTask } from './tasks.js?v=85';
-import { refreshAll } from './app.js?v=85';
+import { $, esc, toISO, todayISO, diffDays, taskOccursOnDate, minutesFromTime, fullClock, fmtDate } from './utils.js?v=86';
+import { state } from './state.js?v=86';
+import { openDateOnBoard, openTaskEditor, arrangeTasksOnDate } from './board.js?v=86';
+import { createTask, deleteTask, updateTask } from './tasks.js?v=86';
+import { refreshAll } from './app.js?v=86';
 
 const DAY_MINUTES = 24 * 60;
 let selectedCalendarDate = todayISO();
@@ -393,6 +393,29 @@ function ganttTaskGroups(){
     rows.get(rowKey).bars.push(bar);
   });
 
+  // カテゴリ管理にある「カテゴリ > グループ > タスク名称候補」は、予定がまだ0件でも左列に出す。
+  // これにより、スプレッドシートの空セルへ直接ガンチャ予定を入力できる。
+  (state.tree || []).forEach(cat=>{
+    const category = cat?.name || '未分類';
+    (cat?.projects || []).forEach(project=>{
+      const groupName = project?.name || '未分類グループ';
+      (project?.candidates || []).forEach(candidate=>{
+        const taskName = String(candidate || '').trim();
+        if(!taskName) return;
+        const rowKey = [category, groupName, taskName, state.user?.id || ''].join('::');
+        if(!rows.has(rowKey)) rows.set(rowKey, {
+          key: rowKey,
+          category,
+          groupName,
+          taskName,
+          rowName: taskName,
+          owner_id: state.user?.id,
+          bars: []
+        });
+      });
+    });
+  });
+
   return Array.from(rows.values()).map(row=>{
     row.bars.sort((a,b)=>
       Number(a.span.startDay)-Number(b.span.startDay)
@@ -432,6 +455,148 @@ function cellTaskLabel(t, baseTitle, grouped=false){
   if(memo && memo.length <= 28 && memo !== title) return memo;
   return title;
 }
+
+function firstUsefulMemoLine(memo){
+  return String(memo || '')
+    .split('\n')
+    .map(x=>x.trim())
+    .find(x=>x && !x.startsWith('#') && !x.startsWith('納期から逆算：')) || '';
+}
+function extraMemoLines(memo, detail=''){
+  const d = String(detail || '').trim();
+  return String(memo || '')
+    .split('\n')
+    .map(x=>x.trim())
+    .filter(x=>x && x !== d && x !== '#gantt-span')
+    .filter(x=>!x.startsWith('納期から逆算：'));
+}
+function composeGanttMemo(detail, extra, isSpan){
+  const lines = [];
+  const d = String(detail || '').trim();
+  if(d) lines.push(d);
+  String(extra || '').split('\n').map(x=>x.trim()).filter(Boolean).forEach(x=>{
+    if(x !== d && x !== '#gantt-span') lines.push(x);
+  });
+  if(isSpan) lines.push('#gantt-span');
+  return lines.join('\n');
+}
+function normalizeEndDate(start, end){
+  if(!start) return end || todayISO();
+  if(!end || end < start) return start;
+  return end;
+}
+function ensureGanttQuickEditor(){
+  let modal = document.getElementById('ganttQuickModal');
+  if(modal) return modal;
+  modal = document.createElement('div');
+  modal.id = 'ganttQuickModal';
+  modal.className = 'taskEditModal hidden';
+  modal.innerHTML = `
+    <div class="taskEditBackdrop" data-close-gantt-editor></div>
+    <section class="taskEditPanel ganttQuickPanel" role="dialog" aria-modal="true" aria-label="ガンチャ予定を編集">
+      <div class="taskEditPanelHead">
+        <div><h2 id="ganttQuickTitle">ガンチャ予定を追加</h2></div>
+        <button class="ghost" type="button" data-close-gantt-editor>閉じる</button>
+      </div>
+      <div class="form taskEditQuickForm">
+        <label><small>カテゴリ</small><select id="ganttQuickCategory"></select></label>
+        <label><small>グループ</small><input id="ganttQuickGroup" placeholder="例：ネーム"></label>
+        <label><small>タスク名称</small><input id="ganttQuickTaskName" placeholder="例：通常業務／トーン"></label>
+        <label><small>ガンチャ上の詳細</small><input id="ganttQuickDetail" placeholder="例：25話初稿／初稿〆切"></label>
+        <label><small>開始日</small><input id="ganttQuickStart" type="date"></label>
+        <label><small>期限</small><input id="ganttQuickDue" type="date"></label>
+        <label><small>1日あたり見積もり時間 分</small><input id="ganttQuickMinutes" type="number" min="15" step="15" value="60"></label>
+        <label><small>タイムライン開始目安</small><input id="ganttQuickStartTime" type="time" step="900" value="09:00"></label>
+        <label style="grid-column:1/-1"><small>補足メモ</small><textarea id="ganttQuickMemo" placeholder="確認先・注意点など。空でもOK"></textarea></label>
+      </div>
+      <div class="ganttQuickHint">左の「カテゴリ ＞ グループ ＞ タスク名称」は行として使い、右の日付バーには「ガンチャ上の詳細」が表示されます。</div>
+      <div class="actions">
+        <button class="primary" type="button" id="saveGanttQuickTask">保存</button>
+        <button class="danger hidden" type="button" id="deleteGanttQuickTask">削除</button>
+      </div>
+    </section>`;
+  document.body.appendChild(modal);
+  modal.querySelectorAll('[data-close-gantt-editor]').forEach(btn=>btn.addEventListener('click', closeGanttQuickEditor));
+  return modal;
+}
+function closeGanttQuickEditor(){
+  const modal = document.getElementById('ganttQuickModal');
+  if(modal) modal.classList.add('hidden');
+}
+function fillGanttCategoryOptions(current){
+  const select = $('ganttQuickCategory');
+  const names = (state.tree || []).map(c=>c?.name).filter(Boolean);
+  const fallback = current || names[0] || '未分類';
+  const values = names.includes(fallback) ? names : [fallback, ...names];
+  select.innerHTML = values.map(v=>`<option value="${esc(v)}" ${v===fallback?'selected':''}>${esc(v)}</option>`).join('');
+}
+function openGanttQuickEditor({ task=null, date=null, category='', groupName='', taskName='' } = {}){
+  if(!state.user) return alert('ログイン後に使えます');
+  if(task && task.owner_id !== state.user?.id) return alert('他メンバーの予定は閲覧のみです。');
+  const modal = ensureGanttQuickEditor();
+  const start = task?.schedule_date || task?.carryover_date || date || selectedCalendarDate || todayISO();
+  const due = normalizeEndDate(start, task?.due_date || date || start);
+  const currentCategory = task?.category || category || (state.tree?.[0]?.name) || '未分類';
+  const currentGroup = task ? ganttGroupName(task) : (groupName || '未分類グループ');
+  const currentTaskName = task ? ganttTaskName(task) : (taskName || '');
+  const detail = task ? ganttDetailTitle(task) : '';
+  fillGanttCategoryOptions(currentCategory);
+  $('ganttQuickGroup').value = currentGroup || '';
+  $('ganttQuickTaskName').value = currentTaskName || '';
+  $('ganttQuickDetail').value = detail || '';
+  $('ganttQuickStart').value = start || todayISO();
+  $('ganttQuickDue').value = due || start || todayISO();
+  $('ganttQuickMinutes').value = Math.max(15, Math.round(Number(task?.estimated_minutes || 60)/15)*15);
+  $('ganttQuickStartTime').value = task?.start_time || '09:00';
+  $('ganttQuickMemo').value = task ? extraMemoLines(task.memo, detail).join('\n') : '';
+  $('ganttQuickTitle').textContent = task ? 'ガンチャ予定を編集' : 'ガンチャ予定を追加';
+  const del = $('deleteGanttQuickTask');
+  del.classList.toggle('hidden', !task);
+  del.onclick = async()=>{
+    if(!task) return;
+    if(!confirm(`ガンチャ予定「${ganttDetailTitle(task)}」を削除しますか？`)) return;
+    await deleteTask(task.id);
+    closeGanttQuickEditor();
+    await refreshAll();
+  };
+  $('saveGanttQuickTask').onclick = async()=>{
+    const startDate = $('ganttQuickStart').value || date || todayISO();
+    const dueDate = normalizeEndDate(startDate, $('ganttQuickDue').value || startDate);
+    const isSpan = dueDate && startDate && dueDate > startDate;
+    const detailValue = $('ganttQuickDetail').value.trim() || '作業';
+    const rowTaskName = $('ganttQuickTaskName').value.trim() || detailValue;
+    const payload = {
+      category: $('ganttQuickCategory').value || '未分類',
+      project: $('ganttQuickGroup').value.trim() || '未分類グループ',
+      title: rowTaskName,
+      task_type: isSpan ? 'gantt_span' : '',
+      estimated_minutes: Math.max(15, Math.round(Number($('ganttQuickMinutes').value || 60)/15)*15),
+      start_time: $('ganttQuickStartTime').value || '09:00',
+      schedule_date: startDate,
+      carryover_date: null,
+      due_date: dueDate,
+      occurrence: 'single',
+      status: 'scheduled',
+      done: false,
+      memo: composeGanttMemo(detailValue, $('ganttQuickMemo').value, isSpan)
+    };
+    if(task){
+      await updateTask(task.id, payload);
+    }else{
+      await createTask({
+        team_id: state.team.id,
+        owner_id: state.user.id,
+        created_by: state.user.id,
+        ...payload,
+        sort_order: Date.now()*-1
+      });
+    }
+    closeGanttQuickEditor();
+    await refreshAll();
+  };
+  modal.classList.remove('hidden');
+  setTimeout(()=>$('ganttQuickDetail')?.focus(), 0);
+}
 function renderGanttBoard(){
   const board = $('ganttBoard');
   if(!board) return;
@@ -445,13 +610,13 @@ function renderGanttBoard(){
     ? `${Number(today.slice(5,7))}/${Number(today.slice(8,10))} 今日から`
     : `${m}/1 から`;
   if(!days.length){
-    board.innerHTML = '<div class="empty">今日以降のガンチャ予定はありません。</div>';
+    board.innerHTML = '<div class="empty">今日以降のガンチャ予定はありません。<br><button class="primary" type="button" id="ganttEmptyAddBtn">ガンチャ予定を追加</button></div>'; const add=$('ganttEmptyAddBtn'); if(add) add.addEventListener('click',()=>openGanttQuickEditor({date:todayISO()}));
     return;
   }
   const rows = ganttTaskGroups().map(row=>({
     ...row,
     bars:(row.bars || []).filter(bar=>bar.span.endDay >= visibleFirstDay && bar.span.startDay <= last)
-  })).filter(row=>row.bars.length);
+  }));
   const groups = new Map();
   rows.forEach(row=>{
     const key = row.category || '未分類';
@@ -459,7 +624,7 @@ function renderGanttBoard(){
     groups.get(key).push(row);
   });
   if(!rows.length){
-    board.innerHTML = '<div class="empty">今日以降のガンチャ予定はありません。</div>';
+    board.innerHTML = '<div class="empty">今日以降のガンチャ予定はありません。<br><button class="primary" type="button" id="ganttEmptyAddBtn">ガンチャ予定を追加</button></div>'; const add=$('ganttEmptyAddBtn'); if(add) add.addEventListener('click',()=>openGanttQuickEditor({date:todayISO()}));
     return;
   }
   board.innerHTML = `
@@ -481,22 +646,22 @@ function renderGanttBoard(){
           return `<section class="sheetCategory" style="--cat-color:${esc(color)};--days:${days.length}">
             <div class="sheetCategoryTitle"><b>${esc(category)}</b><small>${catTotal}件</small></div>
             ${arr.map(row=>{
-              const mem = taskOwner(row.bars[0]?.task || {});
+              const mem = taskOwner(row.bars[0]?.task || { owner_id: row.owner_id });
               const laneCount = Math.max(1, row.bars.length);
               const dueSoon = row.bars.some(bar=>bar.due_date && diffDays(bar.due_date, today) <= 3 && !bar.done);
               return `<div class="sheetTaskRow detailGanttRow ${dueSoon?'dueSoon':''}" style="--days:${days.length};--cat-color:${esc(color)};--lanes:${laneCount}">
-                <button type="button" class="sheetTaskLabel rowOnlyLabel ganttTreeLabel" data-gantt-row-date="${esc(today)}" title="${esc(row.groupName)} / ${esc(row.taskName)}">
+                <button type="button" class="sheetTaskLabel rowOnlyLabel ganttTreeLabel" data-gantt-row-date="${esc(today)}" data-gantt-category="${esc(row.category || '')}" data-gantt-group="${esc(row.groupName || '')}" data-gantt-task-name="${esc(row.taskName || row.rowName || '')}" title="${esc(row.groupName)} / ${esc(row.taskName)}">
                   <span class="sheetOwner">${esc(mem.emoji || '🌙')}</span>
                   <span class="ganttGroupName">┗ ${esc(row.groupName || '未分類グループ')}</span>
                   <span class="sheetTaskTitle ganttTaskName">　┗ ${esc(row.taskName || row.rowName)}</span>
-                  <small>${esc(row.bars.length)}件の予定</small>
+                  <small>${row.bars.length ? `${esc(row.bars.length)}件の予定` : 'セルをクリックして追加'}</small>
                 </button>
                 <div class="sheetCells detailGanttCells">
                   ${days.map(d=>{
                     const iso = `${state.calendarMonth}-${String(d).padStart(2,'0')}`;
                     const w = dayLabel(y,m,d);
                     const cls = `${iso===today?'today':''} ${w==='土'?'sat':''} ${w==='日'?'sun':''}`;
-                    return `<div class="sheetCell detailGanttDay ${cls}" data-gantt-date="${iso}"></div>`;
+                    return `<div class="sheetCell detailGanttDay ${cls}" data-gantt-date="${iso}" data-gantt-category="${esc(row.category || '')}" data-gantt-group="${esc(row.groupName || '')}" data-gantt-task-name="${esc(row.taskName || row.rowName || '')}"></div>`;
                   }).join('')}
                   <div class="ganttBarLayer" style="--days:${days.length};--lanes:${laneCount}">
                     ${row.bars.map((bar,idx)=>{
@@ -531,18 +696,34 @@ function renderGanttBoard(){
     e.preventDefault();
     e.stopPropagation();
     const date = btn.dataset.ganttDate;
+    if(btn.classList.contains('detailGanttDay')){
+      openGanttQuickEditor({
+        date,
+        category: btn.dataset.ganttCategory || '',
+        groupName: btn.dataset.ganttGroup || '',
+        taskName: btn.dataset.ganttTaskName || ''
+      });
+      return;
+    }
     if(date) selectCalendarDate(date, true);
+  }));
+  board.querySelectorAll('[data-gantt-row-date]').forEach(btn=>btn.addEventListener('click', e=>{
+    if(e.target.closest('[data-gantt-task-id]')) return;
+    e.preventDefault();
+    e.stopPropagation();
+    openGanttQuickEditor({
+      date: btn.dataset.ganttRowDate || todayISO(),
+      category: btn.dataset.ganttCategory || '',
+      groupName: btn.dataset.ganttGroup || '',
+      taskName: btn.dataset.ganttTaskName || ''
+    });
   }));
   board.querySelectorAll('[data-gantt-task-id]').forEach(btn=>btn.addEventListener('click', e=>{
     e.preventDefault();
     e.stopPropagation();
     const t = taskArray().find(x=>String(x.id)===String(btn.dataset.ganttTaskId));
     if(!t) return;
-    if(t.owner_id !== state.user?.id){
-      alert('他メンバーの予定は閲覧のみです。');
-      return;
-    }
-    openTaskEditor(t);
+    openGanttQuickEditor({ task:t });
   }));
 }
 function showGanttMsg(text, error=false){
@@ -1015,6 +1196,7 @@ async function importSelectedIcs(){
 export function initCalendarEvents(){
   $('calendarMonth').addEventListener('change',()=>{ state.calendarMonth = $('calendarMonth').value; renderCalendar(); });
   $('calendarThisMonth').addEventListener('click',()=>{ state.calendarMonth = new Date().toISOString().slice(0,7); renderCalendar(); });
+  $('ganttQuickAddBtn')?.addEventListener('click',()=>openGanttQuickEditor({date:todayISO()}));
   $('ganttAssignTodayBtn')?.addEventListener('click', assignGanttToToday);
   $('ganttOpenTodayBtn')?.addEventListener('click',()=>openDateOnBoard(todayISO()));
   $('icsParseBtn')?.addEventListener('click', loadIcsFile);
@@ -1022,7 +1204,7 @@ export function initCalendarEvents(){
   $('icsSelectAllBtn')?.addEventListener('click',()=>document.querySelectorAll('[data-ics-index]').forEach(c=>c.checked=true));
   $('icsClearAllBtn')?.addEventListener('click',()=>document.querySelectorAll('[data-ics-index]').forEach(c=>c.checked=false));
   $('icsImportBtn')?.addEventListener('click', importSelectedIcs);
-  $('openProfileFromCalendar')?.addEventListener('click',()=>{ import('./app.js?v=85').then(m=>m.showView('profile')); });
+  $('openProfileFromCalendar')?.addEventListener('click',()=>{ import('./app.js?v=86').then(m=>m.showView('profile')); });
   $('unavailableAllDay')?.addEventListener('change',()=>{
     const allDay = $('unavailableAllDay').checked;
     $('unavailableStart').disabled = allDay;
