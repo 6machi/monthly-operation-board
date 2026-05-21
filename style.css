@@ -893,3 +893,15 @@ input[type="time"], input[type="date"]{min-height:42px}
 .sheetCategoryTitle{min-height:52px;font-size:15px;padding-left:18px}
 .sheetCategoryTitle b{font-size:16px}
 @media(max-width:700px){.sheetGroupHeader{grid-template-columns:220px max-content}.sheetGroupTitle{width:220px;padding-left:18px}.sheetGroupCells{grid-template-columns:repeat(var(--days),135px)}.sheetGroupCell{width:135px;min-width:135px}.ganttTreeLabel{grid-template-columns:18px 1fr auto;padding-left:12px}}
+
+
+/* v92: group reorder in shelf and gantt */
+.draggableProjectBox{cursor:grab}
+.draggableProjectBox.dragging{opacity:.55;transform:scale(.995)}
+.draggableProjectBox.dragover{outline:3px solid #5d9cec;outline-offset:3px;background:#f7fbff}
+.projectCandidateTitle{display:flex;align-items:flex-start;gap:8px}
+.projectDragHandle,.ganttGroupDragHandle{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:8px;background:#eef4ff;color:#5d9cec;font-weight:950;flex:0 0 auto;cursor:grab;user-select:none}
+.sheetGroupHeader{cursor:grab}
+.sheetGroupHeader.ganttGroupDragging{opacity:.55}
+.sheetGroupHeader.ganttGroupReorderTarget .sheetGroupTitle{background:#eff6ff!important;box-shadow:inset 0 3px 0 #5d9cec}
+.ganttGroupDragHandle{width:20px;height:20px;margin-right:2px}

@@ -1,12 +1,13 @@
-import { $, esc, occurrenceLabel, addDays, diffDays, fmtDate, minutesFromTime, fullClock } from './utils.js?v=91';
-import { state } from './state.js?v=91';
-import { saveTree } from './setup.js?v=91';
-import { updateMyProfile, loadMembers } from './auth.js?v=91';
-import { createTask, updateTask, deleteTask } from './tasks.js?v=91';
-import { refreshAll, showView } from './app.js?v=91';
-import { renderUnavailableList, isUnavailableTask } from './calendar.js?v=91';
+import { $, esc, occurrenceLabel, addDays, diffDays, fmtDate, minutesFromTime, fullClock } from './utils.js?v=92';
+import { state } from './state.js?v=92';
+import { saveTree } from './setup.js?v=92';
+import { updateMyProfile, loadMembers } from './auth.js?v=92';
+import { createTask, updateTask, deleteTask } from './tasks.js?v=92';
+import { refreshAll, showView } from './app.js?v=92';
+import { renderUnavailableList, isUnavailableTask } from './calendar.js?v=92';
 
 let draggingCategoryIndex = null;
+let draggingProjectIndex = null;
 const ACHIEVEMENT_EXCLUDE = '[[achievement_excluded]]';
 function achievementExcluded(t){ return String(t?.memo||'').includes(ACHIEVEMENT_EXCLUDE); }
 function stripAchievementMarker(memo){ return String(memo||'').replace(ACHIEVEMENT_EXCLUDE,'').trim(); }
@@ -68,7 +69,7 @@ async function persist(){ normalizeTree(); await saveTree(state.treeRowId, state
 export function renderSetup(){
   normalizeTree();
   $('setupNotice').textContent = editable()
-    ? 'タスクを追加する画面です。カテゴリはドラッグで並び替えできます。'
+    ? 'タスクを追加する画面です。カテゴリとグループはドラッグで並び替えできます。'
     : '他メンバーのタスク追加画面は閲覧中心です。';
   renderCategories();
   renderSelectors();
@@ -235,9 +236,9 @@ function renderProjectCandidateBoxes(c){
   return `
     <div class="projectCandidateEditor">
       ${projects.length ? projects.map((p,pi)=>`
-        <section class="projectCandidateBox" data-project-box="${pi}">
+        <section class="projectCandidateBox draggableProjectBox" data-project-box="${pi}" draggable="true">
           <div class="projectCandidateHead">
-            <div><b>${esc(p.name)}</b><span>タスク名称候補 ${p.candidates?.length||0}件</span></div>
+            <div class="projectCandidateTitle"><span class="projectDragHandle" title="ドラッグしてグループを並べ替え">↕</span><div><b>${esc(p.name)}</b><span>タスク名称候補 ${p.candidates?.length||0}件</span></div></div>
             <div class="boxItemActions"><button type="button" class="ghost tiny" data-edit-project="${pi}">グループ名を修正</button><button type="button" class="danger tiny" data-delete-project="${pi}">×</button></div>
           </div>
           <p class="muted">このグループで使うタスク名称候補です。</p>
@@ -283,6 +284,42 @@ function renderCategoryEditor(){
   $('addCategoryBtn').onclick = async()=>{ const name=prompt('追加するカテゴリ名'); if(!name)return; state.tree.push({name, memo:'', color:'#9aa4b6', projects:[], sharedWith:[]}); state.selectedCategoryIndex=state.tree.length-1; await persist(); };
   $('deleteCategoryBtn').onclick = async()=>{ if(!confirm(`カテゴリ「${c.name}」を削除しますか？\n登録済みタスク自体は消えません。`))return; state.tree.splice(state.selectedCategoryIndex,1); state.selectedCategoryIndex=Math.max(0,state.selectedCategoryIndex-1); await persist(); };
   $('addProjectBtn').onclick = async()=>{ const name=prompt('追加するグループ名'); if(!name)return; c.projects=c.projects||[]; c.projects.push({name:name.trim(), candidates:[]}); await persist(); };
+  box.querySelectorAll('[data-project-box]').forEach(projectBox=>{
+    projectBox.addEventListener('dragstart', e=>{
+      if(!editable()){ e.preventDefault(); return; }
+      if(e.target.closest('button, input, textarea, select')){ e.preventDefault(); return; }
+      draggingProjectIndex = Number(projectBox.dataset.projectBox);
+      projectBox.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', String(draggingProjectIndex));
+    });
+    projectBox.addEventListener('dragend', ()=>{
+      draggingProjectIndex = null;
+      projectBox.classList.remove('dragging');
+      box.querySelectorAll('.dragover').forEach(el=>el.classList.remove('dragover'));
+    });
+    projectBox.addEventListener('dragover', e=>{
+      if(draggingProjectIndex === null) return;
+      const to = Number(projectBox.dataset.projectBox);
+      if(Number.isNaN(to) || to === draggingProjectIndex) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      projectBox.classList.add('dragover');
+    });
+    projectBox.addEventListener('dragleave', ()=>projectBox.classList.remove('dragover'));
+    projectBox.addEventListener('drop', async e=>{
+      if(draggingProjectIndex === null) return;
+      e.preventDefault();
+      projectBox.classList.remove('dragover');
+      const from = draggingProjectIndex ?? Number(e.dataTransfer.getData('text/plain'));
+      const to = Number(projectBox.dataset.projectBox);
+      if(Number.isNaN(from) || Number.isNaN(to) || from === to) return;
+      c.projects = Array.isArray(c.projects) ? c.projects : [];
+      const [item] = c.projects.splice(from, 1);
+      c.projects.splice(to, 0, item);
+      await persist();
+    });
+  });
   box.querySelectorAll('[data-edit-project]').forEach(btn=>btn.onclick=async()=>{ const pi=Number(btn.dataset.editProject); const p=c.projects?.[pi]; if(!p)return; const name=prompt('グループ名を修正', p.name); if(!name)return; p.name=name.trim()||p.name; await persist(); });
   box.querySelectorAll('[data-delete-project]').forEach(btn=>btn.onclick=async()=>{ const pi=Number(btn.dataset.deleteProject); const p=c.projects?.[pi]; if(!p)return; if(!confirm(`グループ「${p.name}」を削除しますか？\n登録済みタスク自体は消えません。`))return; c.projects.splice(pi,1); await persist(); });
   box.querySelectorAll('[data-add-cand-to-project]').forEach(btn=>btn.onclick=async()=>{ const pi=Number(btn.dataset.addCandToProject); const p=c.projects?.[pi]; if(!p)return; const input=box.querySelector(`[data-candidate-input="${pi}"]`); const name=input?.value?.trim(); if(!name)return alert('追加するタスク名称候補を入力してください'); p.candidates=uniq([...(p.candidates||[]), name]); input.value=''; await persist(); });

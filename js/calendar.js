@@ -1,9 +1,9 @@
-import { $, esc, toISO, todayISO, diffDays, taskOccursOnDate, minutesFromTime, fullClock, fmtDate } from './utils.js?v=91';
-import { state } from './state.js?v=91';
-import { openDateOnBoard, openTaskEditor, arrangeTasksOnDate } from './board.js?v=91';
-import { createTask, deleteTask, updateTask } from './tasks.js?v=91';
-import { saveTree } from './setup.js?v=91';
-import { refreshAll } from './app.js?v=91';
+import { $, esc, toISO, todayISO, diffDays, taskOccursOnDate, minutesFromTime, fullClock, fmtDate } from './utils.js?v=92';
+import { state } from './state.js?v=92';
+import { openDateOnBoard, openTaskEditor, arrangeTasksOnDate } from './board.js?v=92';
+import { createTask, deleteTask, updateTask } from './tasks.js?v=92';
+import { saveTree } from './setup.js?v=92';
+import { refreshAll } from './app.js?v=92';
 
 const DAY_MINUTES = 24 * 60;
 let selectedCalendarDate = todayISO();
@@ -650,6 +650,39 @@ async function reorderGanttTaskRows(category, groupName, draggedTaskName, target
   await refreshAll();
 }
 
+
+async function reorderGanttGroups(category, draggedGroupName, targetGroupName){
+  const dragged = String(draggedGroupName || '').trim();
+  const target = String(targetGroupName || '').trim();
+  if(!dragged || !target || dragged === target) return;
+  normalizeTreeForGantt();
+  const catName = String(category || '未分類');
+  let cat = state.tree.find(c=>String(c.name || '未分類') === catName);
+  if(!cat){
+    cat = { name:catName, memo:'', color:'#9aa4b6', projects:[] };
+    state.tree.push(cat);
+  }
+  cat.projects = Array.isArray(cat.projects) ? cat.projects : [];
+  const allNames = ganttTaskGroups()
+    .filter(row=>String(row.category || '未分類') === catName)
+    .map(row=>String(row.groupName || '未分類グループ').trim())
+    .filter(Boolean);
+  const existing = cat.projects.map(p=>String(p?.name || '').trim()).filter(Boolean);
+  let ordered = [];
+  [...existing, ...allNames, dragged, target].forEach(name=>{ if(name && !ordered.includes(name)) ordered.push(name); });
+  ordered = ordered.filter(name=>name !== dragged);
+  const targetIndex = ordered.indexOf(target);
+  if(targetIndex < 0) ordered.push(dragged);
+  else ordered.splice(targetIndex, 0, dragged);
+  const projectByName = new Map(cat.projects.map(p=>[String(p?.name || '').trim(), p]));
+  cat.projects = ordered.map(name=>{
+    const old = projectByName.get(name);
+    return old ? { ...old, name } : { name, candidates:[] };
+  });
+  await persistGanttTree();
+  await refreshAll();
+}
+
 async function renameGanttBarDetail(taskId, nextTitle){
   const task = taskArray().find(x=>String(x.id) === String(taskId));
   if(!task || task.owner_id !== state.user?.id) return;
@@ -791,6 +824,49 @@ function bindInlineGanttEditing(board){
     await deleteGanttBar(btn.dataset.taskId);
   }));
 }
+
+function bindGanttGroupReorder(board){
+  let groupDrag = null;
+  const clearHover = ()=>board.querySelectorAll('.ganttGroupReorderTarget').forEach(el=>el.classList.remove('ganttGroupReorderTarget'));
+  board.querySelectorAll('[data-gantt-group-header]').forEach(header=>{
+    header.setAttribute('draggable','true');
+    header.addEventListener('dragstart', e=>{
+      if(e.target.closest('button, input, [contenteditable="true"], [data-gantt-task-id]')){ e.preventDefault(); return; }
+      groupDrag = {
+        category: header.dataset.ganttCategory || '未分類',
+        groupName: header.dataset.ganttGroup || '未分類グループ'
+      };
+      header.classList.add('ganttGroupDragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', groupDrag.groupName);
+    });
+    header.addEventListener('dragend', ()=>{
+      header.classList.remove('ganttGroupDragging');
+      groupDrag = null;
+      clearHover();
+    });
+    header.addEventListener('dragover', e=>{
+      if(!groupDrag) return;
+      const targetCategory = header.dataset.ganttCategory || '未分類';
+      const targetGroup = header.dataset.ganttGroup || '未分類グループ';
+      if(String(targetCategory)!==String(groupDrag.category) || String(targetGroup)===String(groupDrag.groupName)) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      clearHover();
+      header.classList.add('ganttGroupReorderTarget');
+    });
+    header.addEventListener('drop', async e=>{
+      if(!groupDrag) return;
+      const targetCategory = header.dataset.ganttCategory || '未分類';
+      const targetGroup = header.dataset.ganttGroup || '未分類グループ';
+      if(String(targetCategory)!==String(groupDrag.category)) return;
+      e.preventDefault();
+      clearHover();
+      await reorderGanttGroups(groupDrag.category, groupDrag.groupName, targetGroup);
+    });
+  });
+}
+
 function bindGanttRowReorder(board){
   let rowDrag = null;
   const clearHover = ()=>board.querySelectorAll('.ganttRowReorderTarget').forEach(el=>el.classList.remove('ganttRowReorderTarget'));
@@ -1091,8 +1167,8 @@ function renderGanttBoard(){
             <div class="sheetCategoryTitle"><b>${esc(category)}</b><small>${catTotal}件</small></div>
             ${Array.from(groupMap.entries()).map(([groupName,arr])=>{
               const groupTotal = arr.reduce((sum,row)=>sum + row.bars.length, 0);
-              return `<div class="sheetGroupHeader" style="--days:${days.length};--cat-color:${esc(color)}">
-                <div class="sheetGroupTitle"><span>${esc(groupName || '未分類グループ')}</span><small>${esc(arr.length)}タスク / ${esc(groupTotal)}件</small></div>
+              return `<div class="sheetGroupHeader" data-gantt-group-header data-gantt-category="${esc(category || '')}" data-gantt-group="${esc(groupName || '未分類グループ')}" style="--days:${days.length};--cat-color:${esc(color)}">
+                <div class="sheetGroupTitle" title="ドラッグしてグループを並べ替え"><span class="ganttGroupDragHandle">↕</span><span>${esc(groupName || '未分類グループ')}</span><small>${esc(arr.length)}タスク / ${esc(groupTotal)}件</small></div>
                 <div class="sheetGroupCells">${days.map(d=>{
                   const iso = `${state.calendarMonth}-${String(d).padStart(2,'0')}`;
                   const w = dayLabel(y,m,d);
@@ -1171,6 +1247,7 @@ function renderGanttBoard(){
     btn.querySelector('[data-gantt-row-name-edit]')?.focus?.();
   }));
   bindInlineGanttEditing(board);
+  bindGanttGroupReorder(board);
   bindGanttRowReorder(board);
   bindGanttDrag(board, visibleFirstDay, last);
 }
@@ -1652,7 +1729,7 @@ export function initCalendarEvents(){
   $('icsSelectAllBtn')?.addEventListener('click',()=>document.querySelectorAll('[data-ics-index]').forEach(c=>c.checked=true));
   $('icsClearAllBtn')?.addEventListener('click',()=>document.querySelectorAll('[data-ics-index]').forEach(c=>c.checked=false));
   $('icsImportBtn')?.addEventListener('click', importSelectedIcs);
-  $('openProfileFromCalendar')?.addEventListener('click',()=>{ import('./app.js?v=91').then(m=>m.showView('profile')); });
+  $('openProfileFromCalendar')?.addEventListener('click',()=>{ import('./app.js?v=92').then(m=>m.showView('profile')); });
   $('unavailableAllDay')?.addEventListener('change',()=>{
     const allDay = $('unavailableAllDay').checked;
     $('unavailableStart').disabled = allDay;
