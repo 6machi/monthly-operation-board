@@ -871,7 +871,7 @@ input[type="time"], input[type="date"]{min-height:42px}
 .detailGanttDay:hover::after{content:''}
 @media(max-width:700px){.sheetHeader,.sheetTaskRow{grid-template-columns:220px max-content}.sheetTaskHead,.sheetCategoryTitle,.sheetTaskLabel{width:220px}.detailGanttScroll .sheetTaskHead{min-width:220px}.ganttTaskNameInput{font-size:12px}}
 
-/* v89: ガンチャ左列を カテゴリ > グループ > タスク名称 のスプシ風に整理 */
+/* v91: ガンチャ左列を カテゴリ > グループ > タスク名称 のスプシ風に整理 */
 .sheetGroupHeader{display:grid;grid-template-columns:300px max-content;min-height:34px;border-top:2px solid #1f2937;background:#fff}
 .sheetGroupTitle{position:sticky;left:0;z-index:5;width:300px;background:#fff;border-right:2px solid #1f2937;border-bottom:1px solid #1f2937;padding:7px 12px 7px 24px;display:flex;align-items:center;gap:8px;color:#111827;font-weight:950}
 .sheetGroupTitle::before{content:'';width:10px;height:10px;border-radius:3px;background:var(--cat-color);opacity:.75;flex:0 0 auto}

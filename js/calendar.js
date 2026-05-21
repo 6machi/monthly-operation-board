@@ -1,9 +1,9 @@
-import { $, esc, toISO, todayISO, diffDays, taskOccursOnDate, minutesFromTime, fullClock, fmtDate } from './utils.js?v=88';
-import { state } from './state.js?v=88';
-import { openDateOnBoard, openTaskEditor, arrangeTasksOnDate } from './board.js?v=88';
-import { createTask, deleteTask, updateTask } from './tasks.js?v=88';
-import { saveTree } from './setup.js?v=88';
-import { refreshAll } from './app.js?v=88';
+import { $, esc, toISO, todayISO, diffDays, taskOccursOnDate, minutesFromTime, fullClock, fmtDate } from './utils.js?v=91';
+import { state } from './state.js?v=91';
+import { openDateOnBoard, openTaskEditor, arrangeTasksOnDate } from './board.js?v=91';
+import { createTask, deleteTask, updateTask } from './tasks.js?v=91';
+import { saveTree } from './setup.js?v=91';
+import { refreshAll } from './app.js?v=91';
 
 const DAY_MINUTES = 24 * 60;
 let selectedCalendarDate = todayISO();
@@ -297,8 +297,41 @@ function projectSortIndex(category, project){
 function taskNameSortIndex(category, groupName, taskName){
   const cat = (state.tree || []).find(c=>c?.name===category);
   const project = (cat?.projects || []).find(p=>p?.name===groupName);
-  const idx = (project?.candidates || []).findIndex(x=>String(x)===String(taskName));
+  const idx = (project?.candidates || []).findIndex(x=>normGanttName(x)===normGanttName(taskName));
   return idx < 0 ? 9999 : idx;
+}
+
+function normGanttName(value){
+  return String(value || '')
+    .replace(/ /g, ' ')
+    .replace(/[\s　]+/g, ' ')
+    .trim();
+}
+function ganttRowKey(category, groupName, taskName){
+  return [normGanttName(category || '未分類'), normGanttName(groupName || '未分類グループ'), normGanttName(taskName || '')].join('::');
+}
+function ganttHiddenRowsStorageKey(){
+  return `task-kanri-hidden-gantt-rows:${state.team?.id || 'local'}:${state.user?.id || 'me'}`;
+}
+function getHiddenGanttRows(){
+  try{ return new Set(JSON.parse(localStorage.getItem(ganttHiddenRowsStorageKey()) || '[]')); }
+  catch(_e){ return new Set(); }
+}
+function saveHiddenGanttRows(set){
+  try{ localStorage.setItem(ganttHiddenRowsStorageKey(), JSON.stringify([...set])); }catch(_e){}
+}
+function hideGanttRowLocally(category, groupName, taskName){
+  const set = getHiddenGanttRows();
+  set.add(ganttRowKey(category, groupName, taskName));
+  saveHiddenGanttRows(set);
+}
+function unhideGanttRowLocally(category, groupName, taskName){
+  const set = getHiddenGanttRows();
+  const key = ganttRowKey(category, groupName, taskName);
+  if(set.delete(key)) saveHiddenGanttRows(set);
+}
+function isGanttRowHidden(category, groupName, taskName){
+  return getHiddenGanttRows().has(ganttRowKey(category, groupName, taskName));
 }
 function ganttGroupName(t){
   const project = String(t?.project || '').trim();
@@ -395,7 +428,8 @@ function ganttTaskGroups(){
       taskName: bar.taskName || bar.rowName,
       rowName: bar.taskName || bar.rowName,
       owner_id: bar.owner_id,
-      bars: []
+      bars: [],
+      fromTree: false
     });
     rows.get(rowKey).bars.push(bar);
   });
@@ -407,8 +441,8 @@ function ganttTaskGroups(){
     (cat?.projects || []).forEach(project=>{
       const groupName = project?.name || '未分類グループ';
       (project?.candidates || []).forEach(candidate=>{
-        const taskName = String(candidate || '').trim();
-        if(!taskName) return;
+        const taskName = normGanttName(candidate);
+        if(!taskName || isGanttRowHidden(category, groupName, taskName)) return;
         const rowKey = [category, groupName, taskName, state.user?.id || ''].join('::');
         if(!rows.has(rowKey)) rows.set(rowKey, {
           key: rowKey,
@@ -417,8 +451,10 @@ function ganttTaskGroups(){
           taskName,
           rowName: taskName,
           owner_id: state.user?.id,
-          bars: []
+          bars: [],
+          fromTree: true
         });
+        else rows.get(rowKey).fromTree = true;
       });
     });
   });
@@ -529,6 +565,7 @@ async function renameGanttRow(category, groupName, oldTaskName, nextTaskName, ow
   const oldName = String(oldTaskName || '').trim();
   const next = String(nextTaskName || '').trim();
   if(!next || next === oldName) return;
+  unhideGanttRowLocally(category || '未分類', groupName || '未分類グループ', next);
   const targets = taskArray().filter(t=>
     t && t.owner_id === (ownerId || state.user?.id)
     && String(t.category || '未分類') === String(category || '未分類')
@@ -552,25 +589,42 @@ async function renameGanttRow(category, groupName, oldTaskName, nextTaskName, ow
   await refreshAll();
 }
 async function deleteEmptyGanttRow(category, groupName, taskName){
-  const hasTasks = taskArray().some(t=>
-    t && String(t.category || '未分類') === String(category || '未分類')
-    && String(ganttGroupName(t)) === String(groupName || '未分類グループ')
-    && String(ganttTaskName(t)) === String(taskName || '')
+  const catName = normGanttName(category || '未分類');
+  const grpName = normGanttName(groupName || '未分類グループ');
+  const rowName = normGanttName(taskName || '');
+  if(!rowName) return;
+
+  const [y,m] = String(state.calendarMonth || todayISO().slice(0,7)).split('-').map(Number);
+  const days = visibleGanttDays(y, m);
+  const first = days[0] || 1;
+  const last = days[days.length - 1] || new Date(y, m, 0).getDate();
+  const row = ganttTaskGroups().find(r=>
+    normGanttName(r.category || '未分類') === catName
+    && normGanttName(r.groupName || '未分類グループ') === grpName
+    && normGanttName(r.taskName || r.rowName || '') === rowName
   );
-  if(hasTasks){
-    alert('予定が入っている行は、バー右端の×で詳細予定を削除してください。行そのものは空になったら削除できます。');
+  const visibleBars = (row?.bars || []).filter(bar=>bar.span.endDay >= first && bar.span.startDay <= last);
+
+  if(visibleBars.length){
+    alert('この行には今日以降の予定バーが入っています。先にバー右端の×で予定を削除してください。');
     return;
   }
+
+  // 予定が空に見える行は、カテゴリ管理に候補が残っている／過去予定だけが残っている場合でも
+  // ガンチャ上から消せるようにする。実タスク本体は勝手に消さない。
+  hideGanttRowLocally(catName, grpName, rowName);
+
   normalizeTreeForGantt();
-  const cat = state.tree.find(c=>c.name === category);
-  const project = cat?.projects?.find(p=>p.name === groupName);
-  if(!project || !Array.isArray(project.candidates)) return;
-  const before = project.candidates.length;
-  project.candidates = project.candidates.filter(x=>String(x) !== String(taskName));
-  if(project.candidates.length !== before){
-    await persistGanttTree();
-    await refreshAll();
+  const cat = state.tree.find(c=>normGanttName(c.name) === catName);
+  const project = cat?.projects?.find(p=>normGanttName(p.name) === grpName);
+  if(project && Array.isArray(project.candidates)){
+    const before = project.candidates.length;
+    project.candidates = project.candidates.filter(x=>normGanttName(x) !== rowName);
+    if(project.candidates.length !== before){
+      try{ await persistGanttTree(); }catch(e){ console.warn('カテゴリ管理からの削除保存に失敗しました', e); }
+    }
   }
+  await refreshAll();
 }
 async function reorderGanttTaskRows(category, groupName, draggedTaskName, targetTaskName){
   const dragged = String(draggedTaskName || '').trim();
@@ -615,6 +669,7 @@ async function deleteGanttBar(taskId){
 async function createGanttCellTask({ date, category, groupName, taskName }){
   if(!state.user) return alert('ログイン後に使えます');
   const detail = '新規作業';
+  unhideGanttRowLocally(category || '未分類', groupName || '未分類グループ', taskName || detail);
   await createTask({
     team_id: state.team.id,
     owner_id: state.user.id,
@@ -1001,7 +1056,7 @@ function renderGanttBoard(){
   const rows = ganttTaskGroups().map(row=>({
     ...row,
     bars:(row.bars || []).filter(bar=>bar.span.endDay >= visibleFirstDay && bar.span.startDay <= last)
-  }));
+  })).filter(row=>row.bars.length || row.fromTree);
   const categoryGroups = new Map();
   rows.forEach(row=>{
     const catKey = row.category || '未分類';
@@ -1597,7 +1652,7 @@ export function initCalendarEvents(){
   $('icsSelectAllBtn')?.addEventListener('click',()=>document.querySelectorAll('[data-ics-index]').forEach(c=>c.checked=true));
   $('icsClearAllBtn')?.addEventListener('click',()=>document.querySelectorAll('[data-ics-index]').forEach(c=>c.checked=false));
   $('icsImportBtn')?.addEventListener('click', importSelectedIcs);
-  $('openProfileFromCalendar')?.addEventListener('click',()=>{ import('./app.js?v=88').then(m=>m.showView('profile')); });
+  $('openProfileFromCalendar')?.addEventListener('click',()=>{ import('./app.js?v=91').then(m=>m.showView('profile')); });
   $('unavailableAllDay')?.addEventListener('change',()=>{
     const allDay = $('unavailableAllDay').checked;
     $('unavailableStart').disabled = allDay;
