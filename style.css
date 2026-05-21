@@ -838,7 +838,7 @@ input[type="time"], input[type="date"]{min-height:42px}
 .sheetDate.today{background:#ffedf1!important;color:#b4233f!important;box-shadow:inset 0 -3px 0 #ff5b78}
 .sheetDate.today span{color:#b4233f;font-weight:950}
 
-/* v86: ガンチャ上で直接入力・編集 */
+/* v87: ガンチャ上で直接入力・編集 */
 .detailGanttDay{cursor:cell;position:relative}
 .detailGanttDay:hover{outline:2px solid rgba(93,156,236,.35);outline-offset:-2px;background:rgba(93,156,236,.08)!important}
 .detailGanttDay:hover::after{content:'＋';position:absolute;right:8px;top:6px;width:20px;height:20px;border-radius:999px;background:#fff;border:1px solid var(--line);box-shadow:0 4px 10px rgba(40,50,80,.12);display:grid;place-items:center;font-weight:950;color:var(--dark)}
@@ -847,3 +847,26 @@ input[type="time"], input[type="date"]{min-height:42px}
 .ganttQuickPanel{max-width:760px}
 .ganttQuickHint{margin:8px 0 0;color:var(--muted);font-size:12px;font-weight:850;line-height:1.6;background:#f8fafc;border:1px solid var(--line);border-radius:14px;padding:10px 12px}
 #ganttEmptyAddBtn{margin-top:10px}
+
+/* v87: ガンチャをスプシ風に直接編集・ドラッグ調整 */
+.detailGanttScroll{user-select:none}
+.detailGanttScroll .sheetTaskHead{min-width:300px}
+.sheetHeader,.sheetTaskRow{grid-template-columns:300px max-content}
+.sheetTaskHead,.sheetCategoryTitle,.sheetTaskLabel{width:300px}
+.sheetCategoryTitle{font-size:14px;letter-spacing:.02em;background:#f8fafc;border-left:0;border-right:2px solid #1f2937;border-bottom:2px solid #1f2937}
+.sheetCategoryTitle b{font-size:14px}.sheetCategoryTitle small{margin-left:auto}
+.ganttTreeLabel{display:grid;grid-template-columns:1fr auto;align-content:center;gap:4px 8px;padding:8px 10px;border-left:0;background:#fff}
+.ganttGroupName{grid-column:1 / -1;display:block;font-size:11px;font-weight:950;color:#475467;border-left:4px solid var(--cat-color);padding-left:8px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ganttTaskNameInput{grid-column:1;min-width:0;border:0;border-radius:8px;background:transparent;color:#111827;font-size:13px;font-weight:950;line-height:1.25;padding:4px 6px;margin-left:10px;outline:none}
+.ganttTaskNameInput:hover{background:#f1f5f9}.ganttTaskNameInput:focus{background:#fff;box-shadow:inset 0 0 0 2px color-mix(in srgb,var(--cat-color) 45%,#cbd5e1)}
+.ganttRowMeta{grid-column:1;color:#667085;font-size:10px;font-weight:850;margin-left:16px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ganttRowDelete{grid-column:2;grid-row:2 / span 2;align-self:center;width:24px;height:24px;border:1px solid #e5e7eb;border-radius:999px;background:#fff;color:#98a2b3;font-weight:950;box-shadow:none;padding:0}
+.ganttRowDelete:hover{background:#fee2e2;color:#b42318;border-color:#fecaca}
+.detailGanttBar{cursor:grab;position:relative;border-radius:8px;padding:6px 30px 6px 10px;gap:6px}
+.detailGanttBar::before{display:none}.detailGanttBar.dragging{cursor:grabbing;opacity:.82;z-index:20;box-shadow:0 12px 24px rgba(40,50,80,.22)}
+.detailGanttBarTitle{outline:none;border-radius:6px;padding:2px 4px;min-width:36px;cursor:text;flex:1 1 auto}.detailGanttBarTitle:hover{background:rgba(255,255,255,.78)}.detailGanttBarTitle:focus{background:#fff;box-shadow:inset 0 0 0 2px rgba(93,156,236,.35)}
+.ganttResizeHandle{position:absolute;top:4px;bottom:4px;width:10px;border-radius:999px;background:rgba(17,24,39,.12);opacity:.15;cursor:ew-resize}.ganttResizeHandle.left{left:3px}.ganttResizeHandle.right{right:3px}.detailGanttBar:hover .ganttResizeHandle{opacity:.55}.ganttResizeHandle:hover{opacity:.9;background:rgba(17,24,39,.25)}
+.ganttBarDelete{position:absolute;right:14px;top:50%;transform:translateY(-50%);width:20px;height:20px;border:0;border-radius:999px;background:rgba(255,255,255,.72);color:#98a2b3;font-weight:950;box-shadow:none;padding:0;display:grid;place-items:center}.ganttBarDelete:hover{background:#fee2e2;color:#b42318}
+.detailGanttBarMeta{margin-left:0;flex:0 0 auto;padding:1px 6px}
+.detailGanttDay:hover::after{content:''}
+@media(max-width:700px){.sheetHeader,.sheetTaskRow{grid-template-columns:220px max-content}.sheetTaskHead,.sheetCategoryTitle,.sheetTaskLabel{width:220px}.detailGanttScroll .sheetTaskHead{min-width:220px}.ganttTaskNameInput{font-size:12px}}
