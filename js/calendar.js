@@ -1,9 +1,9 @@
-import { $, esc, toISO, todayISO, diffDays, taskOccursOnDate, minutesFromTime, fullClock, fmtDate } from './utils.js?v=100';
-import { state } from './state.js?v=100';
-import { openDateOnBoard, openTaskEditor, arrangeTasksOnDate } from './board.js?v=100';
-import { createTask, deleteTask, updateTask } from './tasks.js?v=100';
-import { saveTree } from './setup.js?v=100';
-import { refreshAll } from './app.js?v=100';
+import { $, esc, toISO, todayISO, diffDays, taskOccursOnDate, minutesFromTime, fullClock, fmtDate } from './utils.js?v=102';
+import { state } from './state.js?v=102';
+import { openDateOnBoard, openTaskEditor, arrangeTasksOnDate } from './board.js?v=102';
+import { createTask, deleteTask, updateTask } from './tasks.js?v=102';
+import { saveTree } from './setup.js?v=102';
+import { refreshAll } from './app.js?v=102';
 
 const DAY_MINUTES = 24 * 60;
 let selectedCalendarDate = todayISO();
@@ -346,13 +346,25 @@ function ganttGroupName(t){
 function ganttTaskName(t){
   return splitTaskBaseTitle(t?.title || '未分類タスク');
 }
-function ganttDetailTitle(t){
-  const title = splitTaskBaseTitle(t?.title || '無題のタスク');
-  const memoLine = String(t?.memo || '')
+function firstUsefulMemoLine(t){
+  return String(t?.memo || '')
     .split('\n')
     .map(x=>x.trim())
-    .find(x=>x && !x.startsWith('#') && !x.startsWith('納期から逆算：'));
+    .find(x=>x && !x.startsWith('#') && !x.startsWith('納期から逆算：')) || '';
+}
+function ganttDetailTitle(t){
+  const title = splitTaskBaseTitle(t?.title || '無題のタスク');
+  const memoLine = firstUsefulMemoLine(t);
   return memoLine || title || '無題のタスク';
+}
+function taskDisplayTitleForToday(t){
+  if(isUnavailableTask(t)) return t.memo || t.title || '稼働不可';
+  const title = splitTaskBaseTitle(t?.title || '無題のタスク');
+  const memoLine = firstUsefulMemoLine(t);
+  const groupName = String(t?.project || '').trim();
+  if(isGanttSpanTask(t)) return memoLine || title || '無題のタスク';
+  if(memoLine && (title === groupName || title === '新規作業' || title === '無題のタスク')) return memoLine;
+  return title || memoLine || '無題のタスク';
 }
 function isGanttSpanTask(t){
   return t?.task_type === 'gantt_span' || String(t?.memo || '').includes('#gantt-span');
@@ -804,7 +816,7 @@ async function createGanttCellTask({ date, category, groupName, taskName }){
     category: category || '未分類',
     project: groupName || '未分類グループ',
     title: taskName || detail,
-    task_type: '',
+    task_type: 'gantt_span',
     estimated_minutes: 60,
     start_time: '09:00',
     schedule_date: date || todayISO(),
@@ -1503,8 +1515,7 @@ function taskContextForSelectedDay(t){
   return [category, group].filter(Boolean).join(' / ');
 }
 function taskTitleForList(t){
-  if(isUnavailableTask(t)) return t.memo || t.title || '稼働不可';
-  return isGanttSpanTask(t) ? ganttDetailTitle(t) : (t.title || t.memo || '無題のタスク');
+  return taskDisplayTitleForToday(t);
 }
 function selectedDayItemsForMember(dateIso, mem){
   const normal = taskArray()
@@ -1983,7 +1994,7 @@ export function initCalendarEvents(){
   $('icsSelectAllBtn')?.addEventListener('click',()=>document.querySelectorAll('[data-ics-index]').forEach(c=>c.checked=true));
   $('icsClearAllBtn')?.addEventListener('click',()=>document.querySelectorAll('[data-ics-index]').forEach(c=>c.checked=false));
   $('icsImportBtn')?.addEventListener('click', importSelectedIcs);
-  $('openProfileFromCalendar')?.addEventListener('click',()=>{ import('./app.js?v=100').then(m=>m.showView('profile')); });
+  $('openProfileFromCalendar')?.addEventListener('click',()=>{ import('./app.js?v=102').then(m=>m.showView('profile')); });
   $('unavailableAllDay')?.addEventListener('change',()=>{
     const allDay = $('unavailableAllDay').checked;
     $('unavailableStart').disabled = allDay;

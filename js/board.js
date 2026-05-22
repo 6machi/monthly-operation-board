@@ -1,9 +1,9 @@
-import { $, esc, todayISO, addDays, fmtDate, diffDays, relativeFrom, taskOccursOnDate, occurrenceLabel, fullClock, minutesFromTime } from './utils.js?v=100';
-import { state } from './state.js?v=100';
-import { createTask, markCarryover, returnToSchedule, updateTask, deleteTask } from './tasks.js?v=100';
-import { refreshAll, showView } from './app.js?v=100';
-import { isUnavailableTask, isUnavailableForMember, unavailableBlocksForMember } from './calendar.js?v=100';
-import { updateMyProfile, loadMembers } from './auth.js?v=100';
+import { $, esc, todayISO, addDays, fmtDate, diffDays, relativeFrom, taskOccursOnDate, occurrenceLabel, fullClock, minutesFromTime } from './utils.js?v=102';
+import { state } from './state.js?v=102';
+import { createTask, markCarryover, returnToSchedule, updateTask, deleteTask } from './tasks.js?v=102';
+import { refreshAll, showView } from './app.js?v=102';
+import { isUnavailableTask, isUnavailableForMember, unavailableBlocksForMember } from './calendar.js?v=102';
+import { updateMyProfile, loadMembers } from './auth.js?v=102';
 
 const SLOT_MINUTES = 10;
 const PX_PER_MINUTE = 1.15; // 10分刻み / 60分 = 約69px
@@ -586,15 +586,22 @@ function splitTaskInfo(t){
 function isSplitTask(t){ return !!splitTaskInfo(t); }
 function isGanttSpanTask(t){ return t?.task_type === 'gantt_span' || String(t?.memo || '').includes('#gantt-span'); }
 
+function firstUsefulMemoLineForBoard(t){
+  return String(t?.memo || '')
+    .split('\n')
+    .map(x=>x.trim())
+    .find(x=>x && !x.startsWith('#') && !x.startsWith('納期から逆算：')) || '';
+}
 function ganttDetailTitleForBoard(t){
   const rawTitle = String(t?.title || '').trim();
   const baseTitle = splitTaskInfo(t)?.base || rawTitle || '無題のタスク';
-  if(!isGanttSpanTask(t)) return baseTitle;
-  const memoLine = String(t?.memo || '')
-    .split('\n')
-    .map(x=>x.trim())
-    .find(x=>x && !x.startsWith('#') && !x.startsWith('納期から逆算：'));
-  return memoLine || baseTitle || '無題のタスク';
+  const memoLine = firstUsefulMemoLineForBoard(t);
+  const groupName = String(t?.project || '').trim();
+  // ガンチャ上で作った予定は「タイトル＝行のタスク名称」「メモ先頭＝バー名」になりやすい。
+  // 旧データではタイトルにグループ名が入っていることもあるので、今日のやることでは必ず詳細名を優先する。
+  if(isGanttSpanTask(t)) return memoLine || baseTitle || '無題のタスク';
+  if(memoLine && (rawTitle === groupName || rawTitle === '新規作業' || rawTitle === '無題のタスク')) return memoLine;
+  return baseTitle || memoLine || '無題のタスク';
 }
 function taskContextLabelForBoard(t){
   if(isUnavailableTask(t)) return '稼働不可';
