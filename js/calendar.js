@@ -1,9 +1,9 @@
-import { $, esc, toISO, todayISO, diffDays, taskOccursOnDate, minutesFromTime, fullClock, fmtDate } from './utils.js?v=97';
-import { state } from './state.js?v=97';
-import { openDateOnBoard, openTaskEditor, arrangeTasksOnDate } from './board.js?v=97';
-import { createTask, deleteTask, updateTask } from './tasks.js?v=97';
-import { saveTree } from './setup.js?v=97';
-import { refreshAll } from './app.js?v=97';
+import { $, esc, toISO, todayISO, diffDays, taskOccursOnDate, minutesFromTime, fullClock, fmtDate } from './utils.js?v=99';
+import { state } from './state.js?v=99';
+import { openDateOnBoard, openTaskEditor, arrangeTasksOnDate } from './board.js?v=99';
+import { createTask, deleteTask, updateTask } from './tasks.js?v=99';
+import { saveTree } from './setup.js?v=99';
+import { refreshAll } from './app.js?v=99';
 
 const DAY_MINUTES = 24 * 60;
 let selectedCalendarDate = todayISO();
@@ -369,6 +369,7 @@ function visibleGanttDays(y,m){
   return Array.from({length:Math.max(0,last - startDay + 1)},(_,i)=>startDay+i);
 }
 function ganttTaskGroups(){
+  ensureTreeShelfCanAppearOnGantt();
   const month = state.calendarMonth;
   const rawItems = taskArray()
     .filter(t=>t && t.id && !isUnavailableTask(t))
@@ -559,10 +560,59 @@ function normalizeTreeForGantt(){
     projects: (cat?.projects || []).map(project=>({
       ...project,
       name: project?.name || '未分類グループ',
-      candidates: Array.isArray(project?.candidates) ? project.candidates : [],
+      candidates: Array.isArray(project?.candidates) ? project.candidates.map(normGanttName).filter(Boolean) : [],
       ganttRowOrder: Array.isArray(project?.ganttRowOrder) ? project.ganttRowOrder.map(normGanttName).filter(Boolean) : []
     }))
   }));
+}
+function ensureTreeShelfCanAppearOnGantt(){
+  // 追加したカテゴリ/グループが「候補0件」のままだと、ガンチャ左列に出ない。
+  // ガンチャはスプシ的に直接入力する場所なので、空の棚には最低1行だけ入口を作る。
+  normalizeTreeForGantt();
+  let changed = false;
+  (state.tree || []).forEach(cat=>{
+    if(!Array.isArray(cat.projects) || !cat.projects.length){
+      cat.projects = [{ name:'未分類グループ', candidates:['新規タスク'], ganttRowOrder:[] }];
+      changed = true;
+    }
+    cat.projects.forEach(project=>{
+      if(!Array.isArray(project.candidates)) project.candidates = [];
+      if(!project.candidates.length){
+        project.candidates = ['新規タスク'];
+        changed = true;
+      }
+    });
+  });
+  return changed;
+}
+function findOrCreateGanttCategory(name){
+  const clean = normGanttName(name || '未分類');
+  state.tree = state.tree || [];
+  let cat = state.tree.find(c=>normGanttName(c?.name) === clean);
+  if(!cat){
+    cat = { name:clean, memo:'', color:'#9aa4b6', projects:[], sharedWith:[] };
+    state.tree.push(cat);
+  }
+  if(!Array.isArray(cat.projects)) cat.projects = [];
+  return cat;
+}
+function findOrCreateGanttGroup(categoryName, groupName){
+  const cat = findOrCreateGanttCategory(categoryName);
+  const clean = normGanttName(groupName || '未分類グループ');
+  let project = cat.projects.find(p=>normGanttName(p?.name) === clean);
+  if(!project){
+    project = { name:clean, candidates:['新規タスク'], ganttRowOrder:[] };
+    cat.projects.push(project);
+  }
+  if(!Array.isArray(project.candidates)) project.candidates = [];
+  if(!project.candidates.length) project.candidates.push('新規タスク');
+  return project;
+}
+async function persistGanttTreeAndRefresh(message){
+  ensureTreeShelfCanAppearOnGantt();
+  await saveTree(state.treeRowId, state.tree);
+  await refreshAllKeepGanttViewport();
+  if(message) showGanttMsg(message);
 }
 async function persistGanttTree(){
   if(!state.treeRowId) return;
@@ -1204,6 +1254,7 @@ function canCreateGanttCellFromClick(){
 }
 
 function renderGanttBoard(){
+  ensureTreeShelfCanAppearOnGantt();
   const board = $('ganttBoard');
   if(!board) return;
   const [y,m] = state.calendarMonth.split('-').map(Number);
@@ -1808,16 +1859,40 @@ async function importSelectedIcs(){
 async function addCategoryFromGantt(){
   const name = prompt('追加するカテゴリ名');
   if(!name || !name.trim()) return;
-  state.tree = state.tree || [];
-  const clean = name.trim();
-  const exists = state.tree.find(c=>String(c.name||'').trim()===clean);
+  const clean = normGanttName(name);
+  const exists = (state.tree || []).find(c=>normGanttName(c?.name) === clean);
   if(exists){
-    alert('同じ名前のカテゴリがすでにあります');
+    findOrCreateGanttGroup(clean, '未分類グループ');
+    await persistGanttTreeAndRefresh('既存カテゴリをガンチャに表示できる状態にしました。');
     return;
   }
-  state.tree.push({ name: clean, memo:'', color:'#9aa4b6', projects:[{ name:'未分類', candidates:['新規タスク'] }], sharedWith:[] });
-  await saveTree(state.treeRowId, state.tree);
-  renderGanttBoard();
+  findOrCreateGanttGroup(clean, '未分類グループ');
+  await persistGanttTreeAndRefresh(`カテゴリ「${clean}」を追加しました。`);
+}
+async function addGroupFromGantt(){
+  const categories = (state.tree || []).map(c=>c?.name).filter(Boolean);
+  const category = prompt(`追加先カテゴリ名${categories.length ? `（例：${categories[0]}）` : ''}`, categories[0] || '未分類');
+  if(!category || !category.trim()) return;
+  const group = prompt('追加するグループ名');
+  if(!group || !group.trim()) return;
+  findOrCreateGanttGroup(category, group);
+  await persistGanttTreeAndRefresh(`グループ「${group.trim()}」を追加しました。`);
+}
+async function addTaskNameFromGantt(){
+  const categories = (state.tree || []).map(c=>c?.name).filter(Boolean);
+  const category = prompt(`追加先カテゴリ名${categories.length ? `（例：${categories[0]}）` : ''}`, categories[0] || '未分類');
+  if(!category || !category.trim()) return;
+  const cat = findOrCreateGanttCategory(category);
+  const groups = (cat.projects || []).map(p=>p?.name).filter(Boolean);
+  const group = prompt(`追加先グループ名${groups.length ? `（例：${groups[0]}）` : ''}`, groups[0] || '未分類グループ');
+  if(!group || !group.trim()) return;
+  const taskName = prompt('追加するタスク名称');
+  if(!taskName || !taskName.trim()) return;
+  const project = findOrCreateGanttGroup(category, group);
+  const clean = normGanttName(taskName);
+  project.candidates = (project.candidates || []).filter(x=>normGanttName(x) !== '新規タスク');
+  if(!project.candidates.some(x=>normGanttName(x) === clean)) project.candidates.push(clean);
+  await persistGanttTreeAndRefresh(`タスク名称「${clean}」を追加しました。`);
 }
 
 export function initCalendarEvents(){
@@ -1825,6 +1900,8 @@ export function initCalendarEvents(){
   $('calendarThisMonth').addEventListener('click',()=>{ state.calendarMonth = new Date().toISOString().slice(0,7); renderCalendar(); });
   $('ganttQuickAddBtn')?.addEventListener('click',()=>openGanttQuickEditor({date:todayISO()}));
   $('ganttAddCategoryBtn')?.addEventListener('click', addCategoryFromGantt);
+  $('ganttAddGroupBtn')?.addEventListener('click', addGroupFromGantt);
+  $('ganttAddTaskNameBtn')?.addEventListener('click', addTaskNameFromGantt);
   $('ganttAssignTodayBtn')?.addEventListener('click', assignGanttToToday);
   $('ganttCleanupEmptyRowsBtn')?.addEventListener('click', cleanupVisibleEmptyGanttRows);
   $('ganttOpenTodayBtn')?.addEventListener('click',()=>openDateOnBoard(todayISO()));
@@ -1833,7 +1910,7 @@ export function initCalendarEvents(){
   $('icsSelectAllBtn')?.addEventListener('click',()=>document.querySelectorAll('[data-ics-index]').forEach(c=>c.checked=true));
   $('icsClearAllBtn')?.addEventListener('click',()=>document.querySelectorAll('[data-ics-index]').forEach(c=>c.checked=false));
   $('icsImportBtn')?.addEventListener('click', importSelectedIcs);
-  $('openProfileFromCalendar')?.addEventListener('click',()=>{ import('./app.js?v=97').then(m=>m.showView('profile')); });
+  $('openProfileFromCalendar')?.addEventListener('click',()=>{ import('./app.js?v=99').then(m=>m.showView('profile')); });
   $('unavailableAllDay')?.addEventListener('change',()=>{
     const allDay = $('unavailableAllDay').checked;
     $('unavailableStart').disabled = allDay;

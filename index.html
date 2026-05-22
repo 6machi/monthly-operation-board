@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>タスクかんりシート</title>
-  <link rel="stylesheet" href="style.css?v=97" />
+  <link rel="stylesheet" href="style.css?v=99" />
 </head>
 <body>
   <header>
@@ -136,6 +136,8 @@
             <div class="actions ganttActions">
               <button class="primary" id="ganttQuickAddBtn" type="button">ガンチャに予定を追加</button>
               <button class="ghost" id="ganttAddCategoryBtn" type="button">＋カテゴリ</button>
+              <button class="ghost" id="ganttAddGroupBtn" type="button">＋グループ</button>
+              <button class="ghost" id="ganttAddTaskNameBtn" type="button">＋タスク名称</button>
               <button class="primary" id="ganttAssignTodayBtn" type="button">今日のタイムラインに自動配置</button>
               <button class="ghost" id="ganttCleanupEmptyRowsBtn" type="button">空行を一括整理</button>
               <button class="ghost" id="ganttOpenTodayBtn" type="button">今日のタイムラインを見る</button>
@@ -233,9 +235,13 @@
       <section id="setup" class="view">
         <div class="tabs" id="setupMemberTabs"></div>
         <div id="setupNotice" class="notice ok"></div>
-        <section class="panel">
+        <section class="panel shelfTopPanel">
           <div class="setupMainActions"><button class="ghost" id="setupAddCategoryTopBtn" type="button">＋カテゴリ</button><button class="ghost" id="setupAddGroupTopBtn" type="button">＋グループ</button><button class="ghost" id="setupAddTaskNameTopBtn" type="button">＋タスク名称</button></div>
-          <h2>今月タスクを追加 <button class="infoDot" type="button" data-info="カテゴリ・グループ・タスク名称候補を選んで、今月のガンチャ予定を追加します。納期から逆算する場合も分割タスクは増やさず、1本の予定として管理します。">i</button></h2>
+          <h2>棚の整理 <button class="infoDot" type="button" data-info="カテゴリ、グループ、タスク名称を整理します。予定そのものはガンチャ上で直接入力できます。">i</button></h2>
+          <p class="muted shelfLead">よく使う分類だけここで整えます。日付つきの予定はガンチャのセルをクリックして追加できます。</p>
+        </section>
+        <details class="panel sideDetails setupAddTaskDetails">
+          <summary>ガンチャ予定を追加（補助） <button class="infoDot" type="button" data-info="ガンチャ上で直接入力できない時だけ使います。通常はガンチャの空セルから追加してください。">i</button></summary>
           <div class="form">
             <label><small>カテゴリ</small><select id="newCategory"></select></label>
             <label><small>グループ</small><select id="newProject"></select></label>
@@ -263,10 +269,10 @@
             <button class="primary" id="addReversePlanBtn" type="button">ガンチャ予定として追加</button>
           </div>
           <button class="primary" id="addMonthlyTaskBtn">追加する</button>
-        </section>
-        <details class="panel sideDetails"><summary>カテゴリ管理 <button class="infoDot" type="button" data-info="カテゴリカードを選ぶと、そのカテゴリの中身を編集できます。ドラッグで並び替えもできます。">i</button></summary><div class="catgrid" id="categoryGrid"></div></details>
-        <details class="panel sideDetails" id="categoryEditorPanel">
-          <summary>カテゴリ・グループ・タスク名称の編集 <button class="infoDot" type="button" data-info="カテゴリ名、色、グループ、タスク名称候補、一緒に頑張る人などを編集できます。">i</button></summary>
+        </details>
+        <details class="panel sideDetails compactCategoryPicker" open><summary>カテゴリを選ぶ <button class="infoDot" type="button" data-info="編集したいカテゴリを選びます。ドラッグで並び替えもできます。">i</button></summary><div class="catgrid" id="categoryGrid"></div></details>
+        <details class="panel sideDetails" id="categoryEditorPanel" open>
+          <summary>グループ・タスク名称の編集 <button class="infoDot" type="button" data-info="選択中カテゴリのグループとタスク名称を編集できます。">i</button></summary>
           <div id="categoryEditor" class="empty">カテゴリカードをクリックすると編集できます。</div>
         </details>
         <details class="panel sideDetails">
@@ -287,6 +293,6 @@
   </template>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script type="module" src="js/app.js?v=97"></script>
+  <script type="module" src="js/app.js?v=99"></script>
 </body>
 </html>

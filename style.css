@@ -934,3 +934,25 @@ input[type="time"], input[type="date"]{min-height:42px}
 .setupMainActions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;margin-bottom:10px}
 .ganttActions{align-items:center}
 @media (max-width:720px){.setupMainActions{justify-content:flex-start}}
+
+/* v99: 棚・ガンチャ入力をシンプル化 */
+.shelfTopPanel{padding:14px 16px!important}
+.shelfTopPanel h2{margin:0 0 4px!important}
+.shelfLead{margin:0;font-size:12px}
+.setupAddTaskDetails:not([open]){padding:12px 14px}
+.compactCategoryPicker .catgrid{display:flex;gap:8px;overflow-x:auto;padding:10px 2px 2px}
+.compactCategoryPicker .cat{min-width:170px;padding:10px 12px;border-radius:14px}
+.compactCategoryPicker .cat p,.compactCategoryPicker .catShareList,.compactCategoryPicker .dragHint{display:none!important}
+.compactCategoryPicker .cat h3{margin:0;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.shelfEditHeader{display:grid;grid-template-columns:minmax(180px,1fr) 74px auto;gap:10px;align-items:end;margin-top:10px}
+.shelfEditHeader label{margin:0}.shelfEditHeader .colorMini input{height:40px;padding:3px}.categoryMemoInput{width:100%;margin:8px 0 0;border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:#fbfcff;font-weight:700}
+.shelfQuickActions{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+.shelfMainBox{border:1px solid var(--line);border-radius:16px;background:#fbfcff;padding:10px}
+.shelfEditorHint{font-size:12px;color:var(--muted);font-weight:800;margin:0 0 8px}
+.compactShelfEditor{gap:8px;margin-top:0}
+.compactProjectBox{padding:10px;border-left:4px solid var(--blue);border-radius:14px;box-shadow:none;background:#fff}
+.compactProjectHead{align-items:end;margin:0 0 8px}
+.projectNameLine{display:grid;gap:3px;flex:1;margin:0}.projectNameLine small{color:var(--muted);font-size:11px;font-weight:900}.projectNameInput{width:100%;max-width:none;border-color:#e6eaf0;background:#fff;font-weight:900}
+.candidateRows{display:grid;gap:6px}.candidateRow{display:grid;grid-template-columns:1fr 28px;gap:6px;align-items:center}.candidateNameInput{border:1px solid #e6eaf0;background:#fff;border-radius:10px;padding:8px 10px;font-size:13px;font-weight:850;min-width:0}.candidateNameInput:hover,.candidateNameInput:focus{outline:none;border-color:rgba(93,156,236,.55);box-shadow:0 0 0 3px rgba(93,156,236,.08)}
+.candidateAddLine{display:grid;grid-template-columns:1fr auto;gap:6px;margin-top:8px}.candidateAddLine input{border:1px dashed #cbd5e1;background:#fff;border-radius:10px;padding:8px 10px;min-width:0}.compactEmpty{padding:8px;font-size:12px}.chipDelete{width:28px;height:28px;display:grid;place-items:center;border-radius:999px;padding:0;box-shadow:none;background:#fff;color:#98a2b3;border:1px solid #e6eaf0}.chipDelete:hover{background:#fee2e2;color:#b42318;border-color:#fecaca}
+@media(max-width:720px){.shelfEditHeader{grid-template-columns:1fr 70px}.shelfEditHeader .primary{grid-column:1/-1}.compactCategoryPicker .cat{min-width:140px}}
