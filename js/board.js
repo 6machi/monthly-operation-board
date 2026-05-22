@@ -1,9 +1,9 @@
-import { $, esc, todayISO, addDays, fmtDate, diffDays, relativeFrom, taskOccursOnDate, occurrenceLabel, fullClock, minutesFromTime } from './utils.js?v=105';
-import { state } from './state.js?v=105';
-import { createTask, markCarryover, returnToSchedule, updateTask, deleteTask } from './tasks.js?v=105';
-import { refreshAll, showView } from './app.js?v=105';
-import { isUnavailableTask, isUnavailableForMember, unavailableBlocksForMember } from './calendar.js?v=105';
-import { updateMyProfile, loadMembers } from './auth.js?v=105';
+import { $, esc, todayISO, addDays, fmtDate, diffDays, relativeFrom, taskOccursOnDate, occurrenceLabel, fullClock, minutesFromTime } from './utils.js?v=106';
+import { state } from './state.js?v=106';
+import { createTask, markCarryover, returnToSchedule, updateTask, deleteTask } from './tasks.js?v=106';
+import { refreshAll, showView } from './app.js?v=106';
+import { isUnavailableTask, isUnavailableForMember, unavailableBlocksForMember } from './calendar.js?v=106';
+import { updateMyProfile, loadMembers } from './auth.js?v=106';
 
 const SLOT_MINUTES = 10;
 const PX_PER_MINUTE = 1.15; // 10分刻み / 60分 = 約69px
@@ -592,26 +592,63 @@ function firstUsefulMemoLineForBoard(t){
     .map(x=>x.trim())
     .find(x=>x && !x.startsWith('#') && !x.startsWith('納期から逆算：')) || '';
 }
-function ganttDetailTitleForBoard(t){
+function knownGanttGroupNames(){
+  const names = [];
+  (state.tree || []).forEach(cat => (cat.projects || []).forEach(p => {
+    const name = String(p?.name || '').trim();
+    if(name) names.push(name);
+  }));
+  return new Set(names);
+}
+function knownGanttTaskNamesForGroup(category, group){
+  const cat = (state.tree || []).find(c => String(c?.name || '') === String(category || ''));
+  const project = (cat?.projects || []).find(p => String(p?.name || '') === String(group || ''));
+  return (project?.candidates || []).map(x => String(x || '').trim()).filter(Boolean);
+}
+function isPlaceholderTimelineName(v){
+  const name = String(v || '').trim();
+  if(!name) return true;
+  if(['新規作業','無題のタスク','未分類','未分類グループ','その他'].includes(name)) return true;
+  return false;
+}
+function bestTimelineTitleForBoard(t){
+  if(isUnavailableTask(t)) return t.memo || t.title || '稼働不可';
   const rawTitle = String(t?.title || '').trim();
-  const baseTitle = splitTaskInfo(t)?.base || rawTitle || '無題のタスク';
+  const baseTitle = splitTaskInfo(t)?.base || rawTitle;
   const memoLine = firstUsefulMemoLineForBoard(t);
+  const category = String(t?.category || '').trim();
   const groupName = String(t?.project || '').trim();
-  // ガンチャ上で作った予定は「タイトル＝行のタスク名称」「メモ先頭＝バー名」になりやすい。
-  // 旧データではタイトルにグループ名が入っていることもあるので、今日のやることでは必ず詳細名を優先する。
-  if(isGanttSpanTask(t)) return memoLine || baseTitle || '無題のタスク';
-  if(memoLine && (rawTitle === groupName || rawTitle === '新規作業' || rawTitle === '無題のタスク')) return memoLine;
-  return baseTitle || memoLine || '無題のタスク';
+  const knownGroups = knownGanttGroupNames();
+  const titleLooksLikeGroup = rawTitle && (rawTitle === groupName || knownGroups.has(rawTitle));
+  const taskCandidates = knownGanttTaskNamesForGroup(category, groupName);
+  const explicitTaskName = [t.task_name, t.taskName, t.gantt_task_name, t.ganttTaskName, t.row_name, t.rowName]
+    .map(x => String(x || '').trim())
+    .find(x => x && !isPlaceholderTimelineName(x) && x !== groupName);
+
+  // ガンチャのバー名・メモ先頭があるなら、それが一番「今日やること」の内容に近い。
+  if(memoLine && !isPlaceholderTimelineName(memoLine)) return memoLine;
+  // title がグループ名になっている旧データは、候補名や保存済みタスク名を優先する。
+  if(titleLooksLikeGroup){
+    if(explicitTaskName) return explicitTaskName;
+    if(taskCandidates.length === 1 && taskCandidates[0] !== rawTitle) return taskCandidates[0];
+    if(groupName && groupName !== rawTitle && !isPlaceholderTimelineName(groupName) && !knownGroups.has(groupName)) return groupName;
+  }
+  if(baseTitle && !isPlaceholderTimelineName(baseTitle)) return baseTitle;
+  if(explicitTaskName) return explicitTaskName;
+  return memoLine || baseTitle || groupName || '無題のタスク';
+}
+function ganttDetailTitleForBoard(t){
+  return bestTimelineTitleForBoard(t);
 }
 function taskContextLabelForBoard(t){
   if(isUnavailableTask(t)) return '稼働不可';
   const category = String(t?.category || '未分類').trim() || '未分類';
   const group = String(t?.project || '').trim();
+  const title = bestTimelineTitleForBoard(t);
   const taskName = String(splitTaskInfo(t)?.base || t?.title || '').trim();
-  if(isGanttSpanTask(t)){
-    return [category, group, taskName].filter(Boolean).join(' / ');
-  }
-  return [category, group].filter(Boolean).join(' / ');
+  const parts = [category, group];
+  if(taskName && taskName !== title && taskName !== group) parts.push(taskName);
+  return parts.filter(Boolean).join(' / ');
 }
 
 function taskDueKey(t){

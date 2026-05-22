@@ -1,4 +1,4 @@
-import { supabase } from './supabase-client.js?v=105';
+import { supabase } from './supabase-client.js?v=106';
 
 function cleanEmail(email){ return String(email || '').trim(); }
 function cleanPassword(password){ return String(password || ''); }

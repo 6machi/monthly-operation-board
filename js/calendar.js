@@ -1,9 +1,9 @@
-import { $, esc, toISO, todayISO, diffDays, taskOccursOnDate, minutesFromTime, fullClock, fmtDate } from './utils.js?v=105';
-import { state } from './state.js?v=105';
-import { openDateOnBoard, openTaskEditor, arrangeTasksOnDate } from './board.js?v=105';
-import { createTask, deleteTask, updateTask } from './tasks.js?v=105';
-import { saveTree } from './setup.js?v=105';
-import { refreshAll } from './app.js?v=105';
+import { $, esc, toISO, todayISO, diffDays, taskOccursOnDate, minutesFromTime, fullClock, fmtDate } from './utils.js?v=106';
+import { state } from './state.js?v=106';
+import { openDateOnBoard, openTaskEditor, arrangeTasksOnDate } from './board.js?v=106';
+import { createTask, deleteTask, updateTask } from './tasks.js?v=106';
+import { saveTree } from './setup.js?v=106';
+import { refreshAll } from './app.js?v=106';
 
 const DAY_MINUTES = 24 * 60;
 let selectedCalendarDate = todayISO();
@@ -356,14 +356,47 @@ function ganttDetailTitle(t){
   const memoLine = firstUsefulMemoLineFromTask(t);
   return memoLine || title || '無題のタスク';
 }
+function knownGanttGroupNames(){
+  const names = [];
+  (state.tree || []).forEach(cat => (cat.projects || []).forEach(p => {
+    const name = String(p?.name || '').trim();
+    if(name) names.push(name);
+  }));
+  return new Set(names);
+}
+function knownGanttTaskNamesForGroup(category, group){
+  const cat = (state.tree || []).find(c => String(c?.name || '') === String(category || ''));
+  const project = (cat?.projects || []).find(p => String(p?.name || '') === String(group || ''));
+  return (project?.candidates || []).map(x => String(x || '').trim()).filter(Boolean);
+}
+function isPlaceholderTimelineName(v){
+  const name = String(v || '').trim();
+  if(!name) return true;
+  if(['新規作業','無題のタスク','未分類','未分類グループ','その他'].includes(name)) return true;
+  return false;
+}
 function taskDisplayTitleForToday(t){
   if(isUnavailableTask(t)) return t.memo || t.title || '稼働不可';
-  const title = splitTaskBaseTitle(t?.title || '無題のタスク');
+  const rawTitle = String(t?.title || '').trim();
+  const title = splitTaskBaseTitle(rawTitle || '無題のタスク');
   const memoLine = firstUsefulMemoLineFromTask(t);
+  const category = String(t?.category || '').trim();
   const groupName = String(t?.project || '').trim();
-  if(isGanttSpanTask(t)) return memoLine || title || '無題のタスク';
-  if(memoLine && (title === groupName || title === '新規作業' || title === '無題のタスク')) return memoLine;
-  return title || memoLine || '無題のタスク';
+  const knownGroups = knownGanttGroupNames();
+  const titleLooksLikeGroup = rawTitle && (rawTitle === groupName || knownGroups.has(rawTitle));
+  const explicitTaskName = [t.task_name, t.taskName, t.gantt_task_name, t.ganttTaskName, t.row_name, t.rowName]
+    .map(x => String(x || '').trim())
+    .find(x => x && !isPlaceholderTimelineName(x) && x !== groupName);
+  const taskCandidates = knownGanttTaskNamesForGroup(category, groupName);
+  if(memoLine && !isPlaceholderTimelineName(memoLine)) return memoLine;
+  if(titleLooksLikeGroup){
+    if(explicitTaskName) return explicitTaskName;
+    if(taskCandidates.length === 1 && taskCandidates[0] !== rawTitle) return taskCandidates[0];
+    if(groupName && groupName !== rawTitle && !isPlaceholderTimelineName(groupName) && !knownGroups.has(groupName)) return groupName;
+  }
+  if(title && !isPlaceholderTimelineName(title)) return title;
+  if(explicitTaskName) return explicitTaskName;
+  return memoLine || title || groupName || '無題のタスク';
 }
 function isGanttSpanTask(t){
   return t?.task_type === 'gantt_span' || String(t?.memo || '').includes('#gantt-span');
@@ -1994,7 +2027,7 @@ export function initCalendarEvents(){
   $('icsSelectAllBtn')?.addEventListener('click',()=>document.querySelectorAll('[data-ics-index]').forEach(c=>c.checked=true));
   $('icsClearAllBtn')?.addEventListener('click',()=>document.querySelectorAll('[data-ics-index]').forEach(c=>c.checked=false));
   $('icsImportBtn')?.addEventListener('click', importSelectedIcs);
-  $('openProfileFromCalendar')?.addEventListener('click',()=>{ import('./app.js?v=105').then(m=>m.showView('profile')); });
+  $('openProfileFromCalendar')?.addEventListener('click',()=>{ import('./app.js?v=106').then(m=>m.showView('profile')); });
   $('unavailableAllDay')?.addEventListener('change',()=>{
     const allDay = $('unavailableAllDay').checked;
     $('unavailableStart').disabled = allDay;
