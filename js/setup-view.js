@@ -1,10 +1,10 @@
-import { $, esc, occurrenceLabel, addDays, diffDays, fmtDate, minutesFromTime, fullClock } from './utils.js?v=96';
-import { state } from './state.js?v=96';
-import { saveTree } from './setup.js?v=96';
-import { updateMyProfile, loadMembers } from './auth.js?v=96';
-import { createTask, updateTask, deleteTask } from './tasks.js?v=96';
-import { refreshAll, showView } from './app.js?v=96';
-import { renderUnavailableList, isUnavailableTask } from './calendar.js?v=96';
+import { $, esc, occurrenceLabel, addDays, diffDays, fmtDate, minutesFromTime, fullClock } from './utils.js?v=97';
+import { state } from './state.js?v=97';
+import { saveTree } from './setup.js?v=97';
+import { updateMyProfile, loadMembers } from './auth.js?v=97';
+import { createTask, updateTask, deleteTask } from './tasks.js?v=97';
+import { refreshAll, showView } from './app.js?v=97';
+import { renderUnavailableList, isUnavailableTask } from './calendar.js?v=97';
 
 let draggingCategoryIndex = null;
 let draggingProjectIndex = null;
@@ -577,8 +577,58 @@ async function addReversePlanTasks(){
 }
 
 
+
+async function addCategoryDirect(){
+  if(!editable()) return alert('他メンバーの棚卸しは編集できません');
+  const name = prompt('追加するカテゴリ名');
+  if(!name || !name.trim()) return;
+  state.tree = state.tree || [];
+  const clean = name.trim();
+  const exists = state.tree.find(c=>String(c.name||'').trim()===clean);
+  if(exists){ state.selectedCategoryIndex = state.tree.indexOf(exists); await persist(); return; }
+  state.tree.push({name:clean, memo:'', color:'#9aa4b6', projects:[{name:'未分類', candidates:['新規タスク']}], sharedWith:[]});
+  state.selectedCategoryIndex=state.tree.length-1;
+  await persist();
+}
+async function addGroupDirect(){
+  if(!editable()) return alert('他メンバーの棚卸しは編集できません');
+  const c = cat();
+  if(!c) return addCategoryDirect();
+  const name = prompt('追加するグループ名');
+  if(!name || !name.trim()) return;
+  c.projects = c.projects || [];
+  const clean = name.trim();
+  if(c.projects.some(p=>String(p.name||'').trim()===clean)){ alert('同じ名前のグループがすでにあります'); return; }
+  c.projects.push({name:clean, candidates:['新規タスク']});
+  await persist();
+}
+async function addTaskNameDirect(){
+  if(!editable()) return alert('他メンバーの棚卸しは編集できません');
+  const c = cat();
+  if(!c) return addCategoryDirect();
+  c.projects = c.projects || [];
+  if(!c.projects.length) c.projects.push({name:'未分類', candidates:[]});
+  const projectNames = c.projects.map((p,i)=>`${i+1}: ${p.name}`).join('\n');
+  let index = 0;
+  if(c.projects.length > 1){
+    const raw = prompt(`どのグループに追加しますか？番号で入力してください。\n${projectNames}`, '1');
+    if(!raw) return;
+    index = Math.max(0, Math.min(c.projects.length-1, Number(raw)-1));
+  }
+  const name = prompt('追加するタスク名称');
+  if(!name || !name.trim()) return;
+  const p = c.projects[index];
+  p.candidates = p.candidates || [];
+  const clean = name.trim();
+  if(!p.candidates.includes(clean)) p.candidates.push(clean);
+  await persist();
+}
+
 export function initSetupEvents(){
   $('backToBoardBtn')?.addEventListener('click', ()=>showView('board'));
+  $('setupAddCategoryTopBtn')?.addEventListener('click', addCategoryDirect);
+  $('setupAddGroupTopBtn')?.addEventListener('click', addGroupDirect);
+  $('setupAddTaskNameTopBtn')?.addEventListener('click', addTaskNameDirect);
   $('saveProfileBtn').addEventListener('click', async()=>{
     try{
       const updated = await updateMyProfile({ display_name:$('profileName').value, display_emoji:$('profileEmoji').value, display_color:$('profileColor').value, sleep_start_time:$('profileSleepStart').value || '02:00', sleep_end_time:$('profileSleepEnd').value || '09:00', work_enabled: $('profileWorkEnabled')?.checked || false, work_start_time:$('profileWorkStart')?.value || '10:00', work_end_time:$('profileWorkEnd')?.value || '19:00', work_category:$('profileWorkCategory')?.value || '仕事', work_days:[...document.querySelectorAll('.profileWorkDay:checked')].map(ch=>Number(ch.value)) });

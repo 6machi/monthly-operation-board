@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>タスクかんりシート</title>
-  <link rel="stylesheet" href="style.css?v=96" />
+  <link rel="stylesheet" href="style.css?v=97" />
 </head>
 <body>
   <header>
@@ -135,6 +135,7 @@
             <h2>ガンチャ <button class="infoDot" type="button" data-info="今日以降の予定だけを表示します。左はカテゴリ・グループ・タスク名称、右のバーがガンチャで管理する詳細予定です。">i</button></h2>
             <div class="actions ganttActions">
               <button class="primary" id="ganttQuickAddBtn" type="button">ガンチャに予定を追加</button>
+              <button class="ghost" id="ganttAddCategoryBtn" type="button">＋カテゴリ</button>
               <button class="primary" id="ganttAssignTodayBtn" type="button">今日のタイムラインに自動配置</button>
               <button class="ghost" id="ganttCleanupEmptyRowsBtn" type="button">空行を一括整理</button>
               <button class="ghost" id="ganttOpenTodayBtn" type="button">今日のタイムラインを見る</button>
@@ -233,6 +234,7 @@
         <div class="tabs" id="setupMemberTabs"></div>
         <div id="setupNotice" class="notice ok"></div>
         <section class="panel">
+          <div class="setupMainActions"><button class="ghost" id="setupAddCategoryTopBtn" type="button">＋カテゴリ</button><button class="ghost" id="setupAddGroupTopBtn" type="button">＋グループ</button><button class="ghost" id="setupAddTaskNameTopBtn" type="button">＋タスク名称</button></div>
           <h2>今月タスクを追加 <button class="infoDot" type="button" data-info="カテゴリ・グループ・タスク名称候補を選んで、今月のガンチャ予定を追加します。納期から逆算する場合も分割タスクは増やさず、1本の予定として管理します。">i</button></h2>
           <div class="form">
             <label><small>カテゴリ</small><select id="newCategory"></select></label>
@@ -285,6 +287,6 @@
   </template>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script type="module" src="js/app.js?v=96"></script>
+  <script type="module" src="js/app.js?v=97"></script>
 </body>
 </html>

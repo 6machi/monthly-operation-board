@@ -1,9 +1,9 @@
-import { $, esc, toISO, todayISO, diffDays, taskOccursOnDate, minutesFromTime, fullClock, fmtDate } from './utils.js?v=96';
-import { state } from './state.js?v=96';
-import { openDateOnBoard, openTaskEditor, arrangeTasksOnDate } from './board.js?v=96';
-import { createTask, deleteTask, updateTask } from './tasks.js?v=96';
-import { saveTree } from './setup.js?v=96';
-import { refreshAll } from './app.js?v=96';
+import { $, esc, toISO, todayISO, diffDays, taskOccursOnDate, minutesFromTime, fullClock, fmtDate } from './utils.js?v=97';
+import { state } from './state.js?v=97';
+import { openDateOnBoard, openTaskEditor, arrangeTasksOnDate } from './board.js?v=97';
+import { createTask, deleteTask, updateTask } from './tasks.js?v=97';
+import { saveTree } from './setup.js?v=97';
+import { refreshAll } from './app.js?v=97';
 
 const DAY_MINUTES = 24 * 60;
 let selectedCalendarDate = todayISO();
@@ -1804,10 +1804,27 @@ async function importSelectedIcs(){
   showIcsMsg(`${created}件を稼働不可として取り込みました。${skipped ? `重複っぽい予定 ${skipped}件はスキップしました。` : ''}`);
 }
 
+
+async function addCategoryFromGantt(){
+  const name = prompt('追加するカテゴリ名');
+  if(!name || !name.trim()) return;
+  state.tree = state.tree || [];
+  const clean = name.trim();
+  const exists = state.tree.find(c=>String(c.name||'').trim()===clean);
+  if(exists){
+    alert('同じ名前のカテゴリがすでにあります');
+    return;
+  }
+  state.tree.push({ name: clean, memo:'', color:'#9aa4b6', projects:[{ name:'未分類', candidates:['新規タスク'] }], sharedWith:[] });
+  await saveTree(state.treeRowId, state.tree);
+  renderGanttBoard();
+}
+
 export function initCalendarEvents(){
   $('calendarMonth').addEventListener('change',()=>{ state.calendarMonth = $('calendarMonth').value; renderCalendar(); });
   $('calendarThisMonth').addEventListener('click',()=>{ state.calendarMonth = new Date().toISOString().slice(0,7); renderCalendar(); });
   $('ganttQuickAddBtn')?.addEventListener('click',()=>openGanttQuickEditor({date:todayISO()}));
+  $('ganttAddCategoryBtn')?.addEventListener('click', addCategoryFromGantt);
   $('ganttAssignTodayBtn')?.addEventListener('click', assignGanttToToday);
   $('ganttCleanupEmptyRowsBtn')?.addEventListener('click', cleanupVisibleEmptyGanttRows);
   $('ganttOpenTodayBtn')?.addEventListener('click',()=>openDateOnBoard(todayISO()));
@@ -1816,7 +1833,7 @@ export function initCalendarEvents(){
   $('icsSelectAllBtn')?.addEventListener('click',()=>document.querySelectorAll('[data-ics-index]').forEach(c=>c.checked=true));
   $('icsClearAllBtn')?.addEventListener('click',()=>document.querySelectorAll('[data-ics-index]').forEach(c=>c.checked=false));
   $('icsImportBtn')?.addEventListener('click', importSelectedIcs);
-  $('openProfileFromCalendar')?.addEventListener('click',()=>{ import('./app.js?v=96').then(m=>m.showView('profile')); });
+  $('openProfileFromCalendar')?.addEventListener('click',()=>{ import('./app.js?v=97').then(m=>m.showView('profile')); });
   $('unavailableAllDay')?.addEventListener('change',()=>{
     const allDay = $('unavailableAllDay').checked;
     $('unavailableStart').disabled = allDay;
