@@ -1,13 +1,14 @@
-import { isConfigured } from './supabase-client.js?v=100';
-import { getSession, signIn, signUp, signOut, ensureProfileAndTeam, loadMembers } from './auth.js?v=100';
-import { loadTasks } from './tasks.js?v=100';
-import { loadTree } from './setup.js?v=100';
-import { state } from './state.js?v=100';
-import { $, qsa, todayISO, nowTimeText, fmtDate } from './utils.js?v=100';
-import { initBoardEvents, renderBoard } from './board.js?v=100';
-import { initCalendarEvents, renderCalendar } from './calendar.js?v=100';
-import { initSetupEvents, renderSetup, renderProfilePage } from './setup-view.js?v=100';
+import { isConfigured, supabase } from './supabase-client.js?v=103';
+import { getSession, signIn, signUp, signOut, resetAuthSession, ensureProfileAndTeam, loadMembers } from './auth.js?v=103';
+import { loadTasks } from './tasks.js?v=103';
+import { loadTree } from './setup.js?v=103';
+import { state } from './state.js?v=103';
+import { $, qsa, todayISO, nowTimeText, fmtDate, DEFAULT_TREE } from './utils.js?v=103';
+import { initBoardEvents, renderBoard } from './board.js?v=103';
+import { initCalendarEvents, renderCalendar } from './calendar.js?v=103';
+import { initSetupEvents, renderSetup, renderProfilePage } from './setup-view.js?v=103';
 
+let bootingUserId = null;
 function safeGet(id){ return document.getElementById(id); }
 function safeOn(id, event, fn){
   const el = safeGet(id);
@@ -97,26 +98,53 @@ export async function refreshAll(){
   renderCurrent();
 }
 async function bootAuthed(session){
-  state.session = session; state.user = session.user;
-  const result = await ensureProfileAndTeam(state.user);
-  state.profile = result.profile; state.team = result.team;
-  state.members = await loadMembers(state.team.id);
-  normalizeCurrentMember();
-  // ログイン直後は必ず本人のタブに戻す。
-  // 前の操作で他メンバーを見ていた状態が残ると、自分の予定が消えたように見えるため。
-  state.selectedMemberId = state.user.id;
-  const treeResult = await loadTree(state.team.id, state.user.id);
-  state.treeRowId = treeResult.id; state.tree = treeResult.tree;
-  state.tasks = await loadTasks(state.team.id);
-  safeGet('authView')?.classList.add('hidden');
-  safeGet('appView')?.classList.remove('hidden');
-  safeGet('mainNav')?.classList.remove('hidden');
-  safeGet('logoutBtn')?.classList.remove('hidden');
-  const pill = safeGet('loginPill');
-  if(pill) pill.textContent = `${state.profile?.display_emoji || '🌙'} ${state.profile?.display_name || '自分'}`;
-  renderCurrent();
+  const user = session?.user || (await supabase.auth.getUser()).data?.user;
+  if(!user?.id) { showAuth(); return; }
+  if(bootingUserId === user.id) return;
+  bootingUserId = user.id;
+  try{
+    state.session = session;
+    state.user = user;
+    const result = await ensureProfileAndTeam(state.user);
+    state.profile = result.profile;
+    state.team = result.team;
+    try{
+      state.members = await loadMembers(state.team.id);
+    }catch(e){
+      console.warn('members load failed; fallback to myself', e);
+      state.members = [];
+    }
+    normalizeCurrentMember();
+    // ログイン直後は必ず本人のタブに戻す。
+    // 前の操作で他メンバーを見ていた状態が残ると、自分の予定が消えたように見えるため。
+    state.selectedMemberId = state.user.id;
+    try{
+      const treeResult = await loadTree(state.team.id, state.user.id);
+      state.treeRowId = treeResult.id; state.tree = treeResult.tree;
+    }catch(e){
+      console.warn('tree load failed; use default tree', e);
+      state.treeRowId = null; state.tree = DEFAULT_TREE;
+    }
+    try{
+      state.tasks = await loadTasks(state.team.id);
+    }catch(e){
+      console.warn('tasks load failed; start empty', e);
+      state.tasks = [];
+      authMsg('ログインはできましたが、タスク読み込みでエラーが出ました。SupabaseのRLS/SQL設定を確認してください。', true);
+    }
+    safeGet('authView')?.classList.add('hidden');
+    safeGet('appView')?.classList.remove('hidden');
+    safeGet('mainNav')?.classList.remove('hidden');
+    safeGet('logoutBtn')?.classList.remove('hidden');
+    const pill = safeGet('loginPill');
+    if(pill) pill.textContent = `${state.profile?.display_emoji || '🌙'} ${state.profile?.display_name || '自分'}`;
+    renderCurrent();
+  }finally{
+    bootingUserId = null;
+  }
 }
 function showAuth(){
+  state.session=null; state.user=null; state.profile=null; state.team=null; state.members=[]; state.selectedMemberId=null;
   safeGet('authView')?.classList.remove('hidden');
   safeGet('appView')?.classList.add('hidden');
   safeGet('mainNav')?.classList.add('hidden');
@@ -152,6 +180,11 @@ function bindAuthEvents(){
       console.error(e);
       authMsg(e.message || '登録に失敗しました', true);
     }
+  });
+  safeOn('resetSessionBtn','click', async()=>{
+    await resetAuthSession();
+    showAuth();
+    authMsg('ログイン状態をリセットしました。もう一度ログインしてください。');
   });
   safeOn('logoutBtn','click', async()=>{ await signOut(); showAuth(); });
   safeOn('loginPill','click',()=>{ if(state.user) showView('profile'); });
@@ -189,6 +222,14 @@ async function init(){
     return;
   }
   initFeatureEvents();
+  supabase.auth.onAuthStateChange(async(event, session)=>{
+    if(event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED'){
+      if(session?.user?.id && !bootingUserId){
+        try{ await bootAuthed(session); }catch(e){ console.error(e); authMsg(e.message || 'アカウント反映でエラーが出ました', true); }
+      }
+    }
+    if(event === 'SIGNED_OUT') showAuth();
+  });
   setInterval(()=>{ if(!safeGet('appView')?.classList.contains('hidden')) renderHero(); }, 1000);
   try{
     const session = await getSession();

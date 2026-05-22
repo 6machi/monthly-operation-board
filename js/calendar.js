@@ -1,9 +1,9 @@
-import { $, esc, toISO, todayISO, diffDays, taskOccursOnDate, minutesFromTime, fullClock, fmtDate } from './utils.js?v=102';
-import { state } from './state.js?v=102';
-import { openDateOnBoard, openTaskEditor, arrangeTasksOnDate } from './board.js?v=102';
-import { createTask, deleteTask, updateTask } from './tasks.js?v=102';
-import { saveTree } from './setup.js?v=102';
-import { refreshAll } from './app.js?v=102';
+import { $, esc, toISO, todayISO, diffDays, taskOccursOnDate, minutesFromTime, fullClock, fmtDate } from './utils.js?v=103';
+import { state } from './state.js?v=103';
+import { openDateOnBoard, openTaskEditor, arrangeTasksOnDate } from './board.js?v=103';
+import { createTask, deleteTask, updateTask } from './tasks.js?v=103';
+import { saveTree } from './setup.js?v=103';
+import { refreshAll } from './app.js?v=103';
 
 const DAY_MINUTES = 24 * 60;
 let selectedCalendarDate = todayISO();
@@ -39,7 +39,6 @@ export function renderCalendar(){
   renderGanttBoard();
   renderMonthGrid();
   renderSelectedDayTasks();
-  renderMemberSummary();
 }
 
 export function isUnavailableTask(t){
@@ -1588,6 +1587,7 @@ function renderSelectedDayTasks(){
 
 function renderMemberSummary(){
   const box = $('memberSummary');
+  if(!box) return;
   box.innerHTML='';
   const month = state.calendarMonth;
 
@@ -1994,7 +1994,7 @@ export function initCalendarEvents(){
   $('icsSelectAllBtn')?.addEventListener('click',()=>document.querySelectorAll('[data-ics-index]').forEach(c=>c.checked=true));
   $('icsClearAllBtn')?.addEventListener('click',()=>document.querySelectorAll('[data-ics-index]').forEach(c=>c.checked=false));
   $('icsImportBtn')?.addEventListener('click', importSelectedIcs);
-  $('openProfileFromCalendar')?.addEventListener('click',()=>{ import('./app.js?v=102').then(m=>m.showView('profile')); });
+  $('openProfileFromCalendar')?.addEventListener('click',()=>{ import('./app.js?v=103').then(m=>m.showView('profile')); });
   $('unavailableAllDay')?.addEventListener('change',()=>{
     const allDay = $('unavailableAllDay').checked;
     $('unavailableStart').disabled = allDay;
