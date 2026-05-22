@@ -1,10 +1,10 @@
-import { $, esc, occurrenceLabel, addDays, diffDays, fmtDate, minutesFromTime, fullClock } from './utils.js?v=92';
-import { state } from './state.js?v=92';
-import { saveTree } from './setup.js?v=92';
-import { updateMyProfile, loadMembers } from './auth.js?v=92';
-import { createTask, updateTask, deleteTask } from './tasks.js?v=92';
-import { refreshAll, showView } from './app.js?v=92';
-import { renderUnavailableList, isUnavailableTask } from './calendar.js?v=92';
+import { $, esc, occurrenceLabel, addDays, diffDays, fmtDate, minutesFromTime, fullClock } from './utils.js?v=95';
+import { state } from './state.js?v=95';
+import { saveTree } from './setup.js?v=95';
+import { updateMyProfile, loadMembers } from './auth.js?v=95';
+import { createTask, updateTask, deleteTask } from './tasks.js?v=95';
+import { refreshAll, showView } from './app.js?v=95';
+import { renderUnavailableList, isUnavailableTask } from './calendar.js?v=95';
 
 let draggingCategoryIndex = null;
 let draggingProjectIndex = null;
@@ -65,6 +65,38 @@ function canUseCategoryForMember(c, memberId){
   return categorySharedWith(c).includes(memberId);
 }
 async function persist(){ normalizeTree(); await saveTree(state.treeRowId, state.tree); renderSetup(); }
+
+async function renameProjectEverywhere(categoryName, projectIndex, nextName){
+  normalizeTree();
+  const c = cat();
+  const project = c?.projects?.[projectIndex];
+  if(!project) return;
+  const oldName = String(project.name || '').trim();
+  const clean = String(nextName || '').trim();
+  if(!clean || clean === oldName) return;
+
+  const duplicateIndex = (c.projects || []).findIndex((p, i)=>i !== projectIndex && String(p?.name || '').trim() === clean);
+  if(duplicateIndex >= 0){
+    const dest = c.projects[duplicateIndex];
+    dest.candidates = uniq([...(dest.candidates || []), ...(project.candidates || [])]);
+    c.projects.splice(projectIndex, 1);
+  }else{
+    project.name = clean;
+  }
+
+  await saveTree(state.treeRowId, state.tree);
+
+  const targets = state.tasks.filter(t=>
+    t.owner_id === state.user?.id
+    && String(t.category || '未分類') === String(categoryName || '未分類')
+    && String(t.project || '未分類グループ') === String(oldName || '未分類グループ')
+  );
+  for(const t of targets){
+    await updateTask(t.id, { project: clean });
+  }
+  await refreshAll();
+  if(state.view === 'setup') renderSetup();
+}
 
 export function renderSetup(){
   normalizeTree();
@@ -238,8 +270,8 @@ function renderProjectCandidateBoxes(c){
       ${projects.length ? projects.map((p,pi)=>`
         <section class="projectCandidateBox draggableProjectBox" data-project-box="${pi}" draggable="true">
           <div class="projectCandidateHead">
-            <div class="projectCandidateTitle"><span class="projectDragHandle" title="ドラッグしてグループを並べ替え">↕</span><div><b>${esc(p.name)}</b><span>タスク名称候補 ${p.candidates?.length||0}件</span></div></div>
-            <div class="boxItemActions"><button type="button" class="ghost tiny" data-edit-project="${pi}">グループ名を修正</button><button type="button" class="danger tiny" data-delete-project="${pi}">×</button></div>
+            <div class="projectCandidateTitle"><div><input class="projectNameInput" data-project-name-edit="${pi}" data-original="${esc(p.name)}" value="${esc(p.name)}" aria-label="グループ名を直接編集"><span>タスク名称候補 ${p.candidates?.length||0}件</span></div></div>
+            <div class="boxItemActions"><button type="button" class="danger tiny" data-delete-project="${pi}">×</button></div>
           </div>
           <p class="muted">このグループで使うタスク名称候補です。</p>
           <div class="candidateChips bigCandidates">
@@ -320,11 +352,30 @@ function renderCategoryEditor(){
       await persist();
     });
   });
-  box.querySelectorAll('[data-edit-project]').forEach(btn=>btn.onclick=async()=>{ const pi=Number(btn.dataset.editProject); const p=c.projects?.[pi]; if(!p)return; const name=prompt('グループ名を修正', p.name); if(!name)return; p.name=name.trim()||p.name; await persist(); });
+  box.querySelectorAll('[data-project-name-edit]').forEach(input=>{
+    let composing = false;
+    input.addEventListener('compositionstart', ()=>{ composing = true; });
+    input.addEventListener('compositionend', ()=>{ composing = false; });
+    const commit = async()=>{
+      const pi = Number(input.dataset.projectNameEdit);
+      const p = c.projects?.[pi];
+      if(!p) return;
+      const oldName = String(input.dataset.original || p.name || '').trim();
+      const next = String(input.value || '').trim();
+      if(!next){ input.value = oldName; return; }
+      if(next === oldName) return;
+      await renameProjectEverywhere(c.name, pi, next);
+    };
+    input.addEventListener('keydown', e=>{
+      if(e.key === 'Enter' && !composing){ e.preventDefault(); input.blur(); }
+      if(e.key === 'Escape'){ e.preventDefault(); input.value = input.dataset.original || input.value; input.blur(); }
+    });
+    input.addEventListener('blur', commit);
+  });
   box.querySelectorAll('[data-delete-project]').forEach(btn=>btn.onclick=async()=>{ const pi=Number(btn.dataset.deleteProject); const p=c.projects?.[pi]; if(!p)return; if(!confirm(`グループ「${p.name}」を削除しますか？\n登録済みタスク自体は消えません。`))return; c.projects.splice(pi,1); await persist(); });
   box.querySelectorAll('[data-add-cand-to-project]').forEach(btn=>btn.onclick=async()=>{ const pi=Number(btn.dataset.addCandToProject); const p=c.projects?.[pi]; if(!p)return; const input=box.querySelector(`[data-candidate-input="${pi}"]`); const name=input?.value?.trim(); if(!name)return alert('追加するタスク名称候補を入力してください'); p.candidates=uniq([...(p.candidates||[]), name]); input.value=''; await persist(); });
   box.querySelectorAll('[data-edit-cand]').forEach(btn=>btn.onclick=async()=>{ const [pi,ci]=String(btn.dataset.editCand).split(':').map(Number); const p=c.projects?.[pi]; const old=p?.candidates?.[ci]; if(!old)return; const name=prompt('タスク名称候補を修正', old); if(!name)return; p.candidates[ci]=name.trim()||old; p.candidates=uniq(p.candidates); await persist(); });
-  box.querySelectorAll('[data-del-cand]').forEach(btn=>btn.onclick=async()=>{ const [pi,ci]=String(btn.dataset.delCand).split(':').map(Number); const p=c.projects?.[pi]; const name=p?.candidates?.[ci]; if(!name)return; if(!confirm(`「${name}」を候補から削除しますか？`)) return; p.candidates.splice(ci,1); await persist(); });
+  box.querySelectorAll('[data-del-cand]').forEach(btn=>btn.onclick=async()=>{ const [pi,ci]=String(btn.dataset.delCand).split(':').map(Number); const p=c.projects?.[pi]; const name=p?.candidates?.[ci]; if(!name)return; p.candidates.splice(ci,1); await persist(); });
 }
 
 function taskDateLabel(t){ return t.schedule_date || t.carryover_date || t.due_date || ''; }

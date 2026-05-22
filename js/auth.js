@@ -1,4 +1,4 @@
-import { supabase } from './supabase-client.js?v=92';
+import { supabase } from './supabase-client.js?v=95';
 
 export async function getSession(){
   const { data, error } = await supabase.auth.getSession();

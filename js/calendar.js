@@ -1,9 +1,9 @@
-import { $, esc, toISO, todayISO, diffDays, taskOccursOnDate, minutesFromTime, fullClock, fmtDate } from './utils.js?v=92';
-import { state } from './state.js?v=92';
-import { openDateOnBoard, openTaskEditor, arrangeTasksOnDate } from './board.js?v=92';
-import { createTask, deleteTask, updateTask } from './tasks.js?v=92';
-import { saveTree } from './setup.js?v=92';
-import { refreshAll } from './app.js?v=92';
+import { $, esc, toISO, todayISO, diffDays, taskOccursOnDate, minutesFromTime, fullClock, fmtDate } from './utils.js?v=95';
+import { state } from './state.js?v=95';
+import { openDateOnBoard, openTaskEditor, arrangeTasksOnDate } from './board.js?v=95';
+import { createTask, deleteTask, updateTask } from './tasks.js?v=95';
+import { saveTree } from './setup.js?v=95';
+import { refreshAll } from './app.js?v=95';
 
 const DAY_MINUTES = 24 * 60;
 let selectedCalendarDate = todayISO();
@@ -146,7 +146,7 @@ export function renderUnavailableList(){
       project: t.project || '予定',
       status: 'scheduled'
     });
-    await refreshAll();
+    await refreshAllKeepGanttViewport();
   }));
 
   box.querySelectorAll('[data-convert-unavailable]').forEach(btn=>btn.addEventListener('click', async()=>{
@@ -157,12 +157,12 @@ export function renderUnavailableList(){
     const oldMemo = t.memo && t.memo !== '稼働不可' ? t.memo : '';
     const newMemo = [oldMemo, '稼働不可予定からタスクに変更'].filter(Boolean).join(' / ');
     await updateTask(t.id, { title:title.trim(), category:'未分類', project:'カレンダー予定', task_type:'', status:'scheduled', done:false, memo:newMemo });
-    await refreshAll();
+    await refreshAllKeepGanttViewport();
   }));
   box.querySelectorAll('[data-del-unavailable]').forEach(btn=>btn.addEventListener('click', async()=>{
     if(!confirm('この稼働不可を解除しますか？')) return;
     await deleteTask(btn.dataset.delUnavailable);
-    await refreshAll();
+    await refreshAllKeepGanttViewport();
   }));
 }
 
@@ -586,7 +586,7 @@ async function renameGanttRow(category, groupName, oldTaskName, nextTaskName, ow
       await persistGanttTree();
     }
   }
-  await refreshAll();
+  await refreshAllKeepGanttViewport();
 }
 async function deleteEmptyGanttRow(category, groupName, taskName){
   const catName = normGanttName(category || '未分類');
@@ -624,7 +624,7 @@ async function deleteEmptyGanttRow(category, groupName, taskName){
       try{ await persistGanttTree(); }catch(e){ console.warn('カテゴリ管理からの削除保存に失敗しました', e); }
     }
   }
-  await refreshAll();
+  await refreshAllKeepGanttViewport();
 }
 async function reorderGanttTaskRows(category, groupName, draggedTaskName, targetTaskName){
   const dragged = String(draggedTaskName || '').trim();
@@ -647,7 +647,7 @@ async function reorderGanttTaskRows(category, groupName, draggedTaskName, target
   else ordered.splice(targetIndex, 0, dragged);
   project.candidates = ordered;
   await persistGanttTree();
-  await refreshAll();
+  await refreshAllKeepGanttViewport();
 }
 
 
@@ -680,7 +680,7 @@ async function reorderGanttGroups(category, draggedGroupName, targetGroupName){
     return old ? { ...old, name } : { name, candidates:[] };
   });
   await persistGanttTree();
-  await refreshAll();
+  await refreshAllKeepGanttViewport();
 }
 
 async function renameGanttBarDetail(taskId, nextTitle){
@@ -689,14 +689,14 @@ async function renameGanttBarDetail(taskId, nextTitle){
   const span = taskSpanInMonth(task, state.calendarMonth);
   const isSpan = isGanttSpanTask(task) || Boolean(task.due_date && task.schedule_date && task.due_date > task.schedule_date);
   await updateTask(task.id, { memo: updateFirstUsefulMemo(task.memo, nextTitle, isSpan || Boolean(span && span.endDay > span.startDay)) });
-  await refreshAll();
+  await refreshAllKeepGanttViewport();
 }
 async function deleteGanttBar(taskId){
   const task = taskArray().find(x=>String(x.id) === String(taskId));
   if(!task || task.owner_id !== state.user?.id) return;
   if(!confirm(`「${ganttDetailTitle(task)}」を削除しますか？`)) return;
   await deleteTask(task.id);
-  await refreshAll();
+  await refreshAllKeepGanttViewport();
 }
 
 async function createGanttCellTask({ date, category, groupName, taskName }){
@@ -722,7 +722,7 @@ async function createGanttCellTask({ date, category, groupName, taskName }){
     memo: detail,
     sort_order: Date.now()*-1
   });
-  await refreshAll();
+  await refreshAllKeepGanttViewport();
   setTimeout(()=>{
     const bar = document.querySelector(`[data-gantt-task-id] [data-gantt-bar-title-edit][data-original="${detail}"]`);
     bar?.focus?.();
@@ -768,7 +768,7 @@ async function updateGanttBarPlacement(taskIds, nextStartDay, nextEndDay, target
     if(row.taskName) patch.title = row.taskName;
     await updateTask(task.id, patch);
   }
-  await refreshAll();
+  await refreshAllKeepGanttViewport();
 }
 function rowDataFromElement(el){
   const row = el?.closest?.('[data-gantt-row-target]');
@@ -794,6 +794,36 @@ function sameGanttRow(a,b){
     && String(a.groupName||'')===String(b.groupName||'')
     && String(a.taskName||'')===String(b.taskName||'');
 }
+
+function captureGanttViewport(){
+  const scroller = document.querySelector('#ganttBoard .sheetGanttScroll');
+  return {
+    pageX: window.scrollX || window.pageXOffset || 0,
+    pageY: window.scrollY || window.pageYOffset || 0,
+    ganttLeft: scroller ? scroller.scrollLeft : 0,
+    ganttTop: scroller ? scroller.scrollTop : 0
+  };
+}
+function restoreGanttViewport(snap){
+  if(!snap) return;
+  const apply = ()=>{
+    const scroller = document.querySelector('#ganttBoard .sheetGanttScroll');
+    if(scroller){
+      scroller.scrollLeft = snap.ganttLeft || 0;
+      scroller.scrollTop = snap.ganttTop || 0;
+    }
+    window.scrollTo(snap.pageX || 0, snap.pageY || 0);
+  };
+  requestAnimationFrame(apply);
+  setTimeout(apply, 0);
+  setTimeout(apply, 80);
+}
+async function refreshAllKeepGanttViewport(){
+  const snap = captureGanttViewport();
+  await refreshAll();
+  restoreGanttViewport(snap);
+}
+
 function bindInlineGanttEditing(board){
   board.querySelectorAll('[data-gantt-row-name-edit]').forEach(input=>{
     const commit = async()=>{
@@ -801,7 +831,7 @@ function bindInlineGanttEditing(board){
       if(!next || next === input.dataset.original) { input.value = input.dataset.original || input.value; return; }
       await renameGanttRow(input.dataset.category || '未分類', input.dataset.group || '未分類グループ', input.dataset.original || '', next, input.dataset.owner || state.user?.id);
     };
-    input.addEventListener('keydown', e=>{ if(e.key === 'Enter'){ e.preventDefault(); input.blur(); } });
+    input.addEventListener('keydown', e=>{ e.stopPropagation(); if(e.key === 'Enter'){ e.preventDefault(); input.blur(); } });
     input.addEventListener('blur', ()=>commit());
   });
   board.querySelectorAll('[data-gantt-row-delete]').forEach(btn=>btn.addEventListener('click', async e=>{
@@ -816,7 +846,7 @@ function bindInlineGanttEditing(board){
       await renameGanttBarDetail(el.dataset.taskId, next);
     };
     el.addEventListener('click', e=>{ e.stopPropagation(); });
-    el.addEventListener('keydown', e=>{ if(e.key === 'Enter'){ e.preventDefault(); el.blur(); } });
+    el.addEventListener('keydown', e=>{ e.stopPropagation(); if(e.key === 'Enter'){ e.preventDefault(); el.blur(); } });
     el.addEventListener('blur', ()=>commit());
   });
   board.querySelectorAll('[data-gantt-bar-delete]').forEach(btn=>btn.addEventListener('click', async e=>{
@@ -1073,7 +1103,7 @@ function openGanttQuickEditor({ task=null, date=null, category='', groupName='',
     if(!confirm(`ガンチャ予定「${ganttDetailTitle(task)}」を削除しますか？`)) return;
     await deleteTask(task.id);
     closeGanttQuickEditor();
-    await refreshAll();
+    await refreshAllKeepGanttViewport();
   };
   $('saveGanttQuickTask').onclick = async()=>{
     const startDate = $('ganttQuickStart').value || date || todayISO();
@@ -1108,7 +1138,7 @@ function openGanttQuickEditor({ task=null, date=null, category='', groupName='',
       });
     }
     closeGanttQuickEditor();
-    await refreshAll();
+    await refreshAllKeepGanttViewport();
   };
   modal.classList.remove('hidden');
   setTimeout(()=>$('ganttQuickDetail')?.focus(), 0);
@@ -1168,7 +1198,7 @@ function renderGanttBoard(){
             ${Array.from(groupMap.entries()).map(([groupName,arr])=>{
               const groupTotal = arr.reduce((sum,row)=>sum + row.bars.length, 0);
               return `<div class="sheetGroupHeader" data-gantt-group-header data-gantt-category="${esc(category || '')}" data-gantt-group="${esc(groupName || '未分類グループ')}" style="--days:${days.length};--cat-color:${esc(color)}">
-                <div class="sheetGroupTitle" title="ドラッグしてグループを並べ替え"><span class="ganttGroupDragHandle">↕</span><span>${esc(groupName || '未分類グループ')}</span><small>${esc(arr.length)}タスク / ${esc(groupTotal)}件</small></div>
+                <div class="sheetGroupTitle" title="ドラッグしてグループを並べ替え"><span>${esc(groupName || '未分類グループ')}</span><small>${esc(arr.length)}タスク / ${esc(groupTotal)}件</small></div>
                 <div class="sheetGroupCells">${days.map(d=>{
                   const iso = `${state.calendarMonth}-${String(d).padStart(2,'0')}`;
                   const w = dayLabel(y,m,d);
@@ -1181,7 +1211,6 @@ function renderGanttBoard(){
                 const dueSoon = row.bars.some(bar=>bar.due_date && diffDays(bar.due_date, today) <= 3 && !bar.done);
                 return `<div class="sheetTaskRow detailGanttRow ${dueSoon?'dueSoon':''}" data-gantt-row-target data-gantt-category="${esc(row.category || '')}" data-gantt-group="${esc(row.groupName || '')}" data-gantt-task-name="${esc(row.taskName || row.rowName || '')}" style="--days:${days.length};--cat-color:${esc(color)};--lanes:${laneCount}">
                   <div class="sheetTaskLabel rowOnlyLabel ganttTreeLabel" data-gantt-row-date="${esc(today)}" data-gantt-category="${esc(row.category || '')}" data-gantt-group="${esc(row.groupName || '')}" data-gantt-task-name="${esc(row.taskName || row.rowName || '')}" title="${esc(row.groupName)} / ${esc(row.taskName)}">
-                    <span class="ganttRowDragHandle" title="ドラッグしてタスク名称を並べ替え">↕</span>
                     <input class="sheetTaskTitle ganttTaskNameInput" data-gantt-row-name-edit data-category="${esc(row.category || '')}" data-group="${esc(row.groupName || '')}" data-original="${esc(row.taskName || row.rowName)}" data-owner="${esc(row.owner_id || '')}" value="${esc(row.taskName || row.rowName)}" aria-label="タスク名称を直接編集">
                     <span class="ganttRowMeta">${row.bars.length ? `${esc(row.bars.length)}件の予定` : '空セルをクリックして追加'}</span>
                     <button type="button" class="ganttRowDelete" data-gantt-row-delete data-category="${esc(row.category || '')}" data-group="${esc(row.groupName || '')}" data-task-name="${esc(row.taskName || row.rowName || '')}" title="空行を削除">×</button>
@@ -1219,10 +1248,6 @@ function renderGanttBoard(){
         }).join('')}      </div>
     </div>`;
 
-  requestAnimationFrame(()=>{
-    const scroller = board.querySelector('.sheetGanttScroll');
-    if(scroller) scroller.scrollLeft = 0;
-  });
 
   board.querySelectorAll('[data-gantt-date]').forEach(btn=>btn.addEventListener('click', e=>{
     if(e.target.closest('[data-gantt-task-id]')) return;
@@ -1341,7 +1366,7 @@ function renderSelectedDayTasks(){
       const t = taskArray().find(x=>String(x.id)===String(btn.dataset.selectedDoneId));
       if(!t) return;
       await updateTask(t.id, { done:true, status:'done' });
-      await refreshAll();
+      await refreshAllKeepGanttViewport();
     });
   });
   box.querySelectorAll('[data-selected-edit-id]').forEach(btn=>{
@@ -1714,7 +1739,7 @@ async function importSelectedIcs(){
     });
     created++;
   }
-  await refreshAll();
+  await refreshAllKeepGanttViewport();
   showIcsMsg(`${created}件を稼働不可として取り込みました。${skipped ? `重複っぽい予定 ${skipped}件はスキップしました。` : ''}`);
 }
 
@@ -1729,7 +1754,7 @@ export function initCalendarEvents(){
   $('icsSelectAllBtn')?.addEventListener('click',()=>document.querySelectorAll('[data-ics-index]').forEach(c=>c.checked=true));
   $('icsClearAllBtn')?.addEventListener('click',()=>document.querySelectorAll('[data-ics-index]').forEach(c=>c.checked=false));
   $('icsImportBtn')?.addEventListener('click', importSelectedIcs);
-  $('openProfileFromCalendar')?.addEventListener('click',()=>{ import('./app.js?v=92').then(m=>m.showView('profile')); });
+  $('openProfileFromCalendar')?.addEventListener('click',()=>{ import('./app.js?v=95').then(m=>m.showView('profile')); });
   $('unavailableAllDay')?.addEventListener('change',()=>{
     const allDay = $('unavailableAllDay').checked;
     $('unavailableStart').disabled = allDay;
@@ -1763,7 +1788,7 @@ export function initCalendarEvents(){
         sort_order:Date.now()*-1
       });
       $('unavailableMemo').value='';
-      await refreshAll();
+      await refreshAllKeepGanttViewport();
       alert('稼働不可を追加しました');
     }catch(e){
       console.error(e);
