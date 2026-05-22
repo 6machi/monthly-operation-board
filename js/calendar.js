@@ -1,9 +1,9 @@
-import { $, esc, toISO, todayISO, diffDays, taskOccursOnDate, minutesFromTime, fullClock, fmtDate } from './utils.js?v=104';
-import { state } from './state.js?v=104';
-import { openDateOnBoard, openTaskEditor, arrangeTasksOnDate } from './board.js?v=104';
-import { createTask, deleteTask, updateTask } from './tasks.js?v=104';
-import { saveTree } from './setup.js?v=104';
-import { refreshAll } from './app.js?v=104';
+import { $, esc, toISO, todayISO, diffDays, taskOccursOnDate, minutesFromTime, fullClock, fmtDate } from './utils.js?v=105';
+import { state } from './state.js?v=105';
+import { openDateOnBoard, openTaskEditor, arrangeTasksOnDate } from './board.js?v=105';
+import { createTask, deleteTask, updateTask } from './tasks.js?v=105';
+import { saveTree } from './setup.js?v=105';
+import { refreshAll } from './app.js?v=105';
 
 const DAY_MINUTES = 24 * 60;
 let selectedCalendarDate = todayISO();
@@ -1994,7 +1994,7 @@ export function initCalendarEvents(){
   $('icsSelectAllBtn')?.addEventListener('click',()=>document.querySelectorAll('[data-ics-index]').forEach(c=>c.checked=true));
   $('icsClearAllBtn')?.addEventListener('click',()=>document.querySelectorAll('[data-ics-index]').forEach(c=>c.checked=false));
   $('icsImportBtn')?.addEventListener('click', importSelectedIcs);
-  $('openProfileFromCalendar')?.addEventListener('click',()=>{ import('./app.js?v=104').then(m=>m.showView('profile')); });
+  $('openProfileFromCalendar')?.addEventListener('click',()=>{ import('./app.js?v=105').then(m=>m.showView('profile')); });
   $('unavailableAllDay')?.addEventListener('change',()=>{
     const allDay = $('unavailableAllDay').checked;
     $('unavailableStart').disabled = allDay;

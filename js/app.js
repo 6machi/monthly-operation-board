@@ -1,14 +1,24 @@
-import { isConfigured, supabase } from './supabase-client.js?v=104';
-import { getSession, signIn, signUp, signOut, resetAuthSession, ensureProfileAndTeam, loadMembers } from './auth.js?v=104';
-import { loadTasks } from './tasks.js?v=104';
-import { loadTree } from './setup.js?v=104';
-import { state } from './state.js?v=104';
-import { $, qsa, todayISO, nowTimeText, fmtDate, DEFAULT_TREE } from './utils.js?v=104';
-import { initBoardEvents, renderBoard } from './board.js?v=104';
-import { initCalendarEvents, renderCalendar } from './calendar.js?v=104';
-import { initSetupEvents, renderSetup, renderProfilePage } from './setup-view.js?v=104';
+import { isConfigured, supabase } from './supabase-client.js?v=105';
+import { getSession, signIn, signUp, signOut, resetAuthSession, ensureProfileAndTeam, loadMembers } from './auth.js?v=105';
+import { loadTasks } from './tasks.js?v=105';
+import { loadTree } from './setup.js?v=105';
+import { state } from './state.js?v=105';
+import { $, qsa, todayISO, nowTimeText, fmtDate, DEFAULT_TREE } from './utils.js?v=105';
+import { initBoardEvents, renderBoard } from './board.js?v=105';
+import { initCalendarEvents, renderCalendar } from './calendar.js?v=105';
+import { initSetupEvents, renderSetup, renderProfilePage } from './setup-view.js?v=105';
 
 let bootingUserId = null;
+let bootPromise = null;
+function withTimeout(promise, ms, label){
+  let timer;
+  return Promise.race([
+    promise,
+    new Promise((_, reject)=>{
+      timer = setTimeout(()=>reject(new Error(`${label} がタイムアウトしました。通信状態を確認して、ログインし直してください。`)), ms);
+    })
+  ]).finally(()=>clearTimeout(timer));
+}
 function safeGet(id){ return document.getElementById(id); }
 function safeOn(id, event, fn){
   const el = safeGet(id);
@@ -100,49 +110,68 @@ export async function refreshAll(){
 async function bootAuthed(session){
   const user = session?.user || (await supabase.auth.getUser()).data?.user;
   if(!user?.id) { showAuth(); return; }
-  if(bootingUserId === user.id) return;
+
+  // SIGNED_INイベントとログインボタン直後の二重起動で処理が競合すると、
+  // 片方が先にbootingUserIdを立てて、もう片方が何もせず戻り、
+  // 画面が「ログイン中です…」のまま止まることがありました。
+  // 同じユーザーの起動中は既存Promiseを待つようにします。
+  if(bootingUserId === user.id && bootPromise) return bootPromise;
+
   bootingUserId = user.id;
-  try{
-    state.session = session;
-    state.user = user;
-    const result = await ensureProfileAndTeam(state.user);
-    state.profile = result.profile;
-    state.team = result.team;
+  bootPromise = (async()=>{
     try{
-      state.members = await loadMembers(state.team.id);
-    }catch(e){
-      console.warn('members load failed; fallback to myself', e);
-      state.members = [];
+      authMsg('ログイン情報を確認中です…');
+      state.session = session;
+      state.user = user;
+
+      authMsg('アカウント情報を反映中です…');
+      const result = await withTimeout(ensureProfileAndTeam(state.user), 20000, 'アカウント反映');
+      state.profile = result.profile;
+      state.team = result.team;
+
+      authMsg('メンバー情報を読み込み中です…');
+      try{
+        state.members = await withTimeout(loadMembers(state.team.id), 15000, 'メンバー読み込み');
+      }catch(e){
+        console.warn('members load failed; fallback to myself', e);
+        state.members = [];
+      }
+      normalizeCurrentMember();
+      state.selectedMemberId = state.user.id;
+
+      authMsg('棚情報を読み込み中です…');
+      try{
+        const treeResult = await withTimeout(loadTree(state.team.id, state.user.id), 15000, '棚情報読み込み');
+        state.treeRowId = treeResult.id; state.tree = treeResult.tree;
+      }catch(e){
+        console.warn('tree load failed; use default tree', e);
+        state.treeRowId = null; state.tree = DEFAULT_TREE;
+      }
+
+      authMsg('タスクを読み込み中です…');
+      try{
+        state.tasks = await withTimeout(loadTasks(state.team.id), 20000, 'タスク読み込み');
+      }catch(e){
+        console.warn('tasks load failed; start empty', e);
+        state.tasks = [];
+        authMsg('ログインはできましたが、タスク読み込みでエラーが出ました。SupabaseのRLS/SQL設定を確認してください。', true);
+      }
+
+      safeGet('authView')?.classList.add('hidden');
+      safeGet('appView')?.classList.remove('hidden');
+      safeGet('mainNav')?.classList.remove('hidden');
+      safeGet('logoutBtn')?.classList.remove('hidden');
+      const pill = safeGet('loginPill');
+      if(pill) pill.textContent = `${state.profile?.display_emoji || '🌙'} ${state.profile?.display_name || '自分'}`;
+      renderCurrent();
+    }finally{
+      bootingUserId = null;
+      bootPromise = null;
     }
-    normalizeCurrentMember();
-    // ログイン直後は必ず本人のタブに戻す。
-    // 前の操作で他メンバーを見ていた状態が残ると、自分の予定が消えたように見えるため。
-    state.selectedMemberId = state.user.id;
-    try{
-      const treeResult = await loadTree(state.team.id, state.user.id);
-      state.treeRowId = treeResult.id; state.tree = treeResult.tree;
-    }catch(e){
-      console.warn('tree load failed; use default tree', e);
-      state.treeRowId = null; state.tree = DEFAULT_TREE;
-    }
-    try{
-      state.tasks = await loadTasks(state.team.id);
-    }catch(e){
-      console.warn('tasks load failed; start empty', e);
-      state.tasks = [];
-      authMsg('ログインはできましたが、タスク読み込みでエラーが出ました。SupabaseのRLS/SQL設定を確認してください。', true);
-    }
-    safeGet('authView')?.classList.add('hidden');
-    safeGet('appView')?.classList.remove('hidden');
-    safeGet('mainNav')?.classList.remove('hidden');
-    safeGet('logoutBtn')?.classList.remove('hidden');
-    const pill = safeGet('loginPill');
-    if(pill) pill.textContent = `${state.profile?.display_emoji || '🌙'} ${state.profile?.display_name || '自分'}`;
-    renderCurrent();
-  }finally{
-    bootingUserId = null;
-  }
+  })();
+  return bootPromise;
 }
+
 function showAuth(){
   state.session=null; state.user=null; state.profile=null; state.team=null; state.members=[]; state.selectedMemberId=null;
   safeGet('authView')?.classList.remove('hidden');
@@ -163,7 +192,7 @@ function bindAuthEvents(){
   safeOn('signinBtn','click', async()=>{
     try{
       authMsg('ログイン中です…');
-      const session = await signIn(safeGet('authEmail')?.value || '', safeGet('authPassword')?.value || '');
+      const session = await withTimeout(signIn(safeGet('authEmail')?.value || '', safeGet('authPassword')?.value || ''), 20000, 'ログイン');
       await bootAuthed(session);
     }catch(e){
       console.error(e);
@@ -173,7 +202,7 @@ function bindAuthEvents(){
   safeOn('signupBtn','click', async()=>{
     try{
       authMsg('登録中です…');
-      const session = await signUp(safeGet('authEmail')?.value || '', safeGet('authPassword')?.value || '');
+      const session = await withTimeout(signUp(safeGet('authEmail')?.value || '', safeGet('authPassword')?.value || ''), 20000, '新規登録');
       authMsg('登録しました。メール確認が必要な設定の場合は、メールを確認してください。');
       if(session) await bootAuthed(session);
     }catch(e){
@@ -222,10 +251,17 @@ async function init(){
     return;
   }
   initFeatureEvents();
-  supabase.auth.onAuthStateChange(async(event, session)=>{
+  supabase.auth.onAuthStateChange((event, session)=>{
+    // SupabaseのAuthイベント内で直接awaitつきのDB操作を行うと、環境によって
+    // ログイン後に固まることがあるため、必ず次のtickへ逃がします。
     if(event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED'){
-      if(session?.user?.id && !bootingUserId){
-        try{ await bootAuthed(session); }catch(e){ console.error(e); authMsg(e.message || 'アカウント反映でエラーが出ました', true); }
+      if(session?.user?.id){
+        setTimeout(()=>{
+          bootAuthed(session).catch(e=>{
+            console.error(e);
+            authMsg(e.message || 'アカウント反映でエラーが出ました', true);
+          });
+        }, 0);
       }
     }
     if(event === 'SIGNED_OUT') showAuth();
