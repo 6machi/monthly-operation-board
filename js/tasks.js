@@ -1,4 +1,4 @@
-import { supabase } from './supabase-client.js?v=103';
+import { supabase } from './supabase-client.js?v=104';
 
 export async function loadTasks(teamId){
   const { data, error } = await supabase

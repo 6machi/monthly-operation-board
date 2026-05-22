@@ -1,9 +1,9 @@
-import { $, esc, toISO, todayISO, diffDays, taskOccursOnDate, minutesFromTime, fullClock, fmtDate } from './utils.js?v=103';
-import { state } from './state.js?v=103';
-import { openDateOnBoard, openTaskEditor, arrangeTasksOnDate } from './board.js?v=103';
-import { createTask, deleteTask, updateTask } from './tasks.js?v=103';
-import { saveTree } from './setup.js?v=103';
-import { refreshAll } from './app.js?v=103';
+import { $, esc, toISO, todayISO, diffDays, taskOccursOnDate, minutesFromTime, fullClock, fmtDate } from './utils.js?v=104';
+import { state } from './state.js?v=104';
+import { openDateOnBoard, openTaskEditor, arrangeTasksOnDate } from './board.js?v=104';
+import { createTask, deleteTask, updateTask } from './tasks.js?v=104';
+import { saveTree } from './setup.js?v=104';
+import { refreshAll } from './app.js?v=104';
 
 const DAY_MINUTES = 24 * 60;
 let selectedCalendarDate = todayISO();
@@ -345,7 +345,7 @@ function ganttGroupName(t){
 function ganttTaskName(t){
   return splitTaskBaseTitle(t?.title || '未分類タスク');
 }
-function firstUsefulMemoLine(t){
+function firstUsefulMemoLineFromTask(t){
   return String(t?.memo || '')
     .split('\n')
     .map(x=>x.trim())
@@ -353,13 +353,13 @@ function firstUsefulMemoLine(t){
 }
 function ganttDetailTitle(t){
   const title = splitTaskBaseTitle(t?.title || '無題のタスク');
-  const memoLine = firstUsefulMemoLine(t);
+  const memoLine = firstUsefulMemoLineFromTask(t);
   return memoLine || title || '無題のタスク';
 }
 function taskDisplayTitleForToday(t){
   if(isUnavailableTask(t)) return t.memo || t.title || '稼働不可';
   const title = splitTaskBaseTitle(t?.title || '無題のタスク');
-  const memoLine = firstUsefulMemoLine(t);
+  const memoLine = firstUsefulMemoLineFromTask(t);
   const groupName = String(t?.project || '').trim();
   if(isGanttSpanTask(t)) return memoLine || title || '無題のタスク';
   if(memoLine && (title === groupName || title === '新規作業' || title === '無題のタスク')) return memoLine;
@@ -518,7 +518,7 @@ function cellTaskLabel(t, baseTitle, grouped=false){
   return title;
 }
 
-function firstUsefulMemoLine(memo){
+function firstUsefulMemoLineFromMemo(memo){
   return String(memo || '')
     .split('\n')
     .map(x=>x.trim())
@@ -1994,7 +1994,7 @@ export function initCalendarEvents(){
   $('icsSelectAllBtn')?.addEventListener('click',()=>document.querySelectorAll('[data-ics-index]').forEach(c=>c.checked=true));
   $('icsClearAllBtn')?.addEventListener('click',()=>document.querySelectorAll('[data-ics-index]').forEach(c=>c.checked=false));
   $('icsImportBtn')?.addEventListener('click', importSelectedIcs);
-  $('openProfileFromCalendar')?.addEventListener('click',()=>{ import('./app.js?v=103').then(m=>m.showView('profile')); });
+  $('openProfileFromCalendar')?.addEventListener('click',()=>{ import('./app.js?v=104').then(m=>m.showView('profile')); });
   $('unavailableAllDay')?.addEventListener('change',()=>{
     const allDay = $('unavailableAllDay').checked;
     $('unavailableStart').disabled = allDay;

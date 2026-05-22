@@ -1,12 +1,12 @@
-import { isConfigured, supabase } from './supabase-client.js?v=103';
-import { getSession, signIn, signUp, signOut, resetAuthSession, ensureProfileAndTeam, loadMembers } from './auth.js?v=103';
-import { loadTasks } from './tasks.js?v=103';
-import { loadTree } from './setup.js?v=103';
-import { state } from './state.js?v=103';
-import { $, qsa, todayISO, nowTimeText, fmtDate, DEFAULT_TREE } from './utils.js?v=103';
-import { initBoardEvents, renderBoard } from './board.js?v=103';
-import { initCalendarEvents, renderCalendar } from './calendar.js?v=103';
-import { initSetupEvents, renderSetup, renderProfilePage } from './setup-view.js?v=103';
+import { isConfigured, supabase } from './supabase-client.js?v=104';
+import { getSession, signIn, signUp, signOut, resetAuthSession, ensureProfileAndTeam, loadMembers } from './auth.js?v=104';
+import { loadTasks } from './tasks.js?v=104';
+import { loadTree } from './setup.js?v=104';
+import { state } from './state.js?v=104';
+import { $, qsa, todayISO, nowTimeText, fmtDate, DEFAULT_TREE } from './utils.js?v=104';
+import { initBoardEvents, renderBoard } from './board.js?v=104';
+import { initCalendarEvents, renderCalendar } from './calendar.js?v=104';
+import { initSetupEvents, renderSetup, renderProfilePage } from './setup-view.js?v=104';
 
 let bootingUserId = null;
 function safeGet(id){ return document.getElementById(id); }
