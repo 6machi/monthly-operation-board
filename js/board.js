@@ -1,9 +1,9 @@
-import { $, esc, todayISO, addDays, fmtDate, diffDays, relativeFrom, taskOccursOnDate, occurrenceLabel, fullClock, minutesFromTime } from './utils.js?v=99';
-import { state } from './state.js?v=99';
-import { createTask, markCarryover, returnToSchedule, updateTask, deleteTask } from './tasks.js?v=99';
-import { refreshAll, showView } from './app.js?v=99';
-import { isUnavailableTask, isUnavailableForMember, unavailableBlocksForMember } from './calendar.js?v=99';
-import { updateMyProfile, loadMembers } from './auth.js?v=99';
+import { $, esc, todayISO, addDays, fmtDate, diffDays, relativeFrom, taskOccursOnDate, occurrenceLabel, fullClock, minutesFromTime } from './utils.js?v=100';
+import { state } from './state.js?v=100';
+import { createTask, markCarryover, returnToSchedule, updateTask, deleteTask } from './tasks.js?v=100';
+import { refreshAll, showView } from './app.js?v=100';
+import { isUnavailableTask, isUnavailableForMember, unavailableBlocksForMember } from './calendar.js?v=100';
+import { updateMyProfile, loadMembers } from './auth.js?v=100';
 
 const SLOT_MINUTES = 10;
 const PX_PER_MINUTE = 1.15; // 10分刻み / 60分 = 約69px
@@ -585,6 +585,28 @@ function splitTaskInfo(t){
 }
 function isSplitTask(t){ return !!splitTaskInfo(t); }
 function isGanttSpanTask(t){ return t?.task_type === 'gantt_span' || String(t?.memo || '').includes('#gantt-span'); }
+
+function ganttDetailTitleForBoard(t){
+  const rawTitle = String(t?.title || '').trim();
+  const baseTitle = splitTaskInfo(t)?.base || rawTitle || '無題のタスク';
+  if(!isGanttSpanTask(t)) return baseTitle;
+  const memoLine = String(t?.memo || '')
+    .split('\n')
+    .map(x=>x.trim())
+    .find(x=>x && !x.startsWith('#') && !x.startsWith('納期から逆算：'));
+  return memoLine || baseTitle || '無題のタスク';
+}
+function taskContextLabelForBoard(t){
+  if(isUnavailableTask(t)) return '稼働不可';
+  const category = String(t?.category || '未分類').trim() || '未分類';
+  const group = String(t?.project || '').trim();
+  const taskName = String(splitTaskInfo(t)?.base || t?.title || '').trim();
+  if(isGanttSpanTask(t)){
+    return [category, group, taskName].filter(Boolean).join(' / ');
+  }
+  return [category, group].filter(Boolean).join(' / ');
+}
+
 function taskDueKey(t){
   const d = t?.due_date || t?.schedule_date || t?.carryover_date || monthEndIso(todayISO());
   return String(d || '9999-12-31');
@@ -962,8 +984,8 @@ function makeEventElement(t, index, baseMin, instanceDate=state.scheduleDate, ab
   el.style.height = `${Math.max(22, duration * PX_PER_MINUTE - 4)}px`;
   el.innerHTML = `
     <div class="eventMain">
-      <b>${esc(t.title)}</b>
-      <small>${instanceDate !== state.scheduleDate ? esc(fmtDate(instanceDate)) + ' ' : ''}${timeLabel(start)} - ${timeLabel(start + duration)} / ${Math.round(duration)}分 / ${esc(t.project || t.category || '')}</small>
+      <b>${esc(ganttDetailTitleForBoard(t))}</b>
+      <small>${instanceDate !== state.scheduleDate ? esc(fmtDate(instanceDate)) + ' ' : ''}${timeLabel(start)} - ${timeLabel(start + duration)} / ${Math.round(duration)}分 / ${esc(taskContextLabelForBoard(t))}</small>
     </div>
     <div class="eventMeta">${occurrenceLabel(t.occurrence)}</div>
     <div class="eventActions">

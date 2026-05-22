@@ -935,7 +935,7 @@ input[type="time"], input[type="date"]{min-height:42px}
 .ganttActions{align-items:center}
 @media (max-width:720px){.setupMainActions{justify-content:flex-start}}
 
-/* v99: 棚・ガンチャ入力をシンプル化 */
+/* v100: 棚・ガンチャ入力をシンプル化 */
 .shelfTopPanel{padding:14px 16px!important}
 .shelfTopPanel h2{margin:0 0 4px!important}
 .shelfLead{margin:0;font-size:12px}

@@ -1,9 +1,9 @@
-import { $, esc, toISO, todayISO, diffDays, taskOccursOnDate, minutesFromTime, fullClock, fmtDate } from './utils.js?v=99';
-import { state } from './state.js?v=99';
-import { openDateOnBoard, openTaskEditor, arrangeTasksOnDate } from './board.js?v=99';
-import { createTask, deleteTask, updateTask } from './tasks.js?v=99';
-import { saveTree } from './setup.js?v=99';
-import { refreshAll } from './app.js?v=99';
+import { $, esc, toISO, todayISO, diffDays, taskOccursOnDate, minutesFromTime, fullClock, fmtDate } from './utils.js?v=100';
+import { state } from './state.js?v=100';
+import { openDateOnBoard, openTaskEditor, arrangeTasksOnDate } from './board.js?v=100';
+import { createTask, deleteTask, updateTask } from './tasks.js?v=100';
+import { saveTree } from './setup.js?v=100';
+import { refreshAll } from './app.js?v=100';
 
 const DAY_MINUTES = 24 * 60;
 let selectedCalendarDate = todayISO();
@@ -1429,9 +1429,17 @@ function formatTaskTime(t){
   if(isUnavailableTask(t)) return formatUnavailable(t);
   return `${start}〜${fullClock(minutesFromTime(start)+duration)} / ${duration}分`;
 }
+function taskContextForSelectedDay(t){
+  if(isUnavailableTask(t)) return '稼働不可';
+  const category = String(t?.category || '未分類').trim() || '未分類';
+  const group = String(t?.project || '').trim();
+  const taskName = String(ganttTaskName(t) || '').trim();
+  if(isGanttSpanTask(t)) return [category, group, taskName].filter(Boolean).join(' / ');
+  return [category, group].filter(Boolean).join(' / ');
+}
 function taskTitleForList(t){
   if(isUnavailableTask(t)) return t.memo || t.title || '稼働不可';
-  return t.title || t.memo || '無題のタスク';
+  return isGanttSpanTask(t) ? ganttDetailTitle(t) : (t.title || t.memo || '無題のタスク');
 }
 function selectedDayItemsForMember(dateIso, mem){
   const normal = taskArray()
@@ -1463,7 +1471,7 @@ function renderSelectedDayTasks(){
             <article class="selectedDayCard ${type==='unavailable'?'unavailable':''} ${t.done?'done':''} ${t.owner_id===state.user?.id?'editable':''}" data-selected-task-id="${esc(t.id)}" style="--task-color:${esc(categoryColor(t.category))}" title="${t.owner_id===state.user?.id?'クリックして修正':'閲覧のみ'}">
               <span class="timeBadge">${esc(formatTaskTime(t))}</span>
               <b>${esc(taskTitleForList(t))}</b>
-              <small>${esc(t.category || '未分類')}${t.project ? ` / ${esc(t.project)}` : ''}${t.done ? ' / 完了' : ''}</small>
+              <small>${esc(taskContextForSelectedDay(t))}${t.done ? ' / 完了' : ''}</small>
               ${t.memo && !isUnavailableTask(t) ? `<p>${esc(t.memo)}</p>` : ''}
               ${t.owner_id===state.user?.id && !t.done && type!=='unavailable' ? `<div class="selectedDayActions"><button type="button" class="selectedDayDoneBtn" data-selected-done-id="${esc(t.id)}">✓ 完了</button><button type="button" class="selectedDayEditBtn" data-selected-edit-id="${esc(t.id)}">修正</button></div>` : ''}
             </article>`).join('')}
@@ -1910,7 +1918,7 @@ export function initCalendarEvents(){
   $('icsSelectAllBtn')?.addEventListener('click',()=>document.querySelectorAll('[data-ics-index]').forEach(c=>c.checked=true));
   $('icsClearAllBtn')?.addEventListener('click',()=>document.querySelectorAll('[data-ics-index]').forEach(c=>c.checked=false));
   $('icsImportBtn')?.addEventListener('click', importSelectedIcs);
-  $('openProfileFromCalendar')?.addEventListener('click',()=>{ import('./app.js?v=99').then(m=>m.showView('profile')); });
+  $('openProfileFromCalendar')?.addEventListener('click',()=>{ import('./app.js?v=100').then(m=>m.showView('profile')); });
   $('unavailableAllDay')?.addEventListener('change',()=>{
     const allDay = $('unavailableAllDay').checked;
     $('unavailableStart').disabled = allDay;
