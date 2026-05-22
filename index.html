@@ -132,16 +132,18 @@
         </section>
         <section class="panel ganttPanel" id="ganttPanel">
           <div class="ganttHead">
-            <h2>ガンチャ <button class="infoDot" type="button" data-info="今日以降の予定だけを表示します。左はカテゴリ・グループ・タスク名称、右のバーがガンチャで管理する詳細予定です。">i</button></h2>
-            <div class="actions ganttActions">
-              <button class="primary" id="ganttQuickAddBtn" type="button">ガンチャに予定を追加</button>
-              <button class="ghost" id="ganttAddCategoryBtn" type="button">＋カテゴリ</button>
-              <button class="ghost" id="ganttAddGroupBtn" type="button">＋グループ</button>
-              <button class="ghost" id="ganttAddTaskNameBtn" type="button">＋タスク名称</button>
-              <button class="primary" id="ganttAssignTodayBtn" type="button">今日のタイムラインに自動配置</button>
-              <button class="ghost" id="ganttCleanupEmptyRowsBtn" type="button">空行を一括整理</button>
-              <button class="ghost" id="ganttOpenTodayBtn" type="button">今日のタイムラインを見る</button>
-            </div>
+            <h2>ガンチャ</h2>
+            <details class="ganttTools">
+              <summary>操作</summary>
+              <div class="actions ganttActions">
+                <button class="ghost" id="ganttAddCategoryBtn" type="button">＋カテゴリ</button>
+                <button class="ghost" id="ganttAddGroupBtn" type="button">＋グループ</button>
+                <button class="ghost" id="ganttAddTaskNameBtn" type="button">＋タスク名称</button>
+                <button class="ghost" id="ganttCleanupEmptyRowsBtn" type="button">空行を一括整理</button>
+                <button class="primary" id="ganttAssignTodayBtn" type="button">今日のタイムラインに自動配置</button>
+                <button class="ghost" id="ganttOpenTodayBtn" type="button">今日のタイムラインを見る</button>
+              </div>
+            </details>
           </div>
           <div id="ganttMsg" class="notice hidden"></div>
           <div id="ganttBoard" class="ganttBoard"></div>
@@ -293,6 +295,6 @@
   </template>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script type="module" src="js/app.js?v=100"></script>
+  <script type="module" src="js/app.js?v=101"></script>
 </body>
 </html>

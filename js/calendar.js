@@ -820,13 +820,7 @@ async function createGanttCellTask({ date, category, groupName, taskName }){
   setTimeout(()=>{
     const bar = document.querySelector(`[data-gantt-task-id] [data-gantt-bar-title-edit][data-original="${detail}"]`);
     bar?.focus?.();
-    if(bar){
-      const range = document.createRange();
-      range.selectNodeContents(bar);
-      const sel = window.getSelection();
-      sel.removeAllRanges();
-      sel.addRange(range);
-    }
+    if(bar?.select) bar.select();
   }, 80);
 }
 function normalizeGanttDayPair(nextStartDay, nextEndDay){
@@ -919,29 +913,57 @@ async function refreshAllKeepGanttViewport(){
 }
 
 function bindInlineGanttEditing(board){
-  board.querySelectorAll('[data-gantt-row-name-edit]').forEach(input=>{
+  const bindOneLineTextCommit = (el, getValue, restoreValue, commitValue)=>{
+    let composing = false;
+    let committing = false;
     const commit = async()=>{
-      const next = input.value.trim();
-      if(!next || next === input.dataset.original) { input.value = input.dataset.original || input.value; return; }
-      await renameGanttRow(input.dataset.category || '未分類', input.dataset.group || '未分類グループ', input.dataset.original || '', next, input.dataset.owner || state.user?.id);
+      if(composing || committing) return;
+      const next = normGanttName(getValue());
+      const original = normGanttName(el.dataset.original || '');
+      if(!next){ restoreValue(el.dataset.original || '作業'); return; }
+      if(next === original) return;
+      committing = true;
+      try{
+        await commitValue(next);
+        el.dataset.original = next;
+      }finally{
+        committing = false;
+      }
     };
-    input.addEventListener('keydown', e=>{ e.stopPropagation(); if(e.key === 'Enter'){ e.preventDefault(); input.blur(); } });
-    input.addEventListener('blur', ()=>commit());
+    el.addEventListener('compositionstart', ()=>{ composing = true; });
+    el.addEventListener('compositionend', ()=>{ setTimeout(()=>{ composing = false; }, 0); });
+    el.addEventListener('click', e=>{ e.stopPropagation(); });
+    el.addEventListener('pointerdown', e=>{ e.stopPropagation(); });
+    el.addEventListener('keydown', e=>{
+      e.stopPropagation();
+      if(e.key === 'Enter'){
+        if(e.isComposing || composing) return;
+        e.preventDefault();
+        el.blur();
+      }
+    });
+    el.addEventListener('blur', ()=>commit());
+  };
+
+  board.querySelectorAll('[data-gantt-row-name-edit]').forEach(input=>{
+    bindOneLineTextCommit(
+      input,
+      ()=>input.value,
+      v=>{ input.value = v; },
+      next=>renameGanttRow(input.dataset.category || '未分類', input.dataset.group || '未分類グループ', input.dataset.original || '', next, input.dataset.owner || state.user?.id)
+    );
   });
   board.querySelectorAll('[data-gantt-row-delete]').forEach(btn=>btn.addEventListener('click', async e=>{
     e.preventDefault(); e.stopPropagation();
     await deleteEmptyGanttRow(btn.dataset.category || '未分類', btn.dataset.group || '未分類グループ', btn.dataset.taskName || '');
   }));
-  board.querySelectorAll('[data-gantt-bar-title-edit]').forEach(el=>{
-    const commit = async()=>{
-      const next = el.textContent.trim();
-      if(!next){ el.textContent = el.dataset.original || '作業'; return; }
-      if(next === el.dataset.original) return;
-      await renameGanttBarDetail(el.dataset.taskId, next);
-    };
-    el.addEventListener('click', e=>{ e.stopPropagation(); });
-    el.addEventListener('keydown', e=>{ e.stopPropagation(); if(e.key === 'Enter'){ e.preventDefault(); el.blur(); } });
-    el.addEventListener('blur', ()=>commit());
+  board.querySelectorAll('[data-gantt-bar-title-edit]').forEach(input=>{
+    bindOneLineTextCommit(
+      input,
+      ()=>input.value,
+      v=>{ input.value = v; },
+      next=>renameGanttBarDetail(input.dataset.taskId, next)
+    );
   });
   board.querySelectorAll('[data-gantt-bar-delete]').forEach(btn=>btn.addEventListener('click', async e=>{
     e.preventDefault(); e.stopPropagation();
@@ -952,42 +974,85 @@ function bindInlineGanttEditing(board){
 function bindGanttGroupReorder(board){
   let groupDrag = null;
   const clearHover = ()=>board.querySelectorAll('.ganttGroupReorderTarget').forEach(el=>el.classList.remove('ganttGroupReorderTarget'));
+  const groupHeaderFromElement = (el)=>el?.closest?.('[data-gantt-group-header]') || null;
+  const groupHeaderAtPoint = (x,y)=>{
+    const els = document.elementsFromPoint ? document.elementsFromPoint(x,y) : [];
+    for(const el of els){
+      const header = groupHeaderFromElement(el);
+      if(header) return header;
+    }
+    return null;
+  };
+  const headerData = (header)=>({
+    header,
+    category: header?.dataset.ganttCategory || '未分類',
+    groupName: header?.dataset.ganttGroup || '未分類グループ'
+  });
+  const canDropGroup = (drag, target)=>drag && target
+    && String(target.category) === String(drag.category)
+    && String(target.groupName) !== String(drag.groupName);
+
   board.querySelectorAll('[data-gantt-group-header]').forEach(header=>{
-    header.setAttribute('draggable','true');
-    header.addEventListener('dragstart', e=>{
-      if(e.target.closest('button, input, [contenteditable="true"], [data-gantt-task-id]')){ e.preventDefault(); return; }
+    header.setAttribute('draggable','false');
+    const handle = header.querySelector('.sheetGroupTitle') || header;
+    let pointer = null;
+
+    handle.addEventListener('pointerdown', e=>{
+      if(e.button !== 0) return;
+      if(e.target.closest('button, input, textarea, select, [contenteditable="true"], [data-gantt-task-id]')) return;
       suppressAccidentalGanttCellCreate(1200);
-      groupDrag = {
-        category: header.dataset.ganttCategory || '未分類',
-        groupName: header.dataset.ganttGroup || '未分類グループ'
+      pointer = {
+        ...headerData(header),
+        pointerId: e.pointerId,
+        x: e.clientX,
+        y: e.clientY,
+        active: false
       };
-      header.classList.add('ganttGroupDragging');
-      e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('text/plain', groupDrag.groupName);
+      handle.setPointerCapture?.(e.pointerId);
     });
-    header.addEventListener('dragend', ()=>{
+
+    handle.addEventListener('pointermove', e=>{
+      if(!pointer || pointer.pointerId !== e.pointerId) return;
+      const dist = Math.abs(e.clientX - pointer.x) + Math.abs(e.clientY - pointer.y);
+      if(!pointer.active && dist < 6) return;
+      if(!pointer.active){
+        pointer.active = true;
+        groupDrag = pointer;
+        header.classList.add('ganttGroupDragging');
+      }
+      const targetHeader = groupHeaderAtPoint(e.clientX, e.clientY);
+      const target = headerData(targetHeader);
+      clearHover();
+      if(canDropGroup(groupDrag, target)) targetHeader.classList.add('ganttGroupReorderTarget');
+      e.preventDefault();
+      e.stopPropagation();
+    });
+
+    handle.addEventListener('pointerup', async e=>{
+      if(!pointer || pointer.pointerId !== e.pointerId) return;
+      const wasActive = pointer.active;
+      const targetHeader = wasActive ? groupHeaderAtPoint(e.clientX, e.clientY) : null;
+      const target = headerData(targetHeader);
       header.classList.remove('ganttGroupDragging');
+      clearHover();
       groupDrag = null;
-      clearHover();
+      pointer = null;
+      handle.releasePointerCapture?.(e.pointerId);
+      if(wasActive){
+        e.preventDefault();
+        e.stopPropagation();
+        if(canDropGroup({category: header.dataset.ganttCategory || '未分類', groupName: header.dataset.ganttGroup || '未分類グループ'}, target)){
+          await reorderGanttGroups(header.dataset.ganttCategory || '未分類', header.dataset.ganttGroup || '未分類グループ', target.groupName);
+        }
+      }
     });
-    header.addEventListener('dragover', e=>{
-      if(!groupDrag) return;
-      const targetCategory = header.dataset.ganttCategory || '未分類';
-      const targetGroup = header.dataset.ganttGroup || '未分類グループ';
-      if(String(targetCategory)!==String(groupDrag.category) || String(targetGroup)===String(groupDrag.groupName)) return;
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
+
+    handle.addEventListener('pointercancel', e=>{
+      if(!pointer || pointer.pointerId !== e.pointerId) return;
+      header.classList.remove('ganttGroupDragging');
       clearHover();
-      header.classList.add('ganttGroupReorderTarget');
-    });
-    header.addEventListener('drop', async e=>{
-      if(!groupDrag) return;
-      const targetCategory = header.dataset.ganttCategory || '未分類';
-      const targetGroup = header.dataset.ganttGroup || '未分類グループ';
-      if(String(targetCategory)!==String(groupDrag.category)) return;
-      e.preventDefault();
-      clearHover();
-      await reorderGanttGroups(groupDrag.category, groupDrag.groupName, targetGroup);
+      groupDrag = null;
+      pointer = null;
     });
   });
 }
@@ -1344,7 +1409,7 @@ function renderGanttBoard(){
                         const endCol = Math.min(bar.span.endDay, last) - visibleFirstDay + 2;
                         return `<div class="detailGanttBar ${cls}" data-gantt-task-id="${esc(t.id)}" data-gantt-task-ids="${esc((bar.tasks || [t]).map(x=>x.id).filter(Boolean).join(','))}" data-start-day="${bar.span.startDay}" data-end-day="${bar.span.endDay}" title="${esc(title)}" style="grid-column:${startCol} / ${endCol};grid-row:${idx + 1}">
                           <span class="ganttResizeHandle left" data-gantt-resize="start" aria-hidden="true"></span>
-                          <span class="detailGanttBarTitle" data-gantt-bar-title-edit data-task-id="${esc(t.id)}" data-original="${esc(title)}" contenteditable="true" spellcheck="false">${esc(title)}</span>
+                          <input class="detailGanttBarTitle ganttBarTitleInput" data-gantt-bar-title-edit data-task-id="${esc(t.id)}" data-original="${esc(title)}" value="${esc(title)}" aria-label="ガンチャ上の詳細を直接編集" spellcheck="false">
                           ${meta || progress ? `<span class="detailGanttBarMeta">${esc([progress, meta].filter(Boolean).join(' / '))}</span>` : ''}
                           <button type="button" class="ganttBarDelete" data-gantt-bar-delete data-task-id="${esc(t.id)}" title="予定を削除">×</button>
                           <span class="ganttResizeHandle right" data-gantt-resize="end" aria-hidden="true"></span>

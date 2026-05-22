@@ -935,7 +935,7 @@ input[type="time"], input[type="date"]{min-height:42px}
 .ganttActions{align-items:center}
 @media (max-width:720px){.setupMainActions{justify-content:flex-start}}
 
-/* v100: 棚・ガンチャ入力をシンプル化 */
+/* v101: ガンチャ直接編集・線揃え */
 .shelfTopPanel{padding:14px 16px!important}
 .shelfTopPanel h2{margin:0 0 4px!important}
 .shelfLead{margin:0;font-size:12px}
@@ -956,3 +956,25 @@ input[type="time"], input[type="date"]{min-height:42px}
 .candidateRows{display:grid;gap:6px}.candidateRow{display:grid;grid-template-columns:1fr 28px;gap:6px;align-items:center}.candidateNameInput{border:1px solid #e6eaf0;background:#fff;border-radius:10px;padding:8px 10px;font-size:13px;font-weight:850;min-width:0}.candidateNameInput:hover,.candidateNameInput:focus{outline:none;border-color:rgba(93,156,236,.55);box-shadow:0 0 0 3px rgba(93,156,236,.08)}
 .candidateAddLine{display:grid;grid-template-columns:1fr auto;gap:6px;margin-top:8px}.candidateAddLine input{border:1px dashed #cbd5e1;background:#fff;border-radius:10px;padding:8px 10px;min-width:0}.compactEmpty{padding:8px;font-size:12px}.chipDelete{width:28px;height:28px;display:grid;place-items:center;border-radius:999px;padding:0;box-shadow:none;background:#fff;color:#98a2b3;border:1px solid #e6eaf0}.chipDelete:hover{background:#fee2e2;color:#b42318;border-color:#fecaca}
 @media(max-width:720px){.shelfEditHeader{grid-template-columns:1fr 70px}.shelfEditHeader .primary{grid-column:1/-1}.compactCategoryPicker .cat{min-width:140px}}
+
+/* v101: ガンチャをスプシ寄りに調整。左列の幅と区切り線を揃え、直接編集とグループ移動を安定化 */
+:root{--gantt-left:300px;--gantt-day-width:170px}
+.sheetHeader,.sheetTaskRow,.sheetGroupHeader{grid-template-columns:var(--gantt-left) max-content!important}
+.sheetTaskHead,.sheetCategoryTitle,.sheetTaskLabel,.detailGanttScroll .sheetTaskHead,.sheetGroupTitle{width:var(--gantt-left)!important;min-width:var(--gantt-left)!important;box-sizing:border-box}
+.sheetDates,.sheetCells,.sheetGroupCells,.ganttBarLayer{grid-template-columns:repeat(var(--days),var(--gantt-day-width))!important}
+.sheetDate,.sheetCell,.sheetGroupCell{width:var(--gantt-day-width);min-width:var(--gantt-day-width);box-sizing:border-box}
+.sheetCategoryTitle{position:sticky;overflow:visible}
+.sheetCategoryTitle::after{content:'';position:absolute;left:100%;top:-1px;width:calc(var(--days) * var(--gantt-day-width));height:calc(100% + 1px);background:#fff;border-top:1px solid #cbd5e1;border-bottom:1px solid #cbd5e1;pointer-events:none;z-index:0}
+.sheetTaskRow,.sheetGroupHeader{border-top-color:#1f2937}
+.sheetGroupCell,.sheetCell{border-right:1px solid #cbd5e1}
+.detailGanttCells{border-left:0}
+.ganttBarTitleInput{appearance:none;border:0;background:transparent;color:inherit;font:inherit;font-weight:950;min-width:0;width:100%;outline:none;border-radius:6px;padding:2px 4px;cursor:text;flex:1 1 auto}
+.ganttBarTitleInput:hover{background:rgba(255,255,255,.78)}
+.ganttBarTitleInput:focus{background:#fff;box-shadow:inset 0 0 0 2px rgba(93,156,236,.35)}
+.ganttTools{margin-left:auto;position:relative}
+.ganttTools>summary{list-style:none;cursor:pointer;border:1px solid var(--line);border-radius:999px;background:#fff;padding:7px 12px;font-size:12px;font-weight:950;color:#475467;box-shadow:0 2px 8px rgba(40,50,80,.06)}
+.ganttTools>summary::-webkit-details-marker{display:none}
+.ganttTools[open]>.ganttActions{position:absolute;right:0;top:calc(100% + 8px);z-index:30;width:min(520px,calc(100vw - 28px));background:#fff;border:1px solid var(--line);border-radius:16px;box-shadow:0 14px 30px rgba(40,50,80,.16);padding:10px;justify-content:flex-start}
+.sheetGroupTitle{touch-action:none;cursor:grab}
+.sheetGroupHeader.ganttGroupDragging .sheetGroupTitle{cursor:grabbing;background:#f8fafc!important;box-shadow:inset 0 0 0 2px rgba(93,156,236,.35)}
+@media(max-width:700px){:root{--gantt-left:220px;--gantt-day-width:135px}.sheetHeader,.sheetTaskRow,.sheetGroupHeader{grid-template-columns:var(--gantt-left) max-content!important}.sheetTaskHead,.sheetCategoryTitle,.sheetTaskLabel,.detailGanttScroll .sheetTaskHead,.sheetGroupTitle{width:var(--gantt-left)!important;min-width:var(--gantt-left)!important}.sheetDates,.sheetCells,.sheetGroupCells,.ganttBarLayer{grid-template-columns:repeat(var(--days),var(--gantt-day-width))!important}.sheetDate,.sheetCell,.sheetGroupCell{width:var(--gantt-day-width);min-width:var(--gantt-day-width)}}

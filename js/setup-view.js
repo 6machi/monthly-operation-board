@@ -352,11 +352,68 @@ function renderCategoryEditor(){
       await persist();
     });
   });
+  // HTML5ドラッグが入力欄とぶつかることがあるため、グループ見出しはポインター操作でも並べ替えできるようにする。
+  box.querySelectorAll('[data-project-box]').forEach(projectBox=>{
+    const head = projectBox.querySelector('.projectCandidateHead');
+    if(!head) return;
+    let pointer = null;
+    const boxAtPoint = (x,y)=>{
+      const els = document.elementsFromPoint ? document.elementsFromPoint(x,y) : [];
+      for(const el of els){
+        const found = el.closest?.('[data-project-box]');
+        if(found && box.contains(found)) return found;
+      }
+      return null;
+    };
+    head.addEventListener('pointerdown', e=>{
+      if(!editable() || e.button !== 0) return;
+      if(e.target.closest('button, input, textarea, select')) return;
+      pointer = { id:e.pointerId, from:Number(projectBox.dataset.projectBox), x:e.clientX, y:e.clientY, active:false };
+      head.setPointerCapture?.(e.pointerId);
+    });
+    head.addEventListener('pointermove', e=>{
+      if(!pointer || pointer.id !== e.pointerId) return;
+      const dist = Math.abs(e.clientX-pointer.x) + Math.abs(e.clientY-pointer.y);
+      if(!pointer.active && dist < 6) return;
+      pointer.active = true;
+      projectBox.classList.add('dragging');
+      box.querySelectorAll('.dragover').forEach(el=>el.classList.remove('dragover'));
+      const target = boxAtPoint(e.clientX,e.clientY);
+      if(target && Number(target.dataset.projectBox) !== pointer.from) target.classList.add('dragover');
+      e.preventDefault();
+    });
+    head.addEventListener('pointerup', async e=>{
+      if(!pointer || pointer.id !== e.pointerId) return;
+      const from = pointer.from;
+      const active = pointer.active;
+      const target = active ? boxAtPoint(e.clientX,e.clientY) : null;
+      projectBox.classList.remove('dragging');
+      box.querySelectorAll('.dragover').forEach(el=>el.classList.remove('dragover'));
+      pointer = null;
+      if(active && target){
+        const to = Number(target.dataset.projectBox);
+        if(!Number.isNaN(from) && !Number.isNaN(to) && from !== to){
+          c.projects = Array.isArray(c.projects) ? c.projects : [];
+          const [item] = c.projects.splice(from, 1);
+          c.projects.splice(to, 0, item);
+          await persist();
+        }
+      }
+    });
+    head.addEventListener('pointercancel', ()=>{
+      pointer = null;
+      projectBox.classList.remove('dragging');
+      box.querySelectorAll('.dragover').forEach(el=>el.classList.remove('dragover'));
+    });
+  });
+
   box.querySelectorAll('[data-project-name-edit]').forEach(input=>{
     let composing = false;
     input.addEventListener('compositionstart', ()=>{ composing = true; });
-    input.addEventListener('compositionend', ()=>{ composing = false; });
+    input.addEventListener('compositionend', ()=>{ setTimeout(()=>{ composing = false; }, 0); });
+    let committing = false;
     const commit = async()=>{
+      if(composing || committing) return;
       const pi = Number(input.dataset.projectNameEdit);
       const p = c.projects?.[pi];
       if(!p) return;
@@ -364,10 +421,12 @@ function renderCategoryEditor(){
       const next = String(input.value || '').trim();
       if(!next){ input.value = oldName; return; }
       if(next === oldName) return;
-      await renameProjectEverywhere(c.name, pi, next);
+      committing = true;
+      try{ await renameProjectEverywhere(c.name, pi, next); }
+      finally{ committing = false; }
     };
     input.addEventListener('keydown', e=>{
-      if(e.key === 'Enter' && !composing){ e.preventDefault(); input.blur(); }
+      if(e.key === 'Enter' && !composing && !e.isComposing){ e.preventDefault(); input.blur(); }
       if(e.key === 'Escape'){ e.preventDefault(); input.value = input.dataset.original || input.value; input.blur(); }
     });
     input.addEventListener('blur', commit);
@@ -378,8 +437,10 @@ function renderCategoryEditor(){
   box.querySelectorAll('[data-candidate-name-edit]').forEach(input=>{
     let composing = false;
     input.addEventListener('compositionstart', ()=>{ composing = true; });
-    input.addEventListener('compositionend', ()=>{ composing = false; });
+    input.addEventListener('compositionend', ()=>{ setTimeout(()=>{ composing = false; }, 0); });
+    let committing = false;
     const commit = async()=>{
+      if(composing || committing) return;
       const [pi,ci] = String(input.dataset.candidateNameEdit).split(':').map(Number);
       const p = c.projects?.[pi];
       const oldName = String(input.dataset.original || p?.candidates?.[ci] || '').trim();
@@ -387,12 +448,15 @@ function renderCategoryEditor(){
       if(!p || !oldName) return;
       if(!next){ input.value = oldName; return; }
       if(next === oldName) return;
-      p.candidates[ci] = next;
-      p.candidates = uniq(p.candidates);
-      await persist();
+      committing = true;
+      try{
+        p.candidates[ci] = next;
+        p.candidates = uniq(p.candidates);
+        await persist();
+      }finally{ committing = false; }
     };
     input.addEventListener('keydown', e=>{
-      if(e.key === 'Enter' && !composing){ e.preventDefault(); input.blur(); }
+      if(e.key === 'Enter' && !composing && !e.isComposing){ e.preventDefault(); input.blur(); }
       if(e.key === 'Escape'){ e.preventDefault(); input.value = input.dataset.original || input.value; input.blur(); }
     });
     input.addEventListener('blur', commit);
