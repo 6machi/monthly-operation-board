@@ -1,9 +1,9 @@
-import { $, esc, toISO, todayISO, diffDays, taskOccursOnDate, minutesFromTime, fullClock, fmtDate } from './utils.js?v=95';
-import { state } from './state.js?v=95';
-import { openDateOnBoard, openTaskEditor, arrangeTasksOnDate } from './board.js?v=95';
-import { createTask, deleteTask, updateTask } from './tasks.js?v=95';
-import { saveTree } from './setup.js?v=95';
-import { refreshAll } from './app.js?v=95';
+import { $, esc, toISO, todayISO, diffDays, taskOccursOnDate, minutesFromTime, fullClock, fmtDate } from './utils.js?v=96';
+import { state } from './state.js?v=96';
+import { openDateOnBoard, openTaskEditor, arrangeTasksOnDate } from './board.js?v=96';
+import { createTask, deleteTask, updateTask } from './tasks.js?v=96';
+import { saveTree } from './setup.js?v=96';
+import { refreshAll } from './app.js?v=96';
 
 const DAY_MINUTES = 24 * 60;
 let selectedCalendarDate = todayISO();
@@ -291,12 +291,18 @@ function categorySortIndex(name){
 }
 function projectSortIndex(category, project){
   const cat = (state.tree || []).find(c=>c?.name===category);
-  const idx = (cat?.projects || []).findIndex(p=>p?.name===project);
+  const order = Array.isArray(cat?.ganttGroupOrder) ? cat.ganttGroupOrder.map(normGanttName) : [];
+  const byOrder = order.indexOf(normGanttName(project));
+  if(byOrder >= 0) return byOrder;
+  const idx = (cat?.projects || []).findIndex(p=>normGanttName(p?.name)===normGanttName(project));
   return idx < 0 ? 9999 : idx;
 }
 function taskNameSortIndex(category, groupName, taskName){
   const cat = (state.tree || []).find(c=>c?.name===category);
-  const project = (cat?.projects || []).find(p=>p?.name===groupName);
+  const project = (cat?.projects || []).find(p=>normGanttName(p?.name)===normGanttName(groupName));
+  const rowOrder = Array.isArray(project?.ganttRowOrder) ? project.ganttRowOrder.map(normGanttName) : [];
+  const byOrder = rowOrder.indexOf(normGanttName(taskName));
+  if(byOrder >= 0) return byOrder;
   const idx = (project?.candidates || []).findIndex(x=>normGanttName(x)===normGanttName(taskName));
   return idx < 0 ? 9999 : idx;
 }
@@ -549,10 +555,12 @@ function normalizeTreeForGantt(){
   state.tree = (Array.isArray(state.tree) ? state.tree : []).map(cat=>({
     ...cat,
     name: cat?.name || '未分類',
+    ganttGroupOrder: Array.isArray(cat?.ganttGroupOrder) ? cat.ganttGroupOrder.map(normGanttName).filter(Boolean) : [],
     projects: (cat?.projects || []).map(project=>({
       ...project,
       name: project?.name || '未分類グループ',
-      candidates: Array.isArray(project?.candidates) ? project.candidates : []
+      candidates: Array.isArray(project?.candidates) ? project.candidates : [],
+      ganttRowOrder: Array.isArray(project?.ganttRowOrder) ? project.ganttRowOrder.map(normGanttName).filter(Boolean) : []
     }))
   }));
 }
@@ -588,6 +596,38 @@ async function renameGanttRow(category, groupName, oldTaskName, nextTaskName, ow
   }
   await refreshAllKeepGanttViewport();
 }
+
+async function cleanupVisibleEmptyGanttRows(){
+  normalizeTreeForGantt();
+  const [y,m] = String(state.calendarMonth || todayISO().slice(0,7)).split('-').map(Number);
+  const days = visibleGanttDays(y, m);
+  const first = days[0] || 1;
+  const last = days[days.length - 1] || new Date(y, m, 0).getDate();
+  const rows = ganttTaskGroups().filter(row=>row.fromTree);
+  let changed = false;
+  rows.forEach(row=>{
+    const visibleBars = (row.bars || []).filter(bar=>bar.span.endDay >= first && bar.span.startDay <= last);
+    if(visibleBars.length) return;
+    const catName = normGanttName(row.category || '未分類');
+    const grpName = normGanttName(row.groupName || '未分類グループ');
+    const rowName = normGanttName(row.taskName || row.rowName || '');
+    if(!rowName) return;
+    hideGanttRowLocally(catName, grpName, rowName);
+    const cat = state.tree.find(c=>normGanttName(c.name) === catName);
+    const project = cat?.projects?.find(p=>normGanttName(p.name) === grpName);
+    if(project && Array.isArray(project.candidates)){
+      const before = project.candidates.length;
+      project.candidates = project.candidates.filter(x=>normGanttName(x) !== rowName);
+      if(project.candidates.length !== before) changed = true;
+    }
+  });
+  if(changed){
+    try{ await persistGanttTree(); }catch(e){ console.warn('空行整理の保存に失敗しました', e); }
+  }
+  await refreshAllKeepGanttViewport();
+  showGanttMsg('空のタスク名称行を整理しました。予定バー本体は削除していません。');
+}
+
 async function deleteEmptyGanttRow(category, groupName, taskName){
   const catName = normGanttName(category || '未分類');
   const grpName = normGanttName(groupName || '未分類グループ');
@@ -627,58 +667,62 @@ async function deleteEmptyGanttRow(category, groupName, taskName){
   await refreshAllKeepGanttViewport();
 }
 async function reorderGanttTaskRows(category, groupName, draggedTaskName, targetTaskName){
-  const dragged = String(draggedTaskName || '').trim();
-  const target = String(targetTaskName || '').trim();
+  const dragged = normGanttName(draggedTaskName || '');
+  const target = normGanttName(targetTaskName || '');
   if(!dragged || !target || dragged === target) return;
   normalizeTreeForGantt();
-  const cat = state.tree.find(c=>c.name === category);
-  const project = cat?.projects?.find(p=>p.name === groupName);
-  if(!project) return;
-  const allNames = ganttTaskGroups()
-    .filter(row=>String(row.category||'未分類')===String(category||'未分類') && String(row.groupName||'未分類グループ')===String(groupName||'未分類グループ'))
-    .map(row=>String(row.taskName||row.rowName||'').trim())
+  const catName = String(category || '未分類');
+  const grpName = String(groupName || '未分類グループ');
+  let cat = state.tree.find(c=>String(c.name || '未分類') === catName);
+  if(!cat){ cat = { name:catName, memo:'', color:'#9aa4b6', projects:[] }; state.tree.push(cat); }
+  cat.projects = Array.isArray(cat.projects) ? cat.projects : [];
+  let project = cat.projects.find(p=>normGanttName(p?.name) === normGanttName(grpName));
+  if(!project){ project = { name:grpName, candidates:[], ganttRowOrder:[] }; cat.projects.push(project); }
+
+  // 並べ替えのためだけに候補タスクを増やさない。
+  // 表示中の行順は専用の ganttRowOrder に保存し、candidates は追加しない。
+  const visibleNames = ganttTaskGroups()
+    .filter(row=>String(row.category||'未分類')===catName && String(row.groupName||'未分類グループ')===grpName)
+    .map(row=>normGanttName(row.taskName||row.rowName||''))
     .filter(Boolean);
-  const existing = Array.isArray(project.candidates) ? project.candidates.map(x=>String(x).trim()).filter(Boolean) : [];
+  const currentOrder = Array.isArray(project.ganttRowOrder) ? project.ganttRowOrder.map(normGanttName).filter(Boolean) : [];
   let ordered = [];
-  [...existing, ...allNames].forEach(name=>{ if(name && !ordered.includes(name)) ordered.push(name); });
+  [...currentOrder, ...visibleNames, dragged, target].forEach(name=>{ if(name && !ordered.includes(name)) ordered.push(name); });
   ordered = ordered.filter(name=>name !== dragged);
   const targetIndex = ordered.indexOf(target);
   if(targetIndex < 0) ordered.push(dragged);
   else ordered.splice(targetIndex, 0, dragged);
-  project.candidates = ordered;
+  project.ganttRowOrder = ordered;
   await persistGanttTree();
   await refreshAllKeepGanttViewport();
 }
 
 
 async function reorderGanttGroups(category, draggedGroupName, targetGroupName){
-  const dragged = String(draggedGroupName || '').trim();
-  const target = String(targetGroupName || '').trim();
+  const dragged = normGanttName(draggedGroupName || '');
+  const target = normGanttName(targetGroupName || '');
   if(!dragged || !target || dragged === target) return;
   normalizeTreeForGantt();
   const catName = String(category || '未分類');
   let cat = state.tree.find(c=>String(c.name || '未分類') === catName);
-  if(!cat){
-    cat = { name:catName, memo:'', color:'#9aa4b6', projects:[] };
-    state.tree.push(cat);
-  }
+  if(!cat){ cat = { name:catName, memo:'', color:'#9aa4b6', projects:[] }; state.tree.push(cat); }
   cat.projects = Array.isArray(cat.projects) ? cat.projects : [];
-  const allNames = ganttTaskGroups()
+
+  // グループ移動でも、実タスク由来のグループを勝手に projects へ量産しない。
+  // 並び順だけを ganttGroupOrder に保存する。
+  const visibleGroups = ganttTaskGroups()
     .filter(row=>String(row.category || '未分類') === catName)
-    .map(row=>String(row.groupName || '未分類グループ').trim())
+    .map(row=>normGanttName(row.groupName || '未分類グループ'))
     .filter(Boolean);
-  const existing = cat.projects.map(p=>String(p?.name || '').trim()).filter(Boolean);
+  const currentOrder = Array.isArray(cat.ganttGroupOrder) ? cat.ganttGroupOrder.map(normGanttName).filter(Boolean) : [];
   let ordered = [];
-  [...existing, ...allNames, dragged, target].forEach(name=>{ if(name && !ordered.includes(name)) ordered.push(name); });
+  [...currentOrder, ...cat.projects.map(p=>normGanttName(p?.name)).filter(Boolean), ...visibleGroups, dragged, target]
+    .forEach(name=>{ if(name && !ordered.includes(name)) ordered.push(name); });
   ordered = ordered.filter(name=>name !== dragged);
   const targetIndex = ordered.indexOf(target);
   if(targetIndex < 0) ordered.push(dragged);
   else ordered.splice(targetIndex, 0, dragged);
-  const projectByName = new Map(cat.projects.map(p=>[String(p?.name || '').trim(), p]));
-  cat.projects = ordered.map(name=>{
-    const old = projectByName.get(name);
-    return old ? { ...old, name } : { name, candidates:[] };
-  });
+  cat.ganttGroupOrder = ordered;
   await persistGanttTree();
   await refreshAllKeepGanttViewport();
 }
@@ -862,6 +906,7 @@ function bindGanttGroupReorder(board){
     header.setAttribute('draggable','true');
     header.addEventListener('dragstart', e=>{
       if(e.target.closest('button, input, [contenteditable="true"], [data-gantt-task-id]')){ e.preventDefault(); return; }
+      suppressAccidentalGanttCellCreate(1200);
       groupDrag = {
         category: header.dataset.ganttCategory || '未分類',
         groupName: header.dataset.ganttGroup || '未分類グループ'
@@ -901,9 +946,12 @@ function bindGanttRowReorder(board){
   let rowDrag = null;
   const clearHover = ()=>board.querySelectorAll('.ganttRowReorderTarget').forEach(el=>el.classList.remove('ganttRowReorderTarget'));
   board.querySelectorAll('[data-gantt-row-target]').forEach(row=>{
-    row.setAttribute('draggable','true');
-    row.addEventListener('dragstart', e=>{
+    row.setAttribute('draggable','false');
+    const rowHandle = row.querySelector('.rowOnlyLabel') || row;
+    rowHandle.setAttribute('draggable','true');
+    rowHandle.addEventListener('dragstart', e=>{
       if(e.target.closest('[data-gantt-task-id], input, button, [contenteditable="true"]')){ e.preventDefault(); return; }
+      suppressAccidentalGanttCellCreate(1200);
       rowDrag = {
         category: row.dataset.ganttCategory || '未分類',
         groupName: row.dataset.ganttGroup || '未分類グループ',
@@ -913,7 +961,7 @@ function bindGanttRowReorder(board){
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('text/plain', rowDrag.taskName);
     });
-    row.addEventListener('dragend', ()=>{
+    rowHandle.addEventListener('dragend', ()=>{
       row.classList.remove('ganttRowDragging');
       rowDrag = null;
       clearHover();
@@ -963,6 +1011,7 @@ function bindGanttDrag(board, visibleFirstDay, lastDay){
   board.querySelectorAll('.detailGanttBar').forEach(bar=>{
     bar.addEventListener('pointerdown', e=>{
       if(e.target.closest('[data-gantt-bar-title-edit], [data-gantt-bar-delete]')) return;
+      suppressAccidentalGanttCellCreate(1200);
       const handle = e.target.closest('[data-gantt-resize]');
       const originRow = rowDataFromElement(bar);
       drag = {
@@ -1018,7 +1067,10 @@ function bindGanttDrag(board, visibleFirstDay, lastDay){
       bar.classList.remove('dragging');
       clearDropRow();
       drag = null;
-      if(movedDate || movedRow) await updateGanttBarPlacement(taskIds, ns, ne, movedRow ? targetRow : null);
+      if(movedDate || movedRow){
+        suppressAccidentalGanttCellCreate(1200);
+        await updateGanttBarPlacement(taskIds, ns, ne, movedRow ? targetRow : null);
+      }
     });
     bar.addEventListener('pointercancel', ()=>{
       if(drag?.el === bar){
@@ -1143,6 +1195,14 @@ function openGanttQuickEditor({ task=null, date=null, category='', groupName='',
   modal.classList.remove('hidden');
   setTimeout(()=>$('ganttQuickDetail')?.focus(), 0);
 }
+let suppressNextGanttCellCreateUntil = 0;
+function suppressAccidentalGanttCellCreate(ms=600){
+  suppressNextGanttCellCreateUntil = Date.now() + ms;
+}
+function canCreateGanttCellFromClick(){
+  return Date.now() > suppressNextGanttCellCreateUntil;
+}
+
 function renderGanttBoard(){
   const board = $('ganttBoard');
   if(!board) return;
@@ -1255,6 +1315,7 @@ function renderGanttBoard(){
     e.stopPropagation();
     const date = btn.dataset.ganttDate;
     if(btn.classList.contains('detailGanttDay')){
+      if(!canCreateGanttCellFromClick()) return;
       createGanttCellTask({
         date,
         category: btn.dataset.ganttCategory || '',
@@ -1748,13 +1809,14 @@ export function initCalendarEvents(){
   $('calendarThisMonth').addEventListener('click',()=>{ state.calendarMonth = new Date().toISOString().slice(0,7); renderCalendar(); });
   $('ganttQuickAddBtn')?.addEventListener('click',()=>openGanttQuickEditor({date:todayISO()}));
   $('ganttAssignTodayBtn')?.addEventListener('click', assignGanttToToday);
+  $('ganttCleanupEmptyRowsBtn')?.addEventListener('click', cleanupVisibleEmptyGanttRows);
   $('ganttOpenTodayBtn')?.addEventListener('click',()=>openDateOnBoard(todayISO()));
   $('icsParseBtn')?.addEventListener('click', loadIcsFile);
   $('icsFileInput')?.addEventListener('change', loadIcsFile);
   $('icsSelectAllBtn')?.addEventListener('click',()=>document.querySelectorAll('[data-ics-index]').forEach(c=>c.checked=true));
   $('icsClearAllBtn')?.addEventListener('click',()=>document.querySelectorAll('[data-ics-index]').forEach(c=>c.checked=false));
   $('icsImportBtn')?.addEventListener('click', importSelectedIcs);
-  $('openProfileFromCalendar')?.addEventListener('click',()=>{ import('./app.js?v=95').then(m=>m.showView('profile')); });
+  $('openProfileFromCalendar')?.addEventListener('click',()=>{ import('./app.js?v=96').then(m=>m.showView('profile')); });
   $('unavailableAllDay')?.addEventListener('change',()=>{
     const allDay = $('unavailableAllDay').checked;
     $('unavailableStart').disabled = allDay;

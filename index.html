@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>タスクかんりシート</title>
-  <link rel="stylesheet" href="style.css?v=95" />
+  <link rel="stylesheet" href="style.css?v=96" />
 </head>
 <body>
   <header>
@@ -136,6 +136,7 @@
             <div class="actions ganttActions">
               <button class="primary" id="ganttQuickAddBtn" type="button">ガンチャに予定を追加</button>
               <button class="primary" id="ganttAssignTodayBtn" type="button">今日のタイムラインに自動配置</button>
+              <button class="ghost" id="ganttCleanupEmptyRowsBtn" type="button">空行を一括整理</button>
               <button class="ghost" id="ganttOpenTodayBtn" type="button">今日のタイムラインを見る</button>
             </div>
           </div>
@@ -284,6 +285,6 @@
   </template>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script type="module" src="js/app.js?v=95"></script>
+  <script type="module" src="js/app.js?v=96"></script>
 </body>
 </html>

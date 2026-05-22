@@ -895,7 +895,7 @@ input[type="time"], input[type="date"]{min-height:42px}
 @media(max-width:700px){.sheetGroupHeader{grid-template-columns:220px max-content}.sheetGroupTitle{width:220px;padding-left:18px}.sheetGroupCells{grid-template-columns:repeat(var(--days),135px)}.sheetGroupCell{width:135px;min-width:135px}.ganttTreeLabel{grid-template-columns:18px 1fr auto;padding-left:12px}}
 
 
-/* v95: group reorder in shelf and gantt */
+/* v96: group reorder in shelf and gantt */
 .draggableProjectBox{cursor:grab}
 .draggableProjectBox.dragging{opacity:.55;transform:scale(.995)}
 .draggableProjectBox.dragover{outline:3px solid #5d9cec;outline-offset:3px;background:#f7fbff}
@@ -906,7 +906,7 @@ input[type="time"], input[type="date"]{min-height:42px}
 .sheetGroupHeader.ganttGroupReorderTarget .sheetGroupTitle{background:#eff6ff!important;box-shadow:inset 0 3px 0 #5d9cec}
 .ganttGroupDragHandle{width:20px;height:20px;margin-right:2px}
 
-/* v95: 棚グループ名をポップアップではなく直接編集 */
+/* v96: 棚グループ名をポップアップではなく直接編集 */
 .projectNameInput{
   border:1px solid transparent;
   background:transparent;
@@ -924,7 +924,7 @@ input[type="time"], input[type="date"]{min-height:42px}
   outline:none;
 }
 
-/* v95: remove visible drag arrows and reclaim left-column space */
+/* v96: remove visible drag arrows and reclaim left-column space */
 .ganttGroupDragHandle,.ganttRowDragHandle,.projectDragHandle{display:none!important}
 .sheetGroupTitle,.projectCandidateTitle{gap:8px}
 .ganttTreeLabel{gap:6px}
